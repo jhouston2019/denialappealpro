@@ -8,45 +8,12 @@
   background-color: #2c3e50;
   color: white;
   padding: 1.5rem 2rem;
-  border-bottom: 3px solid #34495e;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
+  text-align: center;
 }
 
 .App-header h1 {
   font-size: 1.8rem;
   font-weight: 600;
-  margin-bottom: 0.3rem;
-}
-
-.header-subtitle {
-  font-size: 0.9rem;
-  color: #bdc3c7;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.App-nav {
-  background-color: #34495e;
-  padding: 0;
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid #2c3e50;
-}
-
-.App-nav a {
-  color: #ecf0f1;
-  text-decoration: none;
-  padding: 1rem 1.5rem;
-  transition: background-color 0.2s;
-  border-right: 1px solid #2c3e50;
-}
-
-.App-nav a:hover {
-  background-color: #2c3e50;
 }
 
 .App-main {
@@ -61,16 +28,65 @@
   background-color: #2c3e50;
   color: #95a5a6;
   text-align: center;
-  padding: 1.5rem;
-  font-size: 0.85rem;
-  border-top: 3px solid #34495e;
+  padding: 1rem;
+  font-size: 0.9rem;
 }
 
-.App-footer p {
-  margin: 0.3rem 0;
+.landing {
+  text-align: center;
+  padding: 4rem 2rem;
 }
 
-/* Form Styles */
+.landing-content h2 {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  color: #2c3e50;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #2980b9;
+}
+
+.btn-primary:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #7f8c8d;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
 .form-container {
   background: white;
   padding: 2rem;
@@ -81,12 +97,20 @@
 .form-container h2 {
   margin-bottom: 1.5rem;
   color: #2c3e50;
-  font-size: 1.5rem;
-  font-weight: 600;
+}
+
+.form-section {
+  margin-bottom: 2rem;
+}
+
+.form-section h3 {
+  margin-bottom: 1rem;
+  color: #2c3e50;
+  font-size: 1.1rem;
 }
 
 .form-group {
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
 }
 
 .form-group label {
@@ -105,14 +129,11 @@
   border: 1px solid #bdc3c7;
   border-radius: 3px;
   font-size: 0.95rem;
-  font-family: inherit;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #3498db;
+.form-group small {
+  color: #7f8c8d;
+  font-size: 0.85rem;
 }
 
 .form-row {
@@ -121,124 +142,39 @@
   gap: 1rem;
 }
 
-.btn {
-  padding: 0.7rem 1.5rem;
-  border: none;
-  border-radius: 3px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
 }
 
-.btn-primary {
-  background-color: #3498db;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #2980b9;
-}
-
-.btn-primary:disabled {
-  background-color: #95a5a6;
-  cursor: not-allowed;
-}
-
-.alert {
-  padding: 1rem;
-  border-radius: 3px;
-  margin-bottom: 1.5rem;
-}
-
-.alert-success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.alert-error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-}
-
-.alert-warning {
-  background-color: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
-}
-
-/* Table Styles */
-.table-container {
+.history-container {
   background: white;
   padding: 2rem;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  overflow-x: auto;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
+.history-list {
+  list-style: none;
 }
 
-table th,
-table td {
-  padding: 0.75rem;
-  text-align: left;
+.history-item {
+  padding: 1rem;
   border-bottom: 1px solid #ecf0f1;
 }
 
-table th {
-  background-color: #f8f9fa;
-  font-weight: 600;
-  color: #2c3e50;
-  font-size: 0.9rem;
-}
-
-table tr:hover {
+.history-item:hover {
   background-color: #f8f9fa;
 }
 
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.6rem;
-  border-radius: 3px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.badge-success {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.badge-warning {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.badge-info {
-  background-color: #d1ecf1;
-  color: #0c5460;
-}
-
-/* Loading */
-.loading {
+.payment-container {
   text-align: center;
-  padding: 2rem;
-  color: #7f8c8d;
+  padding: 3rem 2rem;
 }
 
-/* Empty state */
-.empty-state {
+.download-container {
   text-align: center;
-  padding: 3rem;
-  color: #7f8c8d;
-}
-
-.empty-state h3 {
-  margin-bottom: 0.5rem;
-  color: #95a5a6;
+  padding: 3rem 2rem;
 }

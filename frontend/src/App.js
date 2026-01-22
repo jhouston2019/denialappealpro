@@ -1,41 +1,30 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
-import AppealForm from './components/AppealForm';
-import AppealList from './components/AppealList';
-import BatchUpload from './components/BatchUpload';
-import PayerRules from './components/PayerRules';
+import Landing from './pages/Landing';
+import AppealForm from './pages/AppealForm';
+import AppealHistory from './pages/AppealHistory';
+import PaymentConfirmation from './pages/PaymentConfirmation';
+import AppealDownload from './pages/AppealDownload';
 
 function App() {
   return (
     <Router>
       <div className="App">
         <header className="App-header">
-          <div className="header-content">
-            <h1>Denial Appeal Pro</h1>
-            <p className="header-subtitle">Execution Utility</p>
-          </div>
+          <h1>Denial Appeal Pro</h1>
         </header>
-
-        <nav className="App-nav">
-          <Link to="/">New Appeal</Link>
-          <Link to="/appeals">Appeal History</Link>
-          <Link to="/batch">Batch Processing</Link>
-          <Link to="/payer-rules">Payer Rules</Link>
-        </nav>
-
         <main className="App-main">
           <Routes>
-            <Route path="/" element={<AppealForm />} />
-            <Route path="/appeals" element={<AppealList />} />
-            <Route path="/batch" element={<BatchUpload />} />
-            <Route path="/payer-rules" element={<PayerRules />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/submit" element={<AppealForm />} />
+            <Route path="/history" element={<AppealHistory />} />
+            <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
+            <Route path="/download/:appealId" element={<AppealDownload />} />
           </Routes>
         </main>
-
         <footer className="App-footer">
-          <p>Execution only. No advisory function.</p>
-          <p>$10 per appeal execution</p>
+          <p>$10 per appeal</p>
         </footer>
       </div>
     </Router>

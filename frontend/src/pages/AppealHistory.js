@@ -45,7 +45,7 @@ function AppealHistory() {
                 <p>Payer: {appeal.payer_name}</p>
                 <p>Status: {appeal.status}</p>
                 {appeal.status === 'completed' && (
-                  <button className="btn btn-primary" onClick={() => navigate(`/download/${appeal.id}`)}>
+                  <button className="btn btn-primary" onClick={() => navigate(`/download/${appeal.appeal_id}`)}>
                     Download
                   </button>
                 )}

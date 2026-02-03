@@ -14,7 +14,10 @@ from validator import validate_timely_filing, check_duplicate
 app = Flask(__name__)
 app.config.from_object(Config)
 
-CORS(app)
+# Configure CORS with specific allowed origins
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+CORS(app, origins=[origin.strip() for origin in allowed_origins])
+
 db.init_app(app)
 stripe.api_key = app.config['STRIPE_SECRET_KEY']
 

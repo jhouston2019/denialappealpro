@@ -8,7 +8,7 @@ function Landing() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
       padding: 0,
       margin: 0,
       fontFamily: 'system-ui'
@@ -84,7 +84,7 @@ function Landing() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 50%)',
+          background: 'radial-gradient(circle at 20% 50%, rgba(30, 58, 138, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(15, 23, 42, 0.1) 0%, transparent 50%)',
           pointerEvents: 'none'
         }}></div>
         
@@ -96,7 +96,7 @@ function Landing() {
         }} className="animate-in">
           <div style={{
             display: 'inline-block',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
             color: 'white',
             padding: '8px 20px',
             borderRadius: '50px',
@@ -147,7 +147,7 @@ function Landing() {
               onClick={() => navigate('/submit')}
               className="pulse-animate"
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
                 color: 'white',
                 border: 'none',
                 padding: '20px 48px',
@@ -158,18 +158,18 @@ function Landing() {
                 letterSpacing: '1px',
                 cursor: 'pointer',
                 borderRadius: '50px',
-                boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
+                boxShadow: '0 10px 30px rgba(30, 58, 138, 0.4)',
                 transition: 'all 0.3s ease',
                 position: 'relative',
                 overflow: 'hidden'
               }}
               onMouseOver={(e) => {
                 e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.5)';
+                e.target.style.boxShadow = '0 15px 40px rgba(30, 58, 138, 0.5)';
               }}
               onMouseOut={(e) => {
                 e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 10px 30px rgba(102, 126, 234, 0.4)';
+                e.target.style.boxShadow = '0 10px 30px rgba(30, 58, 138, 0.4)';
               }}
             >
               Generate My Appeal Now
@@ -179,8 +179,8 @@ function Landing() {
               onClick={() => navigate('/history')}
               style={{
                 background: 'transparent',
-                color: '#667eea',
-                border: '2px solid #667eea',
+                color: '#1e3a8a',
+                border: '2px solid #1e3a8a',
                 padding: '18px 40px',
                 fontFamily: '"Inter", sans-serif',
                 fontSize: '16px',
@@ -190,12 +190,12 @@ function Landing() {
                 transition: 'all 0.3s ease'
               }}
               onMouseOver={(e) => {
-                e.target.style.background = '#667eea';
+                e.target.style.background = '#1e3a8a';
                 e.target.style.color = 'white';
               }}
               onMouseOut={(e) => {
                 e.target.style.background = 'transparent';
-                e.target.style.color = '#667eea';
+                e.target.style.color = '#1e3a8a';
               }}
             >
               View Past Appeals
@@ -238,7 +238,7 @@ function Landing() {
             right: '-50px',
             width: '200px',
             height: '200px',
-            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+            background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.1) 0%, rgba(15, 23, 42, 0.1) 100%)',
             borderRadius: '50%',
             filter: 'blur(40px)'
           }}></div>
@@ -281,14 +281,14 @@ function Landing() {
                 onMouseEnter={() => setHoveredStep(i)}
                 onMouseLeave={() => setHoveredStep(null)}
                 style={{
-                  background: hoveredStep === i ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
+                  background: hoveredStep === i ? 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' : '#f8f9fa',
                   padding: '32px 24px',
                   borderRadius: '16px',
                   textAlign: 'center',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
                   transform: hoveredStep === i ? 'translateY(-8px)' : 'translateY(0)',
-                  boxShadow: hoveredStep === i ? '0 20px 40px rgba(102, 126, 234, 0.3)' : '0 4px 12px rgba(0,0,0,0.05)'
+                  boxShadow: hoveredStep === i ? '0 20px 40px rgba(30, 58, 138, 0.3)' : '0 4px 12px rgba(0,0,0,0.05)'
                 }}
               >
                 <div style={{
@@ -326,13 +326,13 @@ function Landing() {
 
         {/* Stats Section */}
         <section style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
           borderRadius: '24px',
           padding: '60px 48px',
           marginBottom: '60px',
           color: 'white',
           textAlign: 'center',
-          boxShadow: '0 20px 60px rgba(102, 126, 234, 0.3)'
+          boxShadow: '0 20px 60px rgba(30, 58, 138, 0.3)'
         }}>
           <h2 style={{
             fontFamily: '"Inter", sans-serif',
@@ -425,7 +425,7 @@ function Landing() {
                   <span style={{
                     position: 'absolute',
                     left: 0,
-                    color: '#667eea',
+                    color: '#1e3a8a',
                     fontWeight: 700
                   }}>•</span>
                   {item}
@@ -567,7 +567,7 @@ function Landing() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
               color: 'white',
               padding: '16px 32px',
               borderRadius: '50px',
@@ -599,7 +599,7 @@ function Landing() {
             transform: 'translate(-50%, -50%)',
             width: '600px',
             height: '600px',
-            background: 'radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(30, 58, 138, 0.1) 0%, transparent 70%)',
             pointerEvents: 'none'
           }}></div>
           
@@ -631,7 +631,7 @@ function Landing() {
             onClick={() => navigate('/submit')}
             className="pulse-animate"
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
               color: 'white',
               border: 'none',
               padding: '24px 64px',
@@ -642,18 +642,18 @@ function Landing() {
               letterSpacing: '1px',
               cursor: 'pointer',
               borderRadius: '50px',
-              boxShadow: '0 15px 40px rgba(102, 126, 234, 0.4)',
+              boxShadow: '0 15px 40px rgba(30, 58, 138, 0.4)',
               transition: 'all 0.3s ease',
               position: 'relative',
               zIndex: 1
             }}
             onMouseOver={(e) => {
               e.target.style.transform = 'translateY(-4px)';
-              e.target.style.boxShadow = '0 20px 50px rgba(102, 126, 234, 0.5)';
+              e.target.style.boxShadow = '0 20px 50px rgba(30, 58, 138, 0.5)';
             }}
             onMouseOut={(e) => {
               e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 15px 40px rgba(102, 126, 234, 0.4)';
+              e.target.style.boxShadow = '0 15px 40px rgba(30, 58, 138, 0.4)';
             }}
           >
             Start Your Appeal Now →
@@ -689,7 +689,7 @@ function Landing() {
             <div>
               <div style={{
                 display: 'inline-block',
-                background: 'rgba(102, 126, 234, 0.2)',
+                background: 'rgba(30, 58, 138, 0.2)',
                 padding: '8px 16px',
                 borderRadius: '20px',
                 fontSize: '12px',

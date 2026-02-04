@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 
 function AppealHistory() {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ function AppealHistory() {
 
   const fetchAppeals = async () => {
     try {
-      const response = await axios.get('/api/appeals/history');
+      const response = await api.get('/api/appeals/history');
       setAppeals(response.data.appeals || []);
     } catch (error) {
       console.error('Failed to load appeals');

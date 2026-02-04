@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from datetime import datetime, timedelta
 import stripe
 import os
@@ -18,16 +20,32 @@ app.config.from_object(Config)
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 CORS(app, origins=[origin.strip() for origin in allowed_origins])
 
+# Configure rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
 db.init_app(app)
 stripe.api_key = app.config['STRIPE_SECRET_KEY']
 
 generator = AppealGenerator(app.config['GENERATED_FOLDER'])
+
+# File upload configuration
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
 
 @app.route('/api/appeals/submit', methods=['POST'])
+@limiter.limit("10 per hour")
 def submit_appeal():
     try:
         # Validate required fields
@@ -47,10 +65,22 @@ def submit_appeal():
         if check_duplicate(request.form.get('claim_number'), request.form.get('payer_name')):
             return jsonify({'error': 'Duplicate appeal detected for this claim'}), 422
         
-        # Handle file upload
+        # Handle file upload with validation
         denial_letter = request.files.get('denial_letter')
         denial_letter_path = None
         if denial_letter:
+            # Validate file type
+            if not allowed_file(denial_letter.filename):
+                return jsonify({'error': 'Invalid file type. Only PDF, JPG, JPEG, and PNG files are allowed.'}), 400
+            
+            # Validate file size
+            denial_letter.seek(0, os.SEEK_END)
+            file_size = denial_letter.tell()
+            denial_letter.seek(0)
+            
+            if file_size > MAX_FILE_SIZE:
+                return jsonify({'error': 'File size exceeds 10MB limit'}), 400
+            
             filename = secure_filename(denial_letter.filename)
             denial_letter_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{uuid.uuid4()}_{filename}")
             denial_letter.save(denial_letter_path)
@@ -84,6 +114,7 @@ def submit_appeal():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/appeals/payment/<appeal_id>', methods=['POST'])
+@limiter.limit("5 per hour")
 def create_payment(appeal_id):
     try:
         appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 
 function AppealDownload() {
   const { appealId } = useParams();
@@ -14,7 +14,7 @@ function AppealDownload() {
 
   const fetchAppeal = async () => {
     try {
-      const response = await axios.get(`/api/appeals/${appealId}`);
+      const response = await api.get(`/api/appeals/${appealId}`);
       if (response.data.status !== 'completed') {
         alert('Appeal not ready');
         navigate('/history');
@@ -30,7 +30,8 @@ function AppealDownload() {
   };
 
   const handleDownload = () => {
-    window.open(`/api/appeals/${appealId}/download`, '_blank');
+    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    window.open(`${baseURL}/api/appeals/${appealId}/download`, '_blank');
   };
 
   if (loading) {

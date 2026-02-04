@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
-import axios from 'axios';
+import api from '../api/axios';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
 function PaymentConfirmation() {
   const { appealId } = useParams();
@@ -17,7 +17,7 @@ function PaymentConfirmation() {
 
   const fetchAppeal = async () => {
     try {
-      const response = await axios.get(`/api/appeals/${appealId}`);
+      const response = await api.get(`/api/appeals/${appealId}`);
       setAppeal(response.data);
     } catch (error) {
       alert('Appeal not found');
@@ -28,7 +28,7 @@ function PaymentConfirmation() {
   const handlePayment = async () => {
     setLoading(true);
     try {
-      const response = await axios.post(`/api/appeals/payment/${appealId}`);
+      const response = await api.post(`/api/appeals/payment/${appealId}`);
       const stripe = await stripePromise;
       const { error } = await stripe.redirectToCheckout({
         sessionId: response.data.session_id

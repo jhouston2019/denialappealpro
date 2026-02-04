@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 
 function AppealForm() {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ function AppealForm() {
         if (formData[key]) data.append(key, formData[key]);
       });
 
-      const response = await axios.post('/api/appeals/submit', data, {
+      const response = await api.post('/api/appeals/submit', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 

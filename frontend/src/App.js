@@ -1,11 +1,46 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import './App.css';
-import Landing from './pages/Landing';
-import AppealForm from './pages/AppealForm';
-import AppealHistory from './pages/AppealHistory';
-import PaymentConfirmation from './pages/PaymentConfirmation';
-import AppealDownload from './pages/AppealDownload';
+
+// Lazy load pages for code splitting
+const Landing = lazy(() => import('./pages/Landing'));
+const AppealForm = lazy(() => import('./pages/AppealForm'));
+const AppealHistory = lazy(() => import('./pages/AppealHistory'));
+const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
+const AppealDownload = lazy(() => import('./pages/AppealDownload'));
+
+// Loading component
+const PageLoader = () => (
+  <div style={{
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#f5f5f5'
+  }}>
+    <div style={{
+      textAlign: 'center'
+    }}>
+      <div style={{
+        display: 'inline-block',
+        width: '50px',
+        height: '50px',
+        border: '4px solid #f3f3f3',
+        borderTop: '4px solid #1e3a8a',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+        marginBottom: '1rem'
+      }}></div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      <p style={{ fontSize: '18px', color: '#666' }}>Loading...</p>
+    </div>
+  </div>
+);
 
 function AppContent() {
   const location = useLocation();
@@ -19,13 +54,15 @@ function AppContent() {
         </header>
       )}
       <main className="App-main" style={isLandingPage ? { padding: 0, maxWidth: 'none' } : {}}>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/submit" element={<AppealForm />} />
-          <Route path="/history" element={<AppealHistory />} />
-          <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
-          <Route path="/download/:appealId" element={<AppealDownload />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/submit" element={<AppealForm />} />
+            <Route path="/history" element={<AppealHistory />} />
+            <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
+            <Route path="/download/:appealId" element={<AppealDownload />} />
+          </Routes>
+        </Suspense>
       </main>
       {!isLandingPage && (
         <footer className="App-footer">

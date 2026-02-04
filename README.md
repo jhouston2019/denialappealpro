@@ -4,14 +4,29 @@ Professional insurance appeal letter generation service. Turn denied claims into
 
 ## Features
 
+### Core Features
 - ✅ Professional appeal letter generation
-- ✅ Stripe payment integration
-- ✅ Timely filing validation
+- ✅ Stripe payment integration ($10 per appeal)
+- ✅ Timely filing validation (90-day window)
 - ✅ Duplicate appeal prevention
 - ✅ PDF generation and download
 - ✅ Appeal history tracking
-- ✅ Rate limiting and security
-- ✅ Mobile-responsive design
+- ✅ Mobile-responsive navy blue design
+
+### Security & Performance
+- ✅ Rate limiting (200/day, 50/hour)
+- ✅ CORS protection with whitelist
+- ✅ File validation (type & size)
+- ✅ Error boundaries (no white screens)
+- ✅ Code splitting with React.lazy()
+- ✅ Service worker for offline capability
+- ✅ PostgreSQL support with connection pooling
+
+### Monitoring & Analytics
+- ✅ Google Analytics integration (optional)
+- ✅ Performance monitoring (Web Vitals)
+- ✅ Error tracking and logging
+- ✅ Email notifications (optional)
 
 ## Tech Stack
 
@@ -120,6 +135,9 @@ REACT_APP_API_URL=http://localhost:5000
 
 # Stripe
 REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Analytics (Optional)
+REACT_APP_GA_TRACKING_ID=G-XXXXXXXXXX
 ```
 
 ## Deployment
@@ -149,17 +167,31 @@ REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 ## Production Checklist
 
+### Backend
 - [ ] Set strong `SECRET_KEY` in backend
 - [ ] Use PostgreSQL database (not SQLite)
 - [ ] Configure production Stripe keys
-- [ ] Set up Stripe webhook
+- [ ] Set up Stripe webhook in dashboard
 - [ ] Configure CORS with production domains
-- [ ] Set `REACT_APP_API_URL` to production backend
-- [ ] Test payment flow end-to-end
-- [ ] Verify file uploads work
-- [ ] Test appeal generation and download
-- [ ] Set up error monitoring (optional: Sentry)
+- [ ] Set up email service (optional)
 - [ ] Configure database backups
+- [ ] Set up error monitoring (optional: Sentry)
+
+### Frontend
+- [ ] Set `REACT_APP_API_URL` to production backend
+- [ ] Configure production Stripe publishable key
+- [ ] Add Google Analytics tracking ID (optional)
+- [ ] Test all pages load correctly
+- [ ] Verify service worker registration
+
+### Testing
+- [ ] Test payment flow end-to-end
+- [ ] Verify file uploads work (PDF, images)
+- [ ] Test appeal generation and download
+- [ ] Test on mobile devices
+- [ ] Verify rate limiting works
+- [ ] Test offline capability
+- [ ] Check loading states on slow connections
 
 ## API Endpoints
 

@@ -20,14 +20,26 @@ class Config:
         'pool_recycle': 300,
     }
     
+    # Supabase Configuration
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+    SUPABASE_STORAGE_BUCKET = os.getenv('SUPABASE_STORAGE_BUCKET', 'appeals')
+    
+    # Use Supabase Storage if configured, otherwise use local filesystem
+    USE_SUPABASE_STORAGE = bool(SUPABASE_URL and SUPABASE_KEY)
+    
+    # Stripe Configuration
     STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
     STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
     STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
     
     PRICE_PER_APPEAL = float(os.getenv('PRICE_PER_APPEAL', '10.00'))
     
+    # Local folders (used for development or if Supabase not configured)
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
     GENERATED_FOLDER = os.path.join(os.path.dirname(__file__), 'generated')
     
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    os.makedirs(GENERATED_FOLDER, exist_ok=True)
+    # Create local folders only if not using Supabase Storage
+    if not USE_SUPABASE_STORAGE:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(GENERATED_FOLDER, exist_ok=True)

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -6,12 +6,14 @@ from datetime import datetime, timedelta
 import stripe
 import os
 import uuid
+import io
 from werkzeug.utils import secure_filename
 
 from config import Config
 from models import db, Appeal
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
+from supabase_storage import storage
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -218,10 +220,34 @@ def download_appeal(appeal_id):
     if not appeal or appeal.status != 'completed':
         return jsonify({'error': 'Not available'}), 404
     
-    if not appeal.appeal_letter_path or not os.path.exists(appeal.appeal_letter_path):
+    if not appeal.appeal_letter_path:
         return jsonify({'error': 'File not found'}), 404
     
-    return send_file(appeal.appeal_letter_path, as_attachment=True, download_name=f"appeal_{appeal.claim_number}.pdf")
+    # Check if using Supabase Storage
+    if Config.USE_SUPABASE_STORAGE:
+        # Download from Supabase
+        file_data = storage.download_file(appeal.appeal_letter_path)
+        if not file_data:
+            return jsonify({'error': 'File not found in storage'}), 404
+        
+        # Return file as response
+        return Response(
+            file_data,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename=appeal_{appeal.claim_number}.pdf'
+            }
+        )
+    else:
+        # Local filesystem
+        if not os.path.exists(appeal.appeal_letter_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        return send_file(
+            appeal.appeal_letter_path, 
+            as_attachment=True, 
+            download_name=f"appeal_{appeal.claim_number}.pdf"
+        )
 
 if __name__ == '__main__':
     with app.app_context():

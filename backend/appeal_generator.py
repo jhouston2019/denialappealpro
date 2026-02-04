@@ -5,7 +5,10 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_JUSTIFY
 from datetime import datetime
 import os
+import io
 from denial_templates import get_denial_template
+from supabase_storage import storage
+from config import Config
 
 class AppealGenerator:
     def __init__(self, output_dir):
@@ -15,11 +18,19 @@ class AppealGenerator:
     def generate_appeal(self, appeal):
         """Generate appeal letter with strict assembly order"""
         filename = f"appeal_{appeal.appeal_id}.pdf"
-        filepath = os.path.join(self.output_dir, filename)
         
-        doc = SimpleDocTemplate(filepath, pagesize=letter,
-                               topMargin=0.75*inch, bottomMargin=0.75*inch,
-                               leftMargin=1*inch, rightMargin=1*inch)
+        # Generate PDF to memory buffer if using Supabase, otherwise to file
+        if Config.USE_SUPABASE_STORAGE:
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                   topMargin=0.75*inch, bottomMargin=0.75*inch,
+                                   leftMargin=1*inch, rightMargin=1*inch)
+        else:
+            filepath = os.path.join(self.output_dir, filename)
+            doc = SimpleDocTemplate(filepath, pagesize=letter,
+                                   topMargin=0.75*inch, bottomMargin=0.75*inch,
+                                   leftMargin=1*inch, rightMargin=1*inch)
+        
         story = []
         styles = getSampleStyleSheet()
         
@@ -123,5 +134,23 @@ class AppealGenerator:
         story.append(Spacer(1, 0.2*inch))
         story.append(Paragraph(f"Appeal ID: {appeal.appeal_id}", styles['Normal']))
         
+        # Build the PDF
         doc.build(story)
-        return filepath
+        
+        # Upload to Supabase Storage or return local filepath
+        if Config.USE_SUPABASE_STORAGE:
+            buffer.seek(0)
+            remote_path = f"appeals/{filename}"
+            result = storage.upload_file(remote_path, buffer.read(), 'application/pdf')
+            if result:
+                return remote_path  # Return Supabase path
+            else:
+                # Fallback to local storage if Supabase upload fails
+                print("Supabase upload failed, falling back to local storage")
+                filepath = os.path.join(self.output_dir, filename)
+                with open(filepath, 'wb') as f:
+                    buffer.seek(0)
+                    f.write(buffer.read())
+                return filepath
+        else:
+            return filepath

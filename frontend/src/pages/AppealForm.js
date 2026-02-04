@@ -19,6 +19,16 @@ function AppealForm() {
     denial_letter: null
   });
 
+  const validateNPI = (npi) => {
+    // NPI must be exactly 10 digits
+    return /^\d{10}$/.test(npi);
+  };
+
+  const validateClaimNumber = (claimNumber) => {
+    // Claim number should be alphanumeric and at least 5 characters
+    return claimNumber.length >= 5 && /^[a-zA-Z0-9-]+$/.test(claimNumber);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -30,6 +40,35 @@ function AppealForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate NPI
+    if (!validateNPI(formData.provider_npi)) {
+      alert('Provider NPI must be exactly 10 digits');
+      return;
+    }
+
+    // Validate claim number
+    if (!validateClaimNumber(formData.claim_number)) {
+      alert('Claim number must be at least 5 characters and contain only letters, numbers, and hyphens');
+      return;
+    }
+
+    // Validate date of service is not in the future
+    const serviceDate = new Date(formData.date_of_service);
+    if (serviceDate > new Date()) {
+      alert('Date of service cannot be in the future');
+      return;
+    }
+
+    // Validate timely filing deadline if provided
+    if (formData.timely_filing_deadline) {
+      const deadline = new Date(formData.timely_filing_deadline);
+      if (deadline < new Date()) {
+        alert('Warning: Timely filing deadline has already passed. You may not be able to submit this appeal.');
+        // Allow to continue but warn user
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -66,7 +105,16 @@ function AppealForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Claim Number *</label>
-              <input type="text" name="claim_number" value={formData.claim_number} onChange={handleChange} required />
+              <input 
+                type="text" 
+                name="claim_number" 
+                value={formData.claim_number} 
+                onChange={handleChange} 
+                minLength="5"
+                placeholder="e.g., CLM-2024-12345"
+                required 
+              />
+              <small>Minimum 5 characters</small>
             </div>
             <div className="form-group">
               <label>Patient ID / Internal Reference *</label>
@@ -105,7 +153,17 @@ function AppealForm() {
             </div>
             <div className="form-group">
               <label>Provider NPI *</label>
-              <input type="text" name="provider_npi" value={formData.provider_npi} onChange={handleChange} required />
+              <input 
+                type="text" 
+                name="provider_npi" 
+                value={formData.provider_npi} 
+                onChange={handleChange} 
+                pattern="\d{10}"
+                maxLength="10"
+                placeholder="10-digit NPI number"
+                required 
+              />
+              <small>Must be exactly 10 digits</small>
             </div>
           </div>
         </div>
@@ -120,11 +178,11 @@ function AppealForm() {
 
         <div className="form-section">
           <h3>Documentation</h3>
-          <div className="form-group">
-            <label>Denial Letter / EOB *</label>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} required />
-            <small>PDF or image format</small>
-          </div>
+            <div className="form-group">
+              <label>Denial Letter / EOB *</label>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} required />
+              <small>PDF or image format (max 10MB)</small>
+            </div>
         </div>
 
         <div className="form-actions">

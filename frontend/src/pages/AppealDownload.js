@@ -35,7 +35,27 @@ function AppealDownload() {
   };
 
   if (loading) {
-    return <div className="download-container"><p>Loading...</p></div>;
+    return (
+      <div className="download-container" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+        <div style={{
+          display: 'inline-block',
+          width: '50px',
+          height: '50px',
+          border: '4px solid #f3f3f3',
+          borderTop: '4px solid #1e3a8a',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          marginBottom: '1rem'
+        }}></div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <p style={{ fontSize: '18px', color: '#666' }}>Loading your appeal...</p>
+      </div>
+    );
   }
 
   if (!appeal) {

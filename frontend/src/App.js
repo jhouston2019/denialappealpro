@@ -8,6 +8,8 @@ const AppealForm = lazy(() => import('./pages/AppealForm'));
 const AppealHistory = lazy(() => import('./pages/AppealHistory'));
 const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
 const AppealDownload = lazy(() => import('./pages/AppealDownload'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
 // Loading component
 const PageLoader = () => (
@@ -61,12 +63,18 @@ function AppContent() {
             <Route path="/history" element={<AppealHistory />} />
             <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
             <Route path="/download/:appealId" element={<AppealDownload />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
           </Routes>
         </Suspense>
       </main>
       {!isLandingPage && (
         <footer className="App-footer">
           <p>$10 per appeal</p>
+          <p style={{ fontSize: '14px', marginTop: '10px' }}>
+            <a href="/terms" style={{ color: '#1e3a8a', marginRight: '20px' }}>Terms of Service</a>
+            <a href="/privacy" style={{ color: '#1e3a8a' }}>Privacy Policy</a>
+          </p>
         </footer>
       )}
     </div>

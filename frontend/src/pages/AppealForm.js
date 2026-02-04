@@ -11,6 +11,7 @@ function AppealForm() {
     patient_id: '',
     denial_reason: '',
     denial_code: '',
+    diagnosis_code: '',
     date_of_service: '',
     cpt_codes: '',
     provider_name: '',
@@ -18,6 +19,32 @@ function AppealForm() {
     timely_filing_deadline: '',
     denial_letter: null
   });
+
+  // Common denial codes
+  const commonDenialCodes = [
+    { value: '', label: 'Select a denial code (or type custom)' },
+    { value: 'CO-50', label: 'CO-50 - Lack of Medical Necessity' },
+    { value: 'CO-16', label: 'CO-16 - Prior Authorization Required' },
+    { value: 'CO-18', label: 'CO-18 - Duplicate Claim/Service' },
+    { value: 'CO-22', label: 'CO-22 - Coordination of Benefits' },
+    { value: 'CO-29', label: 'CO-29 - Time Limit for Filing' },
+    { value: 'CO-96', label: 'CO-96 - Non-Covered Charge' },
+    { value: 'CO-97', label: 'CO-97 - Benefit Maximum/Limitation' },
+    { value: 'CO-4', label: 'CO-4 - Procedure Code Inconsistency' },
+    { value: 'CO-109', label: 'CO-109 - Not Covered for This Patient' },
+    { value: 'CO-197', label: 'CO-197 - Precertification Absent' },
+    { value: 'PR-1', label: 'PR-1 - Patient Deductible' },
+    { value: 'PR-2', label: 'PR-2 - Patient Coinsurance' },
+    { value: 'CO-180', label: 'CO-180 - Experimental/Investigational' },
+    { value: 'CO-24', label: 'CO-24 - Insurance Coverage Inactive' },
+    { value: 'CO-27', label: 'CO-27 - Out of Network Provider' },
+    { value: 'CO-15', label: 'CO-15 - Incorrect Date of Service' },
+    { value: 'CO-5', label: 'CO-5 - Incorrect Diagnosis Code' },
+    { value: 'CO-11', label: 'CO-11 - Incorrect Patient Information' },
+    { value: 'CO-12', label: 'CO-12 - Incorrect Provider Information' },
+    { value: 'CO-14', label: 'CO-14 - Incorrect Place of Service' },
+    { value: 'CO-252', label: 'CO-252 - Additional Documentation Required' }
+  ];
 
   const validateNPI = (npi) => {
     // NPI must be exactly 10 digits
@@ -91,6 +118,35 @@ function AppealForm() {
   return (
     <div className="form-container">
       <h2>Appeal Submission</h2>
+      
+      {/* Disclaimer */}
+      <div style={{
+        background: '#fff3cd',
+        border: '1px solid #ffc107',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '30px'
+      }}>
+        <h3 style={{ marginTop: 0, color: '#856404' }}>⚠️ Important Disclaimer</h3>
+        <p style={{ margin: '10px 0', color: '#856404', lineHeight: '1.6' }}>
+          This service generates <strong>template appeal letters only</strong>. It does NOT provide medical advice, 
+          legal advice, or professional healthcare services.
+        </p>
+        <p style={{ margin: '10px 0', color: '#856404', lineHeight: '1.6' }}>
+          <strong>You are responsible for:</strong>
+        </p>
+        <ul style={{ margin: '10px 0', color: '#856404', lineHeight: '1.6', paddingLeft: '20px' }}>
+          <li>Reviewing all generated content for accuracy and completeness</li>
+          <li>Modifying the letter as necessary for your specific case</li>
+          <li>Ensuring medical appropriateness before submission</li>
+          <li>Compliance with all applicable laws and regulations</li>
+        </ul>
+        <p style={{ margin: '10px 0 0 0', fontSize: '14px', color: '#856404' }}>
+          By submitting this form, you acknowledge that you are a licensed healthcare provider or authorized 
+          representative with the legal right to submit insurance appeals.
+        </p>
+      </div>
+
       <form onSubmit={handleSubmit}>
         <div className="form-section">
           <h3>Payer Information</h3>
@@ -129,9 +185,34 @@ function AppealForm() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Denial Code (Optional)</label>
-              <input type="text" name="denial_code" value={formData.denial_code} onChange={handleChange} placeholder="e.g., CO-50, CARC-16" />
+              <label>Denial Code *</label>
+              <select 
+                name="denial_code" 
+                value={formData.denial_code} 
+                onChange={handleChange}
+                required
+                style={{ padding: '10px', fontSize: '16px' }}
+              >
+                {commonDenialCodes.map(code => (
+                  <option key={code.value} value={code.value}>{code.label}</option>
+                ))}
+              </select>
+              <small>Select the primary denial reason code</small>
             </div>
+            <div className="form-group">
+              <label>Diagnosis Code (ICD-10)</label>
+              <input 
+                type="text" 
+                name="diagnosis_code" 
+                value={formData.diagnosis_code} 
+                onChange={handleChange} 
+                placeholder="e.g., M54.5, E11.9"
+              />
+              <small>Primary diagnosis code(s) for this service</small>
+            </div>
+          </div>
+
+          <div className="form-row">
             <div className="form-group">
               <label>Date of Service *</label>
               <input type="date" name="date_of_service" value={formData.date_of_service} onChange={handleChange} required />

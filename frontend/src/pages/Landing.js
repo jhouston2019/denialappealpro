@@ -350,10 +350,10 @@ function Landing() {
             gap: '40px'
           }}>
             {[
-              { num: '1,247', label: 'Appeals Generated' },
-              { num: '95%', label: 'Success Rate' },
+              { num: '30+', label: 'Denial Codes Covered' },
               { num: '$10', label: 'Fixed Price' },
-              { num: '<5min', label: 'Average Time' }
+              { num: '<5min', label: 'Average Time' },
+              { num: '24/7', label: 'Instant Access' }
             ].map((stat, i) => (
               <div key={i}>
                 <div style={{
@@ -671,6 +671,99 @@ function Landing() {
           </div>
         </section>
 
+        {/* Sample Letter Section */}
+        <section style={{
+          padding: '80px 24px',
+          background: '#f8f9fa'
+        }}>
+          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <h2 style={{
+              fontFamily: '"Inter", sans-serif',
+              fontSize: '42px',
+              fontWeight: 800,
+              textAlign: 'center',
+              margin: '0 0 48px 0',
+              letterSpacing: '-1px'
+            }}>
+              See What You Get
+            </h2>
+            
+            <div style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '40px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              border: '1px solid #e0e0e0'
+            }}>
+              <div style={{
+                background: '#f8f9fa',
+                padding: '10px 20px',
+                borderRadius: '8px 8px 0 0',
+                borderBottom: '2px solid #dee2e6',
+                marginBottom: '20px'
+              }}>
+                <p style={{ margin: 0, fontSize: '14px', color: '#666', fontWeight: 600 }}>
+                  📄 Sample Appeal Letter - CO-50 (Lack of Medical Necessity)
+                </p>
+              </div>
+              
+              <div style={{
+                fontFamily: 'Georgia, serif',
+                fontSize: '14px',
+                lineHeight: '1.8',
+                color: '#333'
+              }}>
+                <p style={{ marginBottom: '10px' }}><strong>ABC Medical Group</strong></p>
+                <p style={{ marginBottom: '10px' }}>NPI: 1234567890</p>
+                <p style={{ marginBottom: '20px' }}>January 15, 2024</p>
+                
+                <p style={{ marginBottom: '20px' }}><strong>To: Blue Cross Blue Shield</strong></p>
+                
+                <p style={{ marginBottom: '10px' }}><strong>RE: Appeal of Claim Denial</strong></p>
+                <p style={{ marginBottom: '5px' }}>Claim Number: CLM-2024-12345</p>
+                <p style={{ marginBottom: '5px' }}>Patient ID: PT-67890</p>
+                <p style={{ marginBottom: '5px' }}>Date of Service: 12/01/2023</p>
+                <p style={{ marginBottom: '20px' }}>CPT Codes: 99214</p>
+                
+                <p style={{ marginBottom: '10px' }}><strong>Denial Reason:</strong></p>
+                <p style={{ marginBottom: '20px' }}>Services denied as not medically necessary</p>
+                
+                <p style={{ marginBottom: '10px' }}><strong>Basis for Appeal:</strong></p>
+                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                  This appeal addresses the denial based on lack of medical necessity. The service(s) rendered meet 
+                  established medical necessity criteria and are supported by clinical documentation.
+                </p>
+                
+                <p style={{ marginBottom: '10px', fontWeight: '600' }}>Medical Necessity Justification:</p>
+                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                  The patient's documented diagnosis and clinical presentation support the medical necessity for the 
+                  service(s) provided. The treatment rendered aligns with evidence-based clinical guidelines and accepted 
+                  standards of care within the medical community.
+                </p>
+                
+                <p style={{ marginBottom: '10px', fontWeight: '600' }}>Clinical Documentation:</p>
+                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                  The medical record contains comprehensive documentation supporting the medical necessity of this service, 
+                  including patient history, physical examination findings, diagnostic results, and clinical rationale for 
+                  the treatment plan...
+                </p>
+                
+                <p style={{ 
+                  marginTop: '30px', 
+                  padding: '15px', 
+                  background: '#e7f3ff', 
+                  borderLeft: '4px solid #2196F3',
+                  fontSize: '13px',
+                  fontStyle: 'italic'
+                }}>
+                  <strong>Note:</strong> This is a condensed sample. Actual letters include full denial-specific arguments, 
+                  policy references, and detailed justifications tailored to your specific denial code.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Pricing Section */}
         <section style={{
           background: 'linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%)',
@@ -814,6 +907,28 @@ function Landing() {
             </div>
           </div>
         </section>
+
+        {/* Footer */}
+        <footer style={{
+          background: 'rgba(15, 23, 42, 0.95)',
+          color: 'white',
+          padding: '40px 24px',
+          textAlign: 'center'
+        }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '14px', opacity: 0.9 }}>
+              © {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.
+            </p>
+            <p style={{ margin: 0, fontSize: '14px' }}>
+              <a href="/terms" style={{ color: 'white', textDecoration: 'none', marginRight: '20px', opacity: 0.8 }}>
+                Terms of Service
+              </a>
+              <a href="/privacy" style={{ color: 'white', textDecoration: 'none', opacity: 0.8 }}>
+                Privacy Policy
+              </a>
+            </p>
+          </div>
+        </footer>
       </div>
     </div>
   );

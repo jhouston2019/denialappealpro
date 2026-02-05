@@ -18,7 +18,9 @@ class Appeal(db.Model):
     date_of_service = db.Column(db.Date, nullable=False)
     denial_reason = db.Column(db.Text, nullable=False)
     denial_code = db.Column(db.String(50))
+    diagnosis_code = db.Column(db.String(100))
     cpt_codes = db.Column(db.String(200))
+    billed_amount = db.Column(db.Numeric(10, 2), default=0.00)
     timely_filing_deadline = db.Column(db.Date)
     denial_letter_path = db.Column(db.String(500))
     

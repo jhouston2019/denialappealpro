@@ -14,6 +14,7 @@ function AppealForm() {
     diagnosis_code: '',
     date_of_service: '',
     cpt_codes: '',
+    billed_amount: '',
     provider_name: '',
     provider_npi: '',
     timely_filing_deadline: '',
@@ -219,9 +220,24 @@ function AppealForm() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label>CPT / Revenue Codes (Optional)</label>
-            <input type="text" name="cpt_codes" value={formData.cpt_codes} onChange={handleChange} placeholder="e.g., 99213, 99214" />
+          <div className="form-row">
+            <div className="form-group">
+              <label>CPT / Revenue Codes (Optional)</label>
+              <input type="text" name="cpt_codes" value={formData.cpt_codes} onChange={handleChange} placeholder="e.g., 99213, 99214" />
+            </div>
+            <div className="form-group">
+              <label>Billed Amount (Optional)</label>
+              <input 
+                type="number" 
+                name="billed_amount" 
+                value={formData.billed_amount} 
+                onChange={handleChange} 
+                placeholder="e.g., 250.00"
+                step="0.01"
+                min="0"
+              />
+              <small>Total amount billed for this claim</small>
+            </div>
           </div>
         </div>
 

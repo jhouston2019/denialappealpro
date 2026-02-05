@@ -98,6 +98,8 @@ def submit_appeal():
             provider_npi=request.form.get('provider_npi'),
             date_of_service=datetime.strptime(request.form.get('date_of_service'), '%Y-%m-%d').date(),
             denial_reason=request.form.get('denial_reason'),
+            billed_amount=request.form.get('billed_amount', 0.00),
+            diagnosis_code=request.form.get('diagnosis_code'),
             denial_code=request.form.get('denial_code'),
             cpt_codes=request.form.get('cpt_codes'),
             timely_filing_deadline=datetime.strptime(deadline_str, '%Y-%m-%d').date() if deadline_str else None,

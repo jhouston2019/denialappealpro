@@ -5,7 +5,8 @@ Professional insurance appeal letter generation service. Turn denied claims into
 ## Features
 
 ### Core Features
-- ✅ Professional appeal letter generation
+- ✅ **AI-Powered Appeal Generation**: OpenAI GPT-4 creates custom, persuasive appeal content
+- ✅ **Smart Fallback**: 30+ pre-written templates if AI unavailable
 - ✅ Stripe payment integration ($10 per appeal)
 - ✅ Timely filing validation (90-day window)
 - ✅ Duplicate appeal prevention

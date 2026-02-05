@@ -44,8 +44,9 @@ Once project is created:
    - **Project API keys** > **service_role**: `eyJhb...` (keep secret!)
 
 3. Go to **Settings** > **Database**
-4. Scroll to **Connection string** > **URI**
-5. Copy the connection string:
+4. Scroll to **Connection Pooler** section
+5. Select **Session mode** tab (or **Shared Pooler**)
+6. Copy the connection string:
    ```
    postgresql://postgres.[your-ref]:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
    ```
@@ -137,17 +138,20 @@ When prompted:
 # Flask secret key (generate a random one)
 fly secrets set SECRET_KEY="your-super-secret-key-here"
 
+# OpenAI API key (for AI-powered appeal generation)
+fly secrets set OPENAI_API_KEY="sk-proj-..."
+
 # Supabase credentials
 fly secrets set SUPABASE_URL="https://[your-project-ref].supabase.co"
 fly secrets set SUPABASE_KEY="your-supabase-anon-key"
 fly secrets set SUPABASE_STORAGE_BUCKET="appeals"
 
-# Database URL (from Supabase)
+# Database URL (from Supabase - use Shared Pooler connection string)
 fly secrets set DATABASE_URL="postgresql://postgres.[your-ref]:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
 
 # Stripe keys
 fly secrets set STRIPE_SECRET_KEY="sk_test_..."
-fly secrets set STRIPE_PUBLISHABLE_KEY="pk_test_..."
+fly secrets set STRIPE_WEBHOOK_SECRET="whsec_..."
 
 # CORS - add your Netlify domain
 fly secrets set ALLOWED_ORIGINS="https://your-site.netlify.app,http://localhost:3000"

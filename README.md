@@ -5,7 +5,13 @@ Professional insurance appeal letter generation service. Turn denied claims into
 ## Features
 
 ### Core Features
-- ✅ **AI-Powered Appeal Generation**: OpenAI GPT-4 creates custom, persuasive appeal content
+- ✅ **Advanced AI Appeal System**: Far superior to generic ChatGPT
+  - Specialized medical billing & insurance law knowledge base
+  - Denial-specific strategic arguments and payer tactics
+  - Regulatory citations (ERISA, ACA, state laws)
+  - Clinical guideline references (ACC/AHA, ACR, NCCN, etc.)
+  - Multi-step reasoning for complex cases
+  - Expert-level medical-legal language
 - ✅ **Smart Fallback**: 30+ pre-written templates if AI unavailable
 - ✅ Stripe payment integration ($10 per appeal)
 - ✅ Timely filing validation (90-day window)

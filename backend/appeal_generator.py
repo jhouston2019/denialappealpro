@@ -9,7 +9,7 @@ import io
 from denial_templates import get_denial_template
 from supabase_storage import storage
 from config import Config
-from ai_generator import ai_generator
+from advanced_ai_generator import advanced_ai_generator
 
 class AppealGenerator:
     def __init__(self, output_dir):
@@ -72,12 +72,17 @@ class AppealGenerator:
             story.append(Paragraph(f"Code: {appeal.denial_code}", styles['Normal']))
         story.append(Spacer(1, 0.3*inch))
         
-        # 4. Generate AI-powered appeal content
+        # 4. Generate Advanced AI-powered appeal content
         story.append(Paragraph("<b>Basis for Appeal:</b>", styles['Normal']))
         story.append(Spacer(1, 0.15*inch))
         
-        # Use AI to generate custom appeal content
-        appeal_content = ai_generator.generate_appeal_content(appeal)
+        # Use Advanced AI system to generate expert-level appeal content
+        # This system is significantly more powerful than generic ChatGPT because:
+        # - Uses specialized medical billing/insurance knowledge base
+        # - Employs denial-specific strategic arguments
+        # - Incorporates regulatory and clinical guideline references
+        # - Tailors arguments to specific payer tactics
+        appeal_content = advanced_ai_generator.generate_appeal_content(appeal)
         
         # Split into paragraphs and add to story
         paragraphs = appeal_content.split('\n\n')

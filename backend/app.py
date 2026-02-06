@@ -14,6 +14,13 @@ from models import db, Appeal
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
+from env_validator import validate_environment
+
+# Validate environment configuration on startup
+print("\n" + "="*60)
+print("DENIAL APPEAL PRO - BACKEND SERVER")
+print("="*60)
+validate_environment(strict=False)
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -52,20 +59,35 @@ def submit_appeal():
     try:
         # Validate required fields
         required = ['payer_name', 'claim_number', 'patient_id', 'provider_name', 'provider_npi', 'date_of_service', 'denial_reason']
-        for field in required:
-            if not request.form.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        missing_fields = [field for field in required if not request.form.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                'error': f'Missing required fields: {", ".join(missing_fields)}',
+                'missing_fields': missing_fields
+            }), 400
         
         # Check timely filing
         deadline_str = request.form.get('timely_filing_deadline')
         if deadline_str:
-            deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
-            if not validate_timely_filing(deadline):
-                return jsonify({'error': 'Timely filing deadline has passed'}), 422
+            try:
+                deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
+                if not validate_timely_filing(deadline):
+                    return jsonify({
+                        'error': 'Timely filing deadline has passed',
+                        'deadline': deadline_str,
+                        'message': 'The timely filing deadline for this claim has already passed. Appeals may not be accepted.'
+                    }), 422
+            except ValueError:
+                return jsonify({'error': 'Invalid date format for timely_filing_deadline. Use YYYY-MM-DD'}), 400
         
         # Check duplicate
         if check_duplicate(request.form.get('claim_number'), request.form.get('payer_name')):
-            return jsonify({'error': 'Duplicate appeal detected for this claim'}), 422
+            return jsonify({
+                'error': 'Duplicate appeal detected',
+                'message': f'An appeal for claim {request.form.get("claim_number")} with {request.form.get("payer_name")} already exists in the system.',
+                'claim_number': request.form.get('claim_number')
+            }), 422
         
         # Handle file upload with validation
         denial_letter = request.files.get('denial_letter')
@@ -73,7 +95,11 @@ def submit_appeal():
         if denial_letter:
             # Validate file type
             if not allowed_file(denial_letter.filename):
-                return jsonify({'error': 'Invalid file type. Only PDF, JPG, JPEG, and PNG files are allowed.'}), 400
+                return jsonify({
+                    'error': 'Invalid file type',
+                    'message': 'Only PDF, JPG, JPEG, and PNG files are allowed.',
+                    'allowed_types': ['pdf', 'jpg', 'jpeg', 'png']
+                }), 400
             
             # Validate file size
             denial_letter.seek(0, os.SEEK_END)
@@ -81,7 +107,12 @@ def submit_appeal():
             denial_letter.seek(0)
             
             if file_size > MAX_FILE_SIZE:
-                return jsonify({'error': 'File size exceeds 10MB limit'}), 400
+                file_size_mb = file_size / (1024 * 1024)
+                return jsonify({
+                    'error': 'File size exceeds limit',
+                    'message': f'File size ({file_size_mb:.1f}MB) exceeds the 10MB limit.',
+                    'max_size_mb': 10
+                }), 400
             
             filename = secure_filename(denial_letter.filename)
             denial_letter_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{uuid.uuid4()}_{filename}")
@@ -112,10 +143,23 @@ def submit_appeal():
         db.session.add(appeal)
         db.session.commit()
         
-        return jsonify({'appeal_id': appeal_id}), 201
+        return jsonify({
+            'appeal_id': appeal_id,
+            'message': 'Appeal submitted successfully',
+            'status': 'pending'
+        }), 201
         
+    except ValueError as e:
+        return jsonify({
+            'error': 'Invalid data format',
+            'message': str(e)
+        }), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Error in submit_appeal: {e}")
+        return jsonify({
+            'error': 'Internal server error',
+            'message': 'An unexpected error occurred while processing your appeal. Please try again or contact support.'
+        }), 500
 
 @app.route('/api/appeals/payment/<appeal_id>', methods=['POST'])
 @limiter.limit("5 per hour")
@@ -123,10 +167,17 @@ def create_payment(appeal_id):
     try:
         appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
         if not appeal:
-            return jsonify({'error': 'Appeal not found'}), 404
+            return jsonify({
+                'error': 'Appeal not found',
+                'message': f'No appeal found with ID: {appeal_id}'
+            }), 404
         
         if appeal.payment_status == 'paid':
-            return jsonify({'error': 'Already paid'}), 400
+            return jsonify({
+                'error': 'Payment already completed',
+                'message': 'This appeal has already been paid for.',
+                'appeal_id': appeal_id
+            }), 400
         
         # Create Stripe checkout session
         session = stripe.checkout.Session.create(
@@ -145,10 +196,24 @@ def create_payment(appeal_id):
             metadata={'appeal_id': appeal_id}
         )
         
-        return jsonify({'session_id': session.id}), 200
+        return jsonify({
+            'session_id': session.id,
+            'appeal_id': appeal_id
+        }), 200
         
+    except stripe.error.StripeError as e:
+        print(f"❌ Stripe error in create_payment: {e}")
+        return jsonify({
+            'error': 'Payment processing error',
+            'message': 'Unable to create payment session. Please try again or contact support.',
+            'details': str(e)
+        }), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Error in create_payment: {e}")
+        return jsonify({
+            'error': 'Internal server error',
+            'message': 'An unexpected error occurred. Please try again or contact support.'
+        }), 500
 
 @app.route('/api/stripe/webhook', methods=['POST'])
 def stripe_webhook():
@@ -219,11 +284,25 @@ def get_history():
 @app.route('/api/appeals/<appeal_id>/download', methods=['GET'])
 def download_appeal(appeal_id):
     appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
-    if not appeal or appeal.status != 'completed':
-        return jsonify({'error': 'Not available'}), 404
+    
+    if not appeal:
+        return jsonify({
+            'error': 'Appeal not found',
+            'message': f'No appeal found with ID: {appeal_id}'
+        }), 404
+    
+    if appeal.status != 'completed':
+        return jsonify({
+            'error': 'Appeal not ready',
+            'message': f'Appeal status is "{appeal.status}". Please wait for completion.',
+            'status': appeal.status
+        }), 404
     
     if not appeal.appeal_letter_path:
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({
+            'error': 'File not found',
+            'message': 'Appeal letter file is missing. Please contact support.'
+        }), 404
     
     # Check if using Supabase Storage
     if Config.USE_SUPABASE_STORAGE:

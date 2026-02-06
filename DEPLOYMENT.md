@@ -218,7 +218,7 @@ git push origin main
 
 ### Step 1: Get Webhook URL
 
-Your webhook URL: `https://denial-appeal-pro.fly.dev/api/webhook/stripe`
+Your webhook URL: `https://denial-appeal-pro.fly.dev/api/stripe/webhook`
 
 ### Step 2: Create Webhook in Stripe
 
@@ -226,10 +226,9 @@ Your webhook URL: `https://denial-appeal-pro.fly.dev/api/webhook/stripe`
 2. Go to **Developers** > **Webhooks**
 3. Click **Add endpoint**
 4. Fill in:
-   - **Endpoint URL**: `https://denial-appeal-pro.fly.dev/api/webhook/stripe`
+   - **Endpoint URL**: `https://denial-appeal-pro.fly.dev/api/stripe/webhook`
    - **Events to send**: Select:
-     - `payment_intent.succeeded`
-     - `payment_intent.payment_failed`
+     - `checkout.session.completed`
 5. Click **Add endpoint**
 
 ### Step 3: Get Webhook Secret

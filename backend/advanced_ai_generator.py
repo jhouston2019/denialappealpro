@@ -16,13 +16,21 @@ from medical_knowledge_base import (
 class AdvancedAIAppealGenerator:
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY')
-        self.enabled = bool(self.api_key)
+        self.enabled = bool(self.api_key and self.api_key.strip() and not self.api_key.startswith('sk-proj-your'))
         
         if self.enabled:
-            self.client = OpenAI(api_key=self.api_key)
-            print("Advanced AI appeal generation enabled (OpenAI GPT-4)")
+            try:
+                self.client = OpenAI(api_key=self.api_key)
+                print("[OK] Advanced AI appeal generation enabled (OpenAI GPT-4)")
+                print("     Appeals will use expert-level AI reasoning and medical knowledge")
+            except Exception as e:
+                print(f"[WARNING] OpenAI initialization warning: {e}")
+                print("          Falling back to template-based appeals")
+                self.enabled = False
         else:
-            print("AI appeal generation disabled (using templates only)")
+            print("[INFO] AI appeal generation not configured (using expert templates)")
+            print("       To enable AI-powered appeals, add OPENAI_API_KEY to .env")
+            print("       Get your API key from: https://platform.openai.com/api-keys")
     
     def generate_appeal_content(self, appeal):
         """
@@ -36,6 +44,7 @@ class AdvancedAIAppealGenerator:
         5. Tailors arguments to specific payer tactics
         """
         if not self.enabled:
+            print(f"[INFO] Generating template-based appeal for {appeal.appeal_id}")
             template = get_denial_template(appeal.denial_code)
             return self._format_template(template['template'], appeal)
         
@@ -50,11 +59,12 @@ class AdvancedAIAppealGenerator:
             # For now, we'll use the primary content
             # In future, could add: enhanced_content = self._enhance_with_references(primary_content, appeal)
             
-            print(f"Advanced AI-generated appeal for {appeal.appeal_id} using denial-specific strategy")
+            print(f"[OK] Advanced AI-generated appeal for {appeal.appeal_id} using denial-specific strategy")
             return primary_content
             
         except Exception as e:
-            print(f"Error in advanced AI generation: {e}")
+            print(f"[WARNING] Error in advanced AI generation: {e}")
+            print(f"          Falling back to template-based appeal for {appeal.appeal_id}")
             template = get_denial_template(appeal.denial_code)
             return self._format_template(template['template'], appeal)
     

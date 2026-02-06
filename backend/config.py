@@ -39,7 +39,10 @@ class Config:
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
     GENERATED_FOLDER = os.path.join(os.path.dirname(__file__), 'generated')
     
-    # Create local folders only if not using Supabase Storage
-    if not USE_SUPABASE_STORAGE:
+    # Create local folders (always create them, even if using Supabase as fallback)
+    try:
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
         os.makedirs(GENERATED_FOLDER, exist_ok=True)
+    except Exception as e:
+        print(f"⚠️  Warning: Could not create directories: {e}")
+        print("   File uploads may fail if directories don't exist")

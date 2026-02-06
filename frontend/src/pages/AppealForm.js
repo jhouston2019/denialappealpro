@@ -71,20 +71,20 @@ function AppealForm() {
     
     // Validate NPI
     if (!validateNPI(formData.provider_npi)) {
-      alert('Provider NPI must be exactly 10 digits');
+      alert('❌ Invalid NPI\n\nProvider NPI must be exactly 10 digits.\nPlease check and try again.');
       return;
     }
 
     // Validate claim number
     if (!validateClaimNumber(formData.claim_number)) {
-      alert('Claim number must be at least 5 characters and contain only letters, numbers, and hyphens');
+      alert('❌ Invalid Claim Number\n\nClaim number must be:\n• At least 5 characters long\n• Contain only letters, numbers, and hyphens\n\nPlease check and try again.');
       return;
     }
 
     // Validate date of service is not in the future
     const serviceDate = new Date(formData.date_of_service);
     if (serviceDate > new Date()) {
-      alert('Date of service cannot be in the future');
+      alert('❌ Invalid Date\n\nDate of service cannot be in the future.\nPlease check and try again.');
       return;
     }
 
@@ -92,9 +92,19 @@ function AppealForm() {
     if (formData.timely_filing_deadline) {
       const deadline = new Date(formData.timely_filing_deadline);
       if (deadline < new Date()) {
-        alert('Warning: Timely filing deadline has already passed. You may not be able to submit this appeal.');
-        // Allow to continue but warn user
+        const proceed = window.confirm(
+          '⚠️ Timely Filing Deadline Warning\n\n' +
+          'The timely filing deadline has already passed. This may affect your ability to appeal.\n\n' +
+          'Do you want to continue anyway?'
+        );
+        if (!proceed) return;
       }
+    }
+
+    // Validate file is attached
+    if (!formData.denial_letter) {
+      alert('❌ Missing Document\n\nPlease attach your denial letter or EOB (Explanation of Benefits).\n\nAccepted formats: PDF, JPG, JPEG, PNG');
+      return;
     }
 
     setLoading(true);
@@ -106,12 +116,38 @@ function AppealForm() {
       });
 
       const response = await api.post('/api/appeals/submit', data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000, // 30 second timeout
       });
 
       navigate(`/payment/${response.data.appeal_id}`);
     } catch (error) {
-      alert(error.response?.data?.error || 'Submission failed');
+      console.error('Appeal submission error:', error);
+      
+      let errorMessage = '❌ Submission Failed\n\n';
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage += 'The request timed out. Please check your internet connection and try again.';
+      } else if (error.response) {
+        // Server responded with error
+        const serverError = error.response.data?.error || 'Unknown server error';
+        errorMessage += `Server Error: ${serverError}\n\n`;
+        
+        if (error.response.status === 422) {
+          errorMessage += 'This may be due to:\n• Duplicate appeal for this claim\n• Timely filing deadline passed\n• Invalid data format';
+        } else if (error.response.status === 400) {
+          errorMessage += 'Please check that all required fields are filled correctly.';
+        } else if (error.response.status === 500) {
+          errorMessage += 'Server error. Please try again or contact support.';
+        }
+      } else if (error.request) {
+        // Request made but no response
+        errorMessage += 'Cannot connect to server.\n\nPlease check:\n• Your internet connection\n• The backend server is running\n• API URL is configured correctly';
+      } else {
+        errorMessage += error.message || 'An unexpected error occurred';
+      }
+      
+      alert(errorMessage);
       setLoading(false);
     }
   };

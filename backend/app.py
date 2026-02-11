@@ -38,7 +38,14 @@ limiter = Limiter(
 )
 
 db.init_app(app)
-stripe.api_key = app.config['STRIPE_SECRET_KEY']
+
+# Configure Stripe
+stripe_key = app.config['STRIPE_SECRET_KEY']
+if not stripe_key:
+    print("⚠️  WARNING: STRIPE_SECRET_KEY is not set!")
+else:
+    print(f"✓ Stripe API key configured (starts with: {stripe_key[:15]}...)")
+stripe.api_key = stripe_key
 
 generator = AppealGenerator(app.config['GENERATED_FOLDER'])
 
@@ -52,6 +59,55 @@ def allowed_file(filename):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/api/appeals/list', methods=['GET'])
+def list_appeals():
+    """List all appeals (for testing)"""
+    try:
+        appeals = Appeal.query.order_by(Appeal.created_at.desc()).limit(20).all()
+        return jsonify({
+            'appeals': [{
+                'appeal_id': a.appeal_id,
+                'claim_number': a.claim_number,
+                'payer_name': a.payer_name,
+                'status': a.status,
+                'payment_status': a.payment_status,
+                'created_at': a.created_at.isoformat() if a.created_at else None
+            } for a in appeals]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/appeals/test-generate/<appeal_id>', methods=['POST'])
+def test_generate_appeal(appeal_id):
+    """Test endpoint to manually generate appeal PDF without payment (for testing only)"""
+    try:
+        appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
+        if not appeal:
+            return jsonify({'error': 'Appeal not found'}), 404
+        
+        # Generate the appeal PDF
+        pdf_path = generator.generate_appeal(appeal)
+        
+        # Update appeal status
+        appeal.pdf_path = pdf_path
+        appeal.status = 'completed'
+        appeal.payment_status = 'paid'  # Mark as paid for testing
+        appeal.generated_at = datetime.now()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Appeal generated successfully',
+            'appeal_id': appeal_id,
+            'status': 'completed',
+            'pdf_path': pdf_path
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in test_generate_appeal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/appeals/submit', methods=['POST'])
 @limiter.limit("10 per hour")
@@ -209,9 +265,13 @@ def create_payment(appeal_id):
             'details': str(e)
         }), 500
     except Exception as e:
+        import traceback
         print(f"❌ Error in create_payment: {e}")
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        print(f"❌ Stripe API key set: {bool(stripe.api_key)}")
+        print(f"❌ Stripe API key value: {stripe.api_key[:20] if stripe.api_key else 'None'}...")
         return jsonify({
-            'error': 'Internal server error',
+            'error': str(e),
             'message': 'An unexpected error occurred. Please try again or contact support.'
         }), 500
 

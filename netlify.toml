@@ -1,11 +1,15 @@
 [build]
   base = "frontend"
-  command = "npm run build"
+  command = "npm install --legacy-peer-deps && npm run build"
   publish = "build"
 
 [build.environment]
   NODE_VERSION = "18"
   CI = "false"
-  NPM_FLAGS = "--legacy-peer-deps"
   REACT_APP_API_URL = "https://denial-appeal-pro.fly.dev"
   REACT_APP_STRIPE_PUBLISHABLE_KEY = "pk_test_51SxDTD8YMLJfp2rpPC0NXjdZ5lSF6oxPE7jW1q03SWRjHC1jC4o3kgXMyY62Oo8kaiTM2PJ7xxJGJWSXpZEJAnO300IFxfUu5o"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

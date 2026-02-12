@@ -494,11 +494,26 @@ def stripe_webhook():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
-    # IDEMPOTENCY: Check if event already processed
     event_id = event['id']
-    existing = ProcessedWebhookEvent.query.filter_by(event_id=event_id).first()
-    if existing:
-        print(f"⚠️  Duplicate webhook ignored: {event_id}")
+    
+    # HARD ATOMIC IDEMPOTENCY CHECK - transaction wrapped
+    try:
+        with db.session.begin_nested():
+            # Check if already processed
+            existing = db.session.query(ProcessedWebhookEvent).filter_by(event_id=event_id).with_for_update().first()
+            if existing:
+                return jsonify({'status': 'duplicate'}), 200
+            
+            # Insert event record FIRST - unique constraint protects against race
+            processed = ProcessedWebhookEvent(event_id=event_id, event_type=event['type'])
+            db.session.add(processed)
+        
+        # Commit the event record
+        db.session.commit()
+        
+    except Exception as e:
+        # Unique constraint violation = duplicate webhook
+        db.session.rollback()
         return jsonify({'status': 'duplicate'}), 200
     
     # Handle checkout.session.completed
@@ -587,19 +602,106 @@ def stripe_webhook():
             CreditManager.cancel_subscription(user.id)
             print(f"✓ Subscription canceled for user {user.id}")
     
-    # MARK EVENT AS PROCESSED
-    try:
-        processed = ProcessedWebhookEvent(
-            event_id=event_id,
-            event_type=event['type']
-        )
-        db.session.add(processed)
-        db.session.commit()
-    except Exception as e:
-        print(f"⚠️  Could not mark webhook as processed: {e}")
-        db.session.rollback()
-    
+    # Event already marked as processed at start of function
     return jsonify({'status': 'success'}), 200
+
+# ============================================================================
+# INTERNAL TESTING ENDPOINTS (DO NOT EXPOSE IN PRODUCTION)
+# ============================================================================
+
+@app.route('/internal/test-parallel-deduction', methods=['POST'])
+def test_parallel_deduction():
+    """Test parallel credit deduction for race conditions"""
+    import concurrent.futures
+    
+    data = request.json
+    user_id = data.get('user_id')
+    threads = data.get('threads', 20)
+    
+    if not user_id:
+        return jsonify({'error': 'user_id required'}), 400
+    
+    # Get initial state
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    initial_sub = user.subscription_credits
+    initial_bulk = user.bulk_credits
+    initial_total = initial_sub + initial_bulk
+    
+    # Execute parallel deductions
+    def deduct():
+        return CreditManager.deduct_credit(user_id)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = [executor.submit(deduct) for _ in range(threads)]
+        results = [f.result() for f in futures]
+    
+    success_count = sum(results)
+    fail_count = len(results) - success_count
+    
+    # Get final state
+    db.session.expire(user)
+    user = User.query.get(user_id)
+    final_sub = user.subscription_credits
+    final_bulk = user.bulk_credits
+    final_total = final_sub + final_bulk
+    
+    return jsonify({
+        'initial_subscription_credits': initial_sub,
+        'initial_bulk_credits': initial_bulk,
+        'initial_total': initial_total,
+        'threads': threads,
+        'success': success_count,
+        'fail': fail_count,
+        'final_subscription_credits': final_sub,
+        'final_bulk_credits': final_bulk,
+        'final_total': final_total,
+        'credits_deducted': initial_total - final_total,
+        'expected_deductions': min(initial_total, threads)
+    })
+
+@app.route('/internal/test-webhook-duplicate', methods=['POST'])
+def test_webhook_duplicate():
+    """Test webhook duplicate handling"""
+    import concurrent.futures
+    from sqlalchemy.exc import IntegrityError
+    
+    data = request.json
+    event_id = data.get('event_id', f'test_event_{int(time.time())}')
+    
+    def insert_event():
+        try:
+            with db.session.begin_nested():
+                event = ProcessedWebhookEvent(event_id=event_id, event_type='test')
+                db.session.add(event)
+            db.session.commit()
+            return True
+        except IntegrityError:
+            db.session.rollback()
+            return False
+        except Exception:
+            db.session.rollback()
+            return False
+    
+    # Try to insert same event twice in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(insert_event) for _ in range(2)]
+        results = [f.result() for f in futures]
+    
+    success_count = sum(results)
+    
+    # Check database
+    event_count = ProcessedWebhookEvent.query.filter_by(event_id=event_id).count()
+    
+    return jsonify({
+        'event_id': event_id,
+        'parallel_inserts_attempted': 2,
+        'successful_inserts': success_count,
+        'events_in_database': event_count,
+        'unique_constraint_working': event_count == 1
+    })
 
 # ============================================================================
 # USER & ADMIN ROUTES

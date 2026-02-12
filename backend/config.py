@@ -6,18 +6,32 @@ load_dotenv()
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     
-    # Database configuration with PostgreSQL support
-    database_url = os.getenv('DATABASE_URL', 'sqlite:///appeals.db')
+    # Database configuration - POSTGRESQL REQUIRED
+    database_url = os.getenv('DATABASE_URL')
+    
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is required. "
+            "PostgreSQL connection string must be provided. "
+            "Format: postgresql://user:pass@host:5432/dbname"
+        )
     
     # Fix for Heroku/Railway postgres:// vs postgresql:// issue
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
+    # Ensure psycopg2 driver
+    if not database_url.startswith('postgresql+psycopg2://') and database_url.startswith('postgresql://'):
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+    
     SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,
+        'max_overflow': 20,
         'pool_pre_ping': True,
         'pool_recycle': 300,
+        'isolation_level': 'READ COMMITTED',
     }
     
     # Supabase Configuration

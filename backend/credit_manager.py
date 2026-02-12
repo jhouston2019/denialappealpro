@@ -50,37 +50,34 @@ class CreditManager:
     
     @staticmethod
     def deduct_credit(user_id: int) -> bool:
-        """Deduct one credit - ATOMIC with row lock, subscription first then bulk"""
+        """HARD ATOMIC credit deduction - transaction-wrapped with row lock"""
         try:
-            # SELECT FOR UPDATE - locks row until transaction completes
-            # Prevents race conditions in parallel requests
-            user = User.query.with_for_update().filter_by(id=user_id).first()
+            # Use explicit transaction with automatic commit/rollback
+            with db.session.begin_nested():
+                # SELECT FOR UPDATE - exclusive row lock
+                user = db.session.query(User).filter(User.id == user_id).with_for_update().one_or_none()
+                
+                if not user:
+                    raise Exception("User not found")
+                
+                # Check total balance
+                total = user.subscription_credits + user.bulk_credits
+                if total <= 0:
+                    raise Exception("No credits available")
+                
+                # Deduct from subscription credits first, then bulk
+                if user.subscription_credits > 0:
+                    user.subscription_credits -= 1
+                elif user.bulk_credits > 0:
+                    user.bulk_credits -= 1
+                else:
+                    raise Exception("No credits available")
             
-            if not user:
-                db.session.rollback()
-                return False
-            
-            # Check total balance
-            total = user.subscription_credits + user.bulk_credits
-            if total <= 0:
-                db.session.rollback()
-                return False
-            
-            # Deduct from subscription credits first, then bulk
-            if user.subscription_credits > 0:
-                user.subscription_credits -= 1
-                print(f"OK Deducted subscription credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
-            elif user.bulk_credits > 0:
-                user.bulk_credits -= 1
-                print(f"OK Deducted bulk credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
-            else:
-                db.session.rollback()
-                return False
-            
+            # Commit outer transaction
             db.session.commit()
             return True
+            
         except Exception as e:
-            print(f"Error deducting credit: {e}")
             db.session.rollback()
             return False
     

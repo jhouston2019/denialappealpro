@@ -496,24 +496,13 @@ def stripe_webhook():
     
     event_id = event['id']
     
-    # HARD ATOMIC IDEMPOTENCY CHECK - transaction wrapped
+    # HARD WEBHOOK IDEMPOTENCY - rely on unique constraint
     try:
-        with db.session.begin_nested():
-            # Check if already processed
-            existing = db.session.query(ProcessedWebhookEvent).filter_by(event_id=event_id).with_for_update().first()
-            if existing:
-                return jsonify({'status': 'duplicate'}), 200
-            
-            # Insert event record FIRST - unique constraint protects against race
-            processed = ProcessedWebhookEvent(event_id=event_id, event_type=event['type'])
-            db.session.add(processed)
-        
-        # Commit the event record
-        db.session.commit()
-        
-    except Exception as e:
-        # Unique constraint violation = duplicate webhook
-        db.session.rollback()
+        with db.session.begin():
+            db.session.add(ProcessedWebhookEvent(event_id=event_id, event_type=event['type']))
+            db.session.flush()
+    except Exception:
+        # IntegrityError from unique constraint = duplicate event
         return jsonify({'status': 'duplicate'}), 200
     
     # Handle checkout.session.completed
@@ -673,16 +662,11 @@ def test_webhook_duplicate():
     
     def insert_event():
         try:
-            with db.session.begin_nested():
-                event = ProcessedWebhookEvent(event_id=event_id, event_type='test')
-                db.session.add(event)
-            db.session.commit()
+            with db.session.begin():
+                db.session.add(ProcessedWebhookEvent(event_id=event_id, event_type='test'))
+                db.session.flush()
             return True
-        except IntegrityError:
-            db.session.rollback()
-            return False
         except Exception:
-            db.session.rollback()
             return False
     
     # Try to insert same event twice in parallel

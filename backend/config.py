@@ -24,6 +24,11 @@ class Config:
     if not database_url.startswith('postgresql+psycopg2://') and database_url.startswith('postgresql://'):
         database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
     
+    # Require SSL for production
+    if 'sslmode=' not in database_url:
+        separator = '&' if '?' in database_url else '?'
+        database_url = f"{database_url}{separator}sslmode=require"
+    
     SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {

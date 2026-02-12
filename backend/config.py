@@ -20,9 +20,9 @@ class Config:
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
-    # Ensure psycopg2 driver
-    if not database_url.startswith('postgresql+psycopg2://') and database_url.startswith('postgresql://'):
-        database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+    # Ensure psycopg driver
+    if not database_url.startswith('postgresql+psycopg://') and database_url.startswith('postgresql://'):
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg://', 1)
     
     # Require SSL for production
     if 'sslmode=' not in database_url:

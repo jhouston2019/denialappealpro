@@ -41,7 +41,7 @@ class CreditManager:
             # Bulk purchases go to bulk_credits (accumulate)
             user.bulk_credits += credits
             db.session.commit()
-            print(f"✓ Added {credits} bulk credits to user {user_id} (bulk: {user.bulk_credits}, sub: {user.subscription_credits})")
+            print(f"OK Added {credits} bulk credits to user {user_id} (bulk: {user.bulk_credits}, sub: {user.subscription_credits})")
             return True
         except Exception as e:
             print(f"Error adding credits: {e}")
@@ -69,10 +69,10 @@ class CreditManager:
             # Deduct from subscription credits first, then bulk
             if user.subscription_credits > 0:
                 user.subscription_credits -= 1
-                print(f"✓ Deducted subscription credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
+                print(f"OK Deducted subscription credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
             elif user.bulk_credits > 0:
                 user.bulk_credits -= 1
-                print(f"✓ Deducted bulk credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
+                print(f"OK Deducted bulk credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
             else:
                 db.session.rollback()
                 return False
@@ -147,7 +147,7 @@ class CreditManager:
             # bulk_credits remains unchanged - accumulates forever
             
             db.session.commit()
-            print(f"✓ Reset subscription credits for user {user.id} to {plan.included_credits} (bulk: {user.bulk_credits} preserved)")
+            print(f"OK Reset subscription credits for user {user.id} to {plan.included_credits} (bulk: {user.bulk_credits} preserved)")
             return True
         except Exception as e:
             print(f"Error allocating monthly credits: {e}")
@@ -299,9 +299,9 @@ def initialize_pricing_data():
                 db.session.add(pack)
         
         db.session.commit()
-        print("✓ Pricing data initialized successfully")
+        print("OK Pricing data initialized successfully")
         return True
     except Exception as e:
-        print(f"❌ Error initializing pricing data: {e}")
+        print(f"ERROR Error initializing pricing data: {e}")
         db.session.rollback()
         return False

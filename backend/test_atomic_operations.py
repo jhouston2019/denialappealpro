@@ -59,10 +59,10 @@ def test_parallel_credit_deduction():
         print(f"Expected: 0 (10 initial - 10 successful)")
         
         if final_credits == 0 and successes == 10:
-            print("✅ PASS: No race condition, atomic operations working")
+            print("PASS: No race condition, atomic operations working")
             return True
         else:
-            print(f"❌ FAIL: Race condition detected!")
+            print(f"FAIL: Race condition detected!")
             print(f"   Expected 10 successes, got {successes}")
             print(f"   Expected 0 final credits, got {final_credits}")
             return False
@@ -113,10 +113,10 @@ def test_subscription_preserves_bulk():
         
         # Starter plan has 20 included credits
         if test_user.subscription_credits == 20 and test_user.bulk_credits == 50:
-            print("✅ PASS: Bulk credits preserved, subscription reset to 20")
+            print("PASS: Bulk credits preserved, subscription reset to 20")
             return True
         else:
-            print(f"❌ FAIL: Expected sub=20, bulk=50")
+            print(f"FAIL: Expected sub=20, bulk=50")
             print(f"   Got sub={test_user.subscription_credits}, bulk={test_user.bulk_credits}")
             return False
 
@@ -156,10 +156,10 @@ def test_credit_deduction_order():
         
         # Should have used all 3 subscription + 2 bulk
         if test_user.subscription_credits == 0 and test_user.bulk_credits == 8:
-            print("✅ PASS: Subscription credits used first, then bulk")
+            print("PASS: Subscription credits used first, then bulk")
             return True
         else:
-            print(f"❌ FAIL: Expected sub=0, bulk=8")
+            print(f"FAIL: Expected sub=0, bulk=8")
             print(f"   Got sub={test_user.subscription_credits}, bulk={test_user.bulk_credits}")
             return False
 
@@ -202,10 +202,10 @@ def test_bulk_credit_accumulation():
         print(f"After adding 250: {test_user.bulk_credits}")
         
         if test_user.bulk_credits == 400:  # 50 + 100 + 250
-            print("✅ PASS: Bulk credits accumulate correctly")
+            print("PASS: Bulk credits accumulate correctly")
             return True
         else:
-            print(f"❌ FAIL: Expected 400, got {test_user.bulk_credits}")
+            print(f"FAIL: Expected 400, got {test_user.bulk_credits}")
             return False
 
 def run_all_tests():
@@ -227,23 +227,23 @@ def run_all_tests():
     print("="*60)
     
     for test_name, passed in results:
-        status = "✅ PASS" if passed else "❌ FAIL"
+        status = "PASS" if passed else "FAIL"
         print(f"{status}: {test_name}")
     
     all_passed = all(result[1] for result in results)
     
     print("\n" + "="*60)
     if all_passed:
-        print("✅ ALL TESTS PASSED - ATOMIC OPERATIONS VERIFIED")
+        print("ALL TESTS PASSED - ATOMIC OPERATIONS VERIFIED")
         print("="*60)
         print("\nRevenue protection is working correctly:")
-        print("  ✓ No race conditions in parallel operations")
-        print("  ✓ Subscription renewals preserve bulk credits")
-        print("  ✓ Credit deduction order is correct")
-        print("  ✓ Bulk credits accumulate properly")
-        print("\n🚀 System ready for production deployment")
+        print("  OK No race conditions in parallel operations")
+        print("  OK Subscription renewals preserve bulk credits")
+        print("  OK Credit deduction order is correct")
+        print("  OK Bulk credits accumulate properly")
+        print("\nSYSTEM READY FOR PRODUCTION DEPLOYMENT")
     else:
-        print("❌ SOME TESTS FAILED - DO NOT DEPLOY")
+        print("SOME TESTS FAILED - DO NOT DEPLOY")
         print("="*60)
         print("\nFix failing tests before production deployment")
     

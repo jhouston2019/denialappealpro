@@ -10,7 +10,17 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     stripe_customer_id = db.Column(db.String(255), unique=True, index=True)
     subscription_tier = db.Column(db.String(50))  # starter, growth, pro, or null
-    credit_balance = db.Column(db.Integer, default=0, nullable=False)
+    
+    # SEPARATED CREDIT POOLS - subscription resets, bulk accumulates
+    subscription_credits = db.Column(db.Integer, default=0, nullable=False)
+    bulk_credits = db.Column(db.Integer, default=0, nullable=False)
+    
+    # DEPRECATED - kept for backward compatibility, computed property
+    @property
+    def credit_balance(self):
+        """Total credits = subscription + bulk"""
+        return self.subscription_credits + self.bulk_credits
+    
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships

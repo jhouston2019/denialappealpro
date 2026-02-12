@@ -31,14 +31,17 @@ class CreditManager:
     
     @staticmethod
     def add_credits(user_id: int, credits: int, reason: str = "purchase") -> bool:
-        """Add credits to user account"""
+        """Add credits to user account - goes to BULK pool"""
         try:
-            user = User.query.get(user_id)
+            user = User.query.with_for_update().filter_by(id=user_id).first()
             if not user:
+                db.session.rollback()
                 return False
             
-            user.credit_balance += credits
+            # Bulk purchases go to bulk_credits (accumulate)
+            user.bulk_credits += credits
             db.session.commit()
+            print(f"✓ Added {credits} bulk credits to user {user_id} (bulk: {user.bulk_credits}, sub: {user.subscription_credits})")
             return True
         except Exception as e:
             print(f"Error adding credits: {e}")
@@ -47,16 +50,33 @@ class CreditManager:
     
     @staticmethod
     def deduct_credit(user_id: int) -> bool:
-        """Deduct one credit from user account"""
+        """Deduct one credit - ATOMIC with row lock, subscription first then bulk"""
         try:
-            user = User.query.get(user_id)
+            # SELECT FOR UPDATE - locks row until transaction completes
+            # Prevents race conditions in parallel requests
+            user = User.query.with_for_update().filter_by(id=user_id).first()
+            
             if not user:
+                db.session.rollback()
                 return False
             
-            if user.credit_balance <= 0:
+            # Check total balance
+            total = user.subscription_credits + user.bulk_credits
+            if total <= 0:
+                db.session.rollback()
                 return False
             
-            user.credit_balance -= 1
+            # Deduct from subscription credits first, then bulk
+            if user.subscription_credits > 0:
+                user.subscription_credits -= 1
+                print(f"✓ Deducted subscription credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
+            elif user.bulk_credits > 0:
+                user.bulk_credits -= 1
+                print(f"✓ Deducted bulk credit from user {user_id} (sub: {user.subscription_credits}, bulk: {user.bulk_credits})")
+            else:
+                db.session.rollback()
+                return False
+            
             db.session.commit()
             return True
         except Exception as e:
@@ -68,13 +88,13 @@ class CreditManager:
     def has_credits(user_id: int) -> bool:
         """Check if user has available credits"""
         user = User.query.get(user_id)
-        return user and user.credit_balance > 0
+        return user and (user.subscription_credits + user.bulk_credits) > 0
     
     @staticmethod
     def get_credit_balance(user_id: int) -> int:
-        """Get user's current credit balance"""
+        """Get user's total credit balance"""
         user = User.query.get(user_id)
-        return user.credit_balance if user else 0
+        return (user.subscription_credits + user.bulk_credits) if user else 0
     
     @staticmethod
     def set_subscription(user_id: int, tier: str) -> bool:
@@ -110,21 +130,24 @@ class CreditManager:
     
     @staticmethod
     def allocate_monthly_credits(user_id: int) -> bool:
-        """Allocate monthly credits based on subscription tier - RESET not accumulate"""
+        """Allocate monthly credits - RESET subscription pool, preserve bulk pool"""
         try:
-            user = User.query.get(user_id)
+            user = User.query.with_for_update().filter_by(id=user_id).first()
             if not user or not user.subscription_tier:
+                db.session.rollback()
                 return False
             
             plan = SubscriptionPlan.query.filter_by(name=user.subscription_tier).first()
             if not plan:
+                db.session.rollback()
                 return False
             
-            # RESET to included credits (subscription credits do NOT accumulate)
-            # Bulk credits accumulate. Subscription credits reset.
-            user.credit_balance = plan.included_credits
+            # RESET subscription credits ONLY (bulk_credits untouched)
+            user.subscription_credits = plan.included_credits
+            # bulk_credits remains unchanged - accumulates forever
+            
             db.session.commit()
-            print(f"✓ Reset subscription credits for user {user.id} to {plan.included_credits}")
+            print(f"✓ Reset subscription credits for user {user.id} to {plan.included_credits} (bulk: {user.bulk_credits} preserved)")
             return True
         except Exception as e:
             print(f"Error allocating monthly credits: {e}")
@@ -144,7 +167,9 @@ class CreditManager:
         return {
             "email": user.email,
             "subscription_tier": user.subscription_tier,
-            "credit_balance": user.credit_balance,
+            "subscription_credits": user.subscription_credits,
+            "bulk_credits": user.bulk_credits,
+            "credit_balance": user.subscription_credits + user.bulk_credits,
             "total_appeals": total_appeals,
             "completed_appeals": completed_appeals,
             "member_since": user.created_at.isoformat()

@@ -121,7 +121,7 @@ function Landing() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
           }}>
-            Turn Your Denied Claim<br/>Into a Winning Appeal
+            Structured Denial Appeal Engine
           </h1>
           
           <p style={{
@@ -132,8 +132,8 @@ function Landing() {
             lineHeight: '1.6',
             fontWeight: 500
           }}>
-            Professional insurance appeal letters generated in minutes.<br/>
-            No legal experience required. Just $10 per appeal.
+            Payer-Specific Logic • CARC Mapping • Timely Filing Validation<br/>
+            Professional denial execution system for healthcare providers.
           </p>
           
           <div style={{
@@ -144,7 +144,7 @@ function Landing() {
             flexWrap: 'wrap'
           }}>
             <button 
-              onClick={() => navigate('/submit')}
+              onClick={() => navigate('/appeal-form')}
               className="pulse-animate"
               style={{
                 background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
@@ -176,7 +176,7 @@ function Landing() {
             </button>
             
             <button 
-              onClick={() => navigate('/history')}
+              onClick={() => navigate('/pricing')}
               style={{
                 background: 'transparent',
                 color: '#1e3a8a',
@@ -198,7 +198,7 @@ function Landing() {
                 e.target.style.color = '#1e3a8a';
               }}
             >
-              View Past Appeals
+              View Pricing Plans
             </button>
           </div>
           

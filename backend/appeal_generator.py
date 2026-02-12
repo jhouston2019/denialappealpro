@@ -51,7 +51,9 @@ class AppealGenerator:
         story.append(Spacer(1, 0.2*inch))
         story.append(Paragraph(datetime.now().strftime('%B %d, %Y'), styles['Normal']))
         story.append(Spacer(1, 0.2*inch))
-        story.append(Paragraph(f"<b>To: {appeal.payer_name}</b>", styles['Normal']))
+        # Handle both 'payer' and 'payer_name' attributes for backward compatibility
+        payer_name = getattr(appeal, 'payer', getattr(appeal, 'payer_name', 'Insurance Payer'))
+        story.append(Paragraph(f"<b>To: {payer_name}</b>", styles['Normal']))
         story.append(Spacer(1, 0.3*inch))
         
         # 2. Claim reference block

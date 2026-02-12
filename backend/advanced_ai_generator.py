@@ -75,15 +75,56 @@ class AdvancedAIAppealGenerator:
     def _generate_primary_appeal(self, appeal, strategy):
         """Generate the primary appeal content using advanced prompting"""
         
-        # Get denial-specific information
-        denial_template = get_denial_template(appeal.denial_code)
-        denial_name = denial_template['name']
+        # Import denial rules and timely filing calculator
+        from denial_rules import get_denial_rule, get_required_sections, get_strategy
+        from timely_filing import calculate_timely_filing
+        from datetime import datetime
+        
+        # Get denial-specific information from new rules engine
+        denial_rule = get_denial_rule(appeal.denial_code)
+        if denial_rule:
+            denial_name = denial_rule['description']
+            required_sections = denial_rule['required_sections']
+            required_docs = denial_rule['required_docs']
+            denial_strategy = denial_rule['strategy']
+        else:
+            # Fallback to old template system
+            denial_template = get_denial_template(appeal.denial_code)
+            denial_name = denial_template['name']
+            required_sections = []
+            required_docs = []
+            denial_strategy = "general"
+        
+        # Calculate timely filing status
+        timely_filing_result = None
+        if hasattr(appeal, 'created_at') and appeal.date_of_service:
+            try:
+                timely_filing_result = calculate_timely_filing(
+                    denial_date=appeal.created_at,
+                    service_date=appeal.date_of_service,
+                    payer=getattr(appeal, 'payer', getattr(appeal, 'payer_name', 'Unknown')),
+                    appeal_level=getattr(appeal, 'appeal_level', 'level_1')
+                )
+            except Exception as e:
+                print(f"[WARNING] Could not calculate timely filing: {e}")
         
         # Build expert system prompt with specialized knowledge
-        system_prompt = self._build_expert_system_prompt(appeal.denial_code, strategy)
+        system_prompt = self._build_expert_system_prompt(
+            appeal.denial_code, 
+            strategy, 
+            denial_rule,
+            timely_filing_result
+        )
         
         # Build comprehensive user prompt with case details
-        user_prompt = self._build_comprehensive_prompt(appeal, denial_name, strategy)
+        user_prompt = self._build_comprehensive_prompt(
+            appeal, 
+            denial_name, 
+            strategy,
+            required_sections,
+            required_docs,
+            timely_filing_result
+        )
         
         # Call OpenAI with advanced parameters
         response = self.client.chat.completions.create(
@@ -101,14 +142,27 @@ class AdvancedAIAppealGenerator:
         
         return response.choices[0].message.content
     
-    def _build_expert_system_prompt(self, denial_code, strategy):
+    def _build_expert_system_prompt(self, denial_code, strategy, denial_rule=None, timely_filing_result=None):
         """Build a highly specialized system prompt with expert knowledge"""
         
         # Get relevant regulatory references based on denial type
         erisa_refs = REGULATORY_REFERENCES.get('ERISA', {})
         aca_refs = REGULATORY_REFERENCES.get('ACA', {})
         
-        return f"""You are an elite medical billing appeals specialist with 20+ years of experience and a background in healthcare law. You have successfully overturned thousands of insurance denials with a 90%+ success rate.
+        # Add timely filing context if available
+        timely_filing_context = ""
+        if timely_filing_result:
+            if not timely_filing_result['within_window']:
+                timely_filing_context = f"\n\nCRITICAL: This appeal is OUTSIDE the standard filing window. You MUST address timely filing and provide good cause arguments."
+            elif timely_filing_result['urgency'] == 'critical':
+                timely_filing_context = f"\n\nURGENT: Only {timely_filing_result['days_remaining']} days remaining. Emphasize urgency and request expedited review."
+        
+        # Add denial rule context if available
+        denial_rule_context = ""
+        if denial_rule:
+            denial_rule_context = f"\n\nREQUIRED SECTIONS: Your appeal MUST include these sections:\n" + "\n".join(f"- {section}" for section in denial_rule['required_sections'])
+        
+        return f"""You are an elite medical billing appeals specialist with 20+ years of experience and a background in healthcare law. You have successfully overturned thousands of insurance denials with a 90%+ success rate.{timely_filing_context}{denial_rule_context}
 
 EXPERTISE AREAS:
 - ERISA regulations and requirements for group health plans
@@ -156,8 +210,48 @@ WHAT MAKES YOUR APPEALS SUPERIOR:
 FORMAT:
 Write ONLY the appeal argument body (no headers, no signature). Start with "This appeal contests..." or "We respectfully appeal..." and provide a compelling, multi-layered argument."""
     
-    def _build_comprehensive_prompt(self, appeal, denial_name, strategy):
+    def _build_comprehensive_prompt(self, appeal, denial_name, strategy, required_sections=None, required_docs=None, timely_filing_result=None):
         """Build detailed prompt with all case information and strategic guidance"""
+        
+        # Get payer name (handle both 'payer' and 'payer_name' attributes)
+        payer_name = getattr(appeal, 'payer', getattr(appeal, 'payer_name', 'Unknown Payer'))
+        
+        # Get appeal level
+        appeal_level = getattr(appeal, 'appeal_level', 'level_1').replace('_', ' ').title()
+        
+        # Build timely filing section
+        timely_filing_section = ""
+        if timely_filing_result:
+            timely_filing_section = f"""
+═══════════════════════════════════════════════════════════
+TIMELY FILING ANALYSIS
+═══════════════════════════════════════════════════════════
+Status: {timely_filing_result['status']}
+Days Remaining: {timely_filing_result['days_remaining']}
+Urgency Level: {timely_filing_result['urgency'].upper()}
+Recommended Strategy: {timely_filing_result['recommended_strategy']}
+
+Strategic Recommendation:
+{timely_filing_result['recommendation']}
+"""
+        
+        # Build required sections guidance
+        required_sections_text = ""
+        if required_sections:
+            required_sections_text = f"""
+═══════════════════════════════════════════════════════════
+REQUIRED SECTIONS (MUST INCLUDE ALL)
+═══════════════════════════════════════════════════════════
+{chr(10).join(f'{i+1}. {section}' for i, section in enumerate(required_sections))}
+"""
+        
+        # Build required documentation guidance
+        required_docs_text = ""
+        if required_docs:
+            required_docs_text = f"""
+Required Documentation References:
+{chr(10).join(f'  • {doc}' for doc in required_docs)}
+"""
         
         prompt = f"""Generate a superior insurance appeal argument for this denied claim:
 
@@ -183,7 +277,9 @@ Service Information:
 - Date of Service: {appeal.date_of_service.strftime('%B %d, %Y')}
 - CPT Code(s): {appeal.cpt_codes or 'See documentation'}
 - Billed Amount: ${appeal.billed_amount:,.2f}
-
+- Appeal Level: {appeal_level}
+{timely_filing_section}
+{required_sections_text}
 ═══════════════════════════════════════════════════════════
 STRATEGIC GUIDANCE (Use this to craft superior arguments)
 ═══════════════════════════════════════════════════════════
@@ -195,6 +291,7 @@ Common Payer Weakness:
 
 Escalation Path:
 {strategy.get('escalation', 'Request detailed review')}
+{required_docs_text}
 
 ═══════════════════════════════════════════════════════════
 REQUIREMENTS FOR SUPERIOR APPEAL

@@ -5,6 +5,8 @@ import './App.css';
 // Lazy load pages for code splitting
 const Landing = lazy(() => import('./pages/Landing'));
 const AppealForm = lazy(() => import('./pages/AppealForm'));
+const AppealFormWizard = lazy(() => import('./pages/AppealFormWizard'));
+const Pricing = lazy(() => import('./pages/Pricing'));
 const AppealHistory = lazy(() => import('./pages/AppealHistory'));
 const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
 const AppealDownload = lazy(() => import('./pages/AppealDownload'));
@@ -60,6 +62,8 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/submit" element={<AppealForm />} />
+            <Route path="/appeal-form" element={<AppealFormWizard />} />
+            <Route path="/pricing" element={<Pricing />} />
             <Route path="/history" element={<AppealHistory />} />
             <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
             <Route path="/download/:appealId" element={<AppealDownload />} />

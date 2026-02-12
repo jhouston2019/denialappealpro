@@ -1,0 +1,280 @@
+"""
+Credit Management System
+Handles credit allocation, deduction, and subscription management
+"""
+
+from datetime import datetime
+from models import db, User, SubscriptionPlan, CreditPack, Appeal
+from typing import Optional, Dict
+
+class CreditManager:
+    """Manage user credits and subscriptions"""
+    
+    @staticmethod
+    def get_or_create_user(email: str, stripe_customer_id: Optional[str] = None) -> User:
+        """Get existing user or create new one"""
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            user = User(
+                email=email,
+                stripe_customer_id=stripe_customer_id,
+                credit_balance=0
+            )
+            db.session.add(user)
+            db.session.commit()
+        elif stripe_customer_id and not user.stripe_customer_id:
+            user.stripe_customer_id = stripe_customer_id
+            db.session.commit()
+        
+        return user
+    
+    @staticmethod
+    def add_credits(user_id: int, credits: int, reason: str = "purchase") -> bool:
+        """Add credits to user account"""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return False
+            
+            user.credit_balance += credits
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding credits: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def deduct_credit(user_id: int) -> bool:
+        """Deduct one credit from user account"""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return False
+            
+            if user.credit_balance <= 0:
+                return False
+            
+            user.credit_balance -= 1
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error deducting credit: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def has_credits(user_id: int) -> bool:
+        """Check if user has available credits"""
+        user = User.query.get(user_id)
+        return user and user.credit_balance > 0
+    
+    @staticmethod
+    def get_credit_balance(user_id: int) -> int:
+        """Get user's current credit balance"""
+        user = User.query.get(user_id)
+        return user.credit_balance if user else 0
+    
+    @staticmethod
+    def set_subscription(user_id: int, tier: str) -> bool:
+        """Set user's subscription tier"""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return False
+            
+            user.subscription_tier = tier
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error setting subscription: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def cancel_subscription(user_id: int) -> bool:
+        """Cancel user's subscription"""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return False
+            
+            user.subscription_tier = None
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error canceling subscription: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def allocate_monthly_credits(user_id: int) -> bool:
+        """Allocate monthly credits based on subscription tier"""
+        try:
+            user = User.query.get(user_id)
+            if not user or not user.subscription_tier:
+                return False
+            
+            plan = SubscriptionPlan.query.filter_by(name=user.subscription_tier).first()
+            if not plan:
+                return False
+            
+            # Reset to included credits (don't accumulate)
+            user.credit_balance = plan.included_credits
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error allocating monthly credits: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def get_user_stats(user_id: int) -> Dict:
+        """Get user statistics"""
+        user = User.query.get(user_id)
+        if not user:
+            return None
+        
+        total_appeals = Appeal.query.filter_by(user_id=user_id).count()
+        completed_appeals = Appeal.query.filter_by(user_id=user_id, status='completed').count()
+        
+        return {
+            "email": user.email,
+            "subscription_tier": user.subscription_tier,
+            "credit_balance": user.credit_balance,
+            "total_appeals": total_appeals,
+            "completed_appeals": completed_appeals,
+            "member_since": user.created_at.isoformat()
+        }
+
+class PricingManager:
+    """Manage pricing tiers and credit packs"""
+    
+    # Subscription tiers
+    SUBSCRIPTION_TIERS = {
+        "starter": {
+            "name": "Starter",
+            "monthly_price": 99.00,
+            "included_credits": 20,
+            "overage_price": 8.00
+        },
+        "growth": {
+            "name": "Growth",
+            "monthly_price": 299.00,
+            "included_credits": 75,
+            "overage_price": 7.00
+        },
+        "pro": {
+            "name": "Pro",
+            "monthly_price": 599.00,
+            "included_credits": 200,
+            "overage_price": 6.00
+        }
+    }
+    
+    # Bulk credit packs
+    CREDIT_PACKS = {
+        "pack_25": {
+            "name": "25 Credits",
+            "credits": 25,
+            "price": 225.00,
+            "per_credit": 9.00
+        },
+        "pack_50": {
+            "name": "50 Credits",
+            "credits": 50,
+            "price": 425.00,
+            "per_credit": 8.50
+        },
+        "pack_100": {
+            "name": "100 Credits",
+            "credits": 100,
+            "price": 750.00,
+            "per_credit": 7.50
+        },
+        "pack_250": {
+            "name": "250 Credits",
+            "credits": 250,
+            "price": 1750.00,
+            "per_credit": 7.00
+        },
+        "pack_500": {
+            "name": "500 Credits",
+            "credits": 500,
+            "price": 3250.00,
+            "per_credit": 6.50
+        }
+    }
+    
+    # Retail pricing
+    RETAIL_PRICE = 10.00
+    
+    @staticmethod
+    def get_subscription_tier(tier_name: str) -> Optional[Dict]:
+        """Get subscription tier details"""
+        return PricingManager.SUBSCRIPTION_TIERS.get(tier_name.lower())
+    
+    @staticmethod
+    def get_credit_pack(pack_id: str) -> Optional[Dict]:
+        """Get credit pack details"""
+        return PricingManager.CREDIT_PACKS.get(pack_id)
+    
+    @staticmethod
+    def get_all_subscription_tiers() -> Dict:
+        """Get all subscription tiers"""
+        return PricingManager.SUBSCRIPTION_TIERS
+    
+    @staticmethod
+    def get_all_credit_packs() -> Dict:
+        """Get all credit packs"""
+        return PricingManager.CREDIT_PACKS
+    
+    @staticmethod
+    def calculate_overage_cost(user_id: int, credits_needed: int) -> float:
+        """Calculate cost for overage credits"""
+        user = User.query.get(user_id)
+        if not user or not user.subscription_tier:
+            return credits_needed * PricingManager.RETAIL_PRICE
+        
+        plan = SubscriptionPlan.query.filter_by(name=user.subscription_tier).first()
+        if not plan:
+            return credits_needed * PricingManager.RETAIL_PRICE
+        
+        return float(plan.overage_price) * credits_needed
+
+def initialize_pricing_data():
+    """Initialize subscription plans and credit packs in database"""
+    try:
+        # Create subscription plans
+        for tier_id, tier_data in PricingManager.SUBSCRIPTION_TIERS.items():
+            existing = SubscriptionPlan.query.filter_by(name=tier_id).first()
+            if not existing:
+                plan = SubscriptionPlan(
+                    name=tier_id,
+                    monthly_price=tier_data["monthly_price"],
+                    included_credits=tier_data["included_credits"],
+                    overage_price=tier_data["overage_price"],
+                    stripe_price_id=f"price_{tier_id}_placeholder"  # Replace with actual Stripe price IDs
+                )
+                db.session.add(plan)
+        
+        # Create credit packs
+        for pack_id, pack_data in PricingManager.CREDIT_PACKS.items():
+            existing = CreditPack.query.filter_by(name=pack_data["name"]).first()
+            if not existing:
+                pack = CreditPack(
+                    name=pack_data["name"],
+                    credits=pack_data["credits"],
+                    price=pack_data["price"],
+                    stripe_price_id=f"price_{pack_id}_placeholder"  # Replace with actual Stripe price IDs
+                )
+                db.session.add(pack)
+        
+        db.session.commit()
+        print("✓ Pricing data initialized successfully")
+        return True
+    except Exception as e:
+        print(f"❌ Error initializing pricing data: {e}")
+        db.session.rollback()
+        return False

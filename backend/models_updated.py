@@ -46,6 +46,7 @@ class CreditPack(db.Model):
     def __repr__(self):
         return f'<CreditPack {self.name} - {self.credits} credits>'
 
+# NEW: Webhook idempotency tracking
 class ProcessedWebhookEvent(db.Model):
     __tablename__ = 'processed_webhook_events'
     
@@ -53,6 +54,7 @@ class ProcessedWebhookEvent(db.Model):
     event_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
     event_type = db.Column(db.String(100), nullable=False)
     processed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    metadata = db.Column(db.Text)  # Store event metadata as JSON
     
     def __repr__(self):
         return f'<ProcessedWebhookEvent {self.event_id}>'
@@ -87,11 +89,6 @@ class Appeal(db.Model):
     # Credit tracking
     credit_used = db.Column(db.Boolean, default=False, nullable=False)
     
-    # Generation tracking - PREVENT ABUSE
-    generation_count = db.Column(db.Integer, default=0, nullable=False)
-    last_generated_at = db.Column(db.DateTime)
-    retail_token_used = db.Column(db.Boolean, default=False, nullable=False)
-    
     # Status
     status = db.Column(db.String(50), nullable=False, default='pending')  # pending, paid, completed, failed
     payment_status = db.Column(db.String(50), default='unpaid')
@@ -107,6 +104,10 @@ class Appeal(db.Model):
     
     # Pricing
     price_charged = db.Column(db.Numeric(10, 2), nullable=False, default=10.00)
+    
+    # NEW: Generation tracking to prevent regeneration exploits
+    generation_count = db.Column(db.Integer, default=0, nullable=False)
+    last_generated_at = db.Column(db.DateTime)
     
     def __repr__(self):
         return f'<Appeal {self.appeal_id}>'

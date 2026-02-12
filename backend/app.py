@@ -10,7 +10,7 @@ import io
 from werkzeug.utils import secure_filename
 
 from config import Config
-from models import db, Appeal, User, SubscriptionPlan, CreditPack
+from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
@@ -222,7 +222,21 @@ def parse_denial_letter():
         try:
             # Parse the PDF
             result = parse_denial_pdf(temp_path)
+            
+            # ADD QUALITY WARNINGS
+            if result.get('confidence') == 'low':
+                result['warning'] = 'Low confidence extraction - please review all fields carefully'
+            
             return jsonify(result), 200
+            
+        except ValueError as e:
+            # USER-FRIENDLY ERROR MESSAGES
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'message': 'Could not extract information from PDF. Please enter information manually.',
+                'allow_manual': True
+            }), 400
         finally:
             # Clean up temp file
             if os.path.exists(temp_path):
@@ -230,7 +244,12 @@ def parse_denial_letter():
     
     except Exception as e:
         print(f"❌ Error parsing denial letter: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'An error occurred while processing your file. Please enter information manually.',
+            'allow_manual': True
+        }), 500
 
 # ============================================================================
 # APPEAL SUBMISSION ROUTES (Updated with Credit Logic)
@@ -364,9 +383,16 @@ def generate_appeal_with_credits(appeal_id):
         if not appeal:
             return jsonify({'error': 'Appeal not found'}), 404
         
-        # Check if already generated
+        # PREVENT ANY REGENERATION
         if appeal.status == 'completed':
             return jsonify({'error': 'Appeal already generated'}), 400
+        
+        # PREVENT RETAIL REGENERATION EXPLOIT
+        if appeal.retail_token_used:
+            return jsonify({
+                'error': 'Retail appeal already generated',
+                'message': 'This retail appeal has already been generated. Purchase credits for additional appeals.'
+            }), 400
         
         # Check if user has credits
         if appeal.user_id:
@@ -377,6 +403,7 @@ def generate_appeal_with_credits(appeal_id):
                     appeal.credit_used = True
                     appeal.payment_status = 'paid'
                     appeal.status = 'paid'
+                    appeal.generation_count += 1
                     db.session.commit()
                     
                     # Generate appeal
@@ -385,6 +412,7 @@ def generate_appeal_with_credits(appeal_id):
                         appeal.appeal_letter_path = pdf_path
                         appeal.status = 'completed'
                         appeal.completed_at = datetime.utcnow()
+                        appeal.last_generated_at = datetime.utcnow()
                         db.session.commit()
                         
                         return jsonify({
@@ -466,6 +494,13 @@ def stripe_webhook():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
+    # IDEMPOTENCY: Check if event already processed
+    event_id = event['id']
+    existing = ProcessedWebhookEvent.query.filter_by(event_id=event_id).first()
+    if existing:
+        print(f"⚠️  Duplicate webhook ignored: {event_id}")
+        return jsonify({'status': 'duplicate'}), 200
+    
     # Handle checkout.session.completed
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
@@ -502,10 +537,17 @@ def stripe_webhook():
             if appeal_id:
                 appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
                 if appeal:
+                    # CHECK IF ALREADY GENERATED
+                    if appeal.status == 'completed' or appeal.retail_token_used:
+                        print(f"⚠️  Appeal {appeal_id} already completed - ignoring webhook")
+                        return jsonify({'status': 'already_completed'}), 200
+                    
                     appeal.payment_status = 'paid'
                     appeal.status = 'paid'
                     appeal.paid_at = datetime.utcnow()
                     appeal.stripe_payment_intent_id = session.get('payment_intent')
+                    appeal.retail_token_used = True  # LOCK RETAIL GENERATION
+                    appeal.generation_count += 1
                     db.session.commit()
                     
                     # Generate appeal after payment
@@ -514,6 +556,7 @@ def stripe_webhook():
                         appeal.appeal_letter_path = appeal_path
                         appeal.status = 'completed'
                         appeal.completed_at = datetime.utcnow()
+                        appeal.last_generated_at = datetime.utcnow()
                         db.session.commit()
                         print(f"✓ Appeal generated for {appeal_id}")
                     except Exception as e:
@@ -543,6 +586,18 @@ def stripe_webhook():
         if user:
             CreditManager.cancel_subscription(user.id)
             print(f"✓ Subscription canceled for user {user.id}")
+    
+    # MARK EVENT AS PROCESSED
+    try:
+        processed = ProcessedWebhookEvent(
+            event_id=event_id,
+            event_type=event['type']
+        )
+        db.session.add(processed)
+        db.session.commit()
+    except Exception as e:
+        print(f"⚠️  Could not mark webhook as processed: {e}")
+        db.session.rollback()
     
     return jsonify({'status': 'success'}), 200
 

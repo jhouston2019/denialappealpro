@@ -110,7 +110,7 @@ class CreditManager:
     
     @staticmethod
     def allocate_monthly_credits(user_id: int) -> bool:
-        """Allocate monthly credits based on subscription tier"""
+        """Allocate monthly credits based on subscription tier - RESET not accumulate"""
         try:
             user = User.query.get(user_id)
             if not user or not user.subscription_tier:
@@ -120,9 +120,11 @@ class CreditManager:
             if not plan:
                 return False
             
-            # Reset to included credits (don't accumulate)
+            # RESET to included credits (subscription credits do NOT accumulate)
+            # Bulk credits accumulate. Subscription credits reset.
             user.credit_balance = plan.included_credits
             db.session.commit()
+            print(f"✓ Reset subscription credits for user {user.id} to {plan.included_credits}")
             return True
         except Exception as e:
             print(f"Error allocating monthly credits: {e}")

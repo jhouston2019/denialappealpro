@@ -43,17 +43,50 @@ class DenialLetterParser:
         pass
     
     def extract_text_from_pdf(self, pdf_path: str) -> str:
-        """Extract text from PDF file"""
+        """Extract text from PDF file with comprehensive error handling"""
         try:
             with open(pdf_path, 'rb') as file:
                 reader = PyPDF2.PdfReader(file)
+                
+                # CHECK IF PDF IS ENCRYPTED
+                if reader.is_encrypted:
+                    try:
+                        reader.decrypt('')  # Try empty password
+                    except:
+                        raise ValueError("PDF is password protected. Please provide an unencrypted version.")
+                
+                # CHECK IF PDF HAS PAGES
+                if len(reader.pages) == 0:
+                    raise ValueError("PDF has no pages")
+                
                 text = ""
-                for page in reader.pages:
-                    text += page.extract_text() + "\n"
+                empty_pages = 0
+                
+                for i, page in enumerate(reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if not page_text or len(page_text.strip()) < 10:
+                            empty_pages += 1
+                        text += page_text + "\n"
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not extract text from page {i+1}: {e}")
+                        empty_pages += 1
+                
+                # VALIDATE MINIMUM TEXT LENGTH
+                if len(text.strip()) < 50:
+                    raise ValueError(
+                        "PDF contains insufficient text. This may be an image-based PDF. "
+                        "Please use a text-based PDF or enter information manually."
+                    )
+                
                 return text
+                
+        except ValueError as e:
+            # Re-raise ValueError with user-friendly message
+            raise
         except Exception as e:
-            print(f"Error extracting PDF text: {e}")
-            return ""
+            # Catch all other errors
+            raise ValueError(f"Failed to read PDF: {str(e)}")
     
     def extract_denial_codes(self, text: str) -> List[str]:
         """Extract CARC/RARC denial codes from text"""

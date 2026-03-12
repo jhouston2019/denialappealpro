@@ -513,12 +513,8 @@ function Landing() {
           </p>
           
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: '60px 1fr',
-            gap: '24px',
-            marginBottom: '32px',
-            maxWidth: '600px',
-            margin: '0 auto 32px auto'
+            textAlign: 'center',
+            marginBottom: '32px'
           }}>
             {[
               { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
@@ -528,35 +524,32 @@ function Landing() {
               { icon: '📝', title: 'Formal Appeal Request', desc: 'Professional reconsideration request language' },
               { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
             ].map((item, i) => (
-              <React.Fragment key={i}>
+              <div key={i} style={{ marginBottom: '32px' }}>
                 <div style={{
                   fontSize: '36px',
-                  textAlign: 'center',
-                  paddingTop: '4px'
+                  marginBottom: '8px'
                 }}>
                   {item.icon}
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    color: '#1a1a1a',
-                    marginBottom: '4px'
-                  }}>
-                    {item.title}
-                  </div>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '15px',
-                    color: '#666',
-                    lineHeight: '1.5',
-                    fontWeight: 500
-                  }}>
-                    {item.desc}
-                  </div>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: '#1a1a1a',
+                  marginBottom: '4px'
+                }}>
+                  {item.title}
                 </div>
-              </React.Fragment>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: '15px',
+                  color: '#666',
+                  lineHeight: '1.5',
+                  fontWeight: 500
+                }}>
+                  {item.desc}
+                </div>
+              </div>
             ))}
           </div>
           

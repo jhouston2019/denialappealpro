@@ -3,6 +3,11 @@ Advanced AI-powered appeal generation with multi-step reasoning and expert knowl
 This system generates appeals that are significantly superior to generic ChatGPT responses
 """
 import os
+from dotenv import load_dotenv
+
+# Load environment variables FIRST before any other imports
+load_dotenv()
+
 from openai import OpenAI
 from denial_templates import get_denial_template
 from medical_knowledge_base import (
@@ -212,7 +217,8 @@ Provide your strategic analysis in 150 words."""
             strategy,
             required_sections,
             required_docs,
-            timely_filing_result
+            timely_filing_result,
+            strategic_analysis
         )
         
         # Call OpenAI with advanced parameters optimized for professional legal/medical writing
@@ -328,7 +334,7 @@ End with: "We request immediate reversal and payment of $[amount] within [X] day
 
 Your appeals win because they demonstrate you know more than the reviewer and are prepared to escalate."""
     
-    def _build_comprehensive_prompt(self, appeal, denial_name, strategy, required_sections=None, required_docs=None, timely_filing_result=None):
+    def _build_comprehensive_prompt(self, appeal, denial_name, strategy, required_sections=None, required_docs=None, timely_filing_result=None, strategic_analysis=None):
         """Build detailed prompt with all case information and strategic guidance"""
         
         # Get payer name (handle both 'payer' and 'payer_name' attributes)

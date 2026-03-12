@@ -713,40 +713,46 @@ function Landing() {
                 lineHeight: '1.8',
                 color: '#333'
               }}>
-                <p style={{ marginBottom: '10px' }}><strong>ABC Medical Group</strong></p>
-                <p style={{ marginBottom: '10px' }}>NPI: 1234567890</p>
-                <p style={{ marginBottom: '20px' }}>January 15, 2024</p>
+                <p style={{ marginBottom: '10px', textAlign: 'center' }}><strong>🏥 ABC Medical Group</strong></p>
+                <p style={{ marginBottom: '10px', textAlign: 'center' }}>NPI: 1234567890</p>
+                <p style={{ marginBottom: '20px', textAlign: 'center' }}>January 15, 2024</p>
                 
-                <p style={{ marginBottom: '20px' }}><strong>To: Blue Cross Blue Shield</strong></p>
+                <p style={{ marginBottom: '20px', textAlign: 'center' }}><strong>To: Blue Cross Blue Shield</strong></p>
                 
-                <p style={{ marginBottom: '10px' }}><strong>RE: Appeal of Claim Denial</strong></p>
-                <p style={{ marginBottom: '5px' }}>Claim Number: CLM-2024-12345</p>
-                <p style={{ marginBottom: '5px' }}>Patient ID: PT-67890</p>
-                <p style={{ marginBottom: '5px' }}>Date of Service: 12/01/2023</p>
-                <p style={{ marginBottom: '20px' }}>CPT Codes: 99214</p>
+                <p style={{ marginBottom: '10px', textAlign: 'center' }}><strong>📋 RE: Appeal of Claim Denial</strong></p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}>Claim Number: CLM-2024-12345</p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}>Patient ID: PT-67890</p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}>Date of Service: 12/01/2023</p>
+                <p style={{ marginBottom: '20px', textAlign: 'center' }}>CPT Codes: 99214</p>
                 
-                <p style={{ marginBottom: '10px' }}><strong>Denial Reason:</strong></p>
-                <p style={{ marginBottom: '20px' }}>Services denied as not medically necessary</p>
+                <p style={{ marginBottom: '10px', textAlign: 'center' }}><strong>❌ Denial Reason:</strong></p>
+                <p style={{ marginBottom: '20px', textAlign: 'center' }}>Services denied as not medically necessary</p>
                 
-                <p style={{ marginBottom: '10px' }}><strong>Basis for Appeal:</strong></p>
-                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                <p style={{ marginBottom: '10px', textAlign: 'center' }}><strong>⚕️ Basis for Appeal:</strong></p>
+                <p style={{ marginBottom: '15px', textAlign: 'center' }}>
                   This appeal addresses the denial based on lack of medical necessity. The service(s) rendered meet 
                   established medical necessity criteria and are supported by clinical documentation.
                 </p>
                 
-                <p style={{ marginBottom: '10px', fontWeight: '600' }}>Medical Necessity Justification:</p>
-                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                <p style={{ marginBottom: '10px', fontWeight: '600', textAlign: 'center' }}>📝 Medical Necessity Justification:</p>
+                <p style={{ marginBottom: '15px', textAlign: 'center' }}>
                   The patient's documented diagnosis and clinical presentation support the medical necessity for the 
                   service(s) provided. The treatment rendered aligns with evidence-based clinical guidelines and accepted 
                   standards of care within the medical community.
                 </p>
                 
-                <p style={{ marginBottom: '10px', fontWeight: '600' }}>Clinical Documentation:</p>
-                <p style={{ marginBottom: '15px', textAlign: 'justify' }}>
+                <p style={{ marginBottom: '10px', fontWeight: '600', textAlign: 'center' }}>Clinical Documentation:</p>
+                <p style={{ marginBottom: '15px', textAlign: 'center' }}>
                   The medical record contains comprehensive documentation supporting the medical necessity of this service, 
                   including patient history, physical examination findings, diagnostic results, and clinical rationale for 
                   the treatment plan...
                 </p>
+                
+                <p style={{ marginTop: '30px', marginBottom: '10px', fontWeight: '600', textAlign: 'center' }}>✍️ Signature Block:</p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}>_________________________________</p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}><strong>Provider Signature</strong></p>
+                <p style={{ marginBottom: '5px', textAlign: 'center' }}>NPI: 1234567890</p>
+                <p style={{ marginBottom: '20px', textAlign: 'center' }}>Date: _______________</p>
                 
                 <p style={{ 
                   marginTop: '30px', 
@@ -754,7 +760,8 @@ function Landing() {
                   background: '#e7f3ff', 
                   borderLeft: '4px solid #2196F3',
                   fontSize: '13px',
-                  fontStyle: 'italic'
+                  fontStyle: 'italic',
+                  textAlign: 'center'
                 }}>
                   <strong>Note:</strong> This is a condensed sample. Actual letters include full denial-specific arguments, 
                   policy references, and detailed justifications tailored to your specific denial code.

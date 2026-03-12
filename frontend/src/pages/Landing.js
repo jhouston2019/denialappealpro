@@ -516,7 +516,9 @@ function Landing() {
             display: 'grid',
             gridTemplateColumns: '60px 1fr',
             gap: '24px',
-            marginBottom: '32px'
+            marginBottom: '32px',
+            maxWidth: '600px',
+            margin: '0 auto 32px auto'
           }}>
             {[
               { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
@@ -534,7 +536,7 @@ function Landing() {
                 }}>
                   {item.icon}
                 </div>
-                <div>
+                <div style={{ textAlign: 'center' }}>
                   <div style={{
                     fontFamily: '"Inter", sans-serif',
                     fontSize: '18px',

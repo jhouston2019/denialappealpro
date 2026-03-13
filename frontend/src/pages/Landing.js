@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// Cache bust: 2026-03-12-23:58
 
 function Landing() {
   const navigate = useNavigate();
@@ -510,47 +511,30 @@ function Landing() {
             Professional appeal letter with all required components
           </p>
           
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '32px',
-            marginBottom: '48px'
-          }}>
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🏥</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Provider & Payer Headers</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Complete identification and contact information</div>
-            </div>
+          <div style={{ marginBottom: '40px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏥</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Provider & Payer Headers</div>
+            <div style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Complete identification and contact information</div>
             
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Claim Reference Block</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Claim number, patient ID, dates of service</div>
-            </div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Claim Reference Block</div>
+            <div style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Claim number, patient ID, dates of service</div>
             
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>❌</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Denial Restatement</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Clear documentation of the denial reason</div>
-            </div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Denial Restatement</div>
+            <div style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Clear documentation of the denial reason</div>
             
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚕️</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Medical Necessity</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Policy references and regulatory citations</div>
-            </div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚕️</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Medical Necessity</div>
+            <div style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Policy references and regulatory citations</div>
             
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📝</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Formal Appeal Request</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Professional reconsideration request language</div>
-            </div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Formal Appeal Request</div>
+            <div style={{ fontSize: '16px', color: '#666', marginBottom: '40px' }}>Professional reconsideration request language</div>
             
-            <div>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>✍️</div>
-              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Signature Block</div>
-              <div style={{ fontSize: '15px', color: '#666' }}>Provider signature area with NPI</div>
-            </div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>✍️</div>
+            <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Signature Block</div>
+            <div style={{ fontSize: '16px', color: '#666' }}>Provider signature area with NPI</div>
           </div>
           
           <div style={{

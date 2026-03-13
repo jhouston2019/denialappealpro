@@ -488,13 +488,12 @@ function Landing() {
           padding: '60px 48px',
           marginBottom: '60px',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
-          position: 'relative'
+          textAlign: 'center'
         }}>
           <h2 style={{
             fontFamily: '"Inter", sans-serif',
             fontSize: '40px',
             fontWeight: 800,
-            textAlign: 'center',
             margin: '0 0 16px 0',
             letterSpacing: '-1px',
             color: '#1a1a1a'
@@ -503,7 +502,6 @@ function Landing() {
           </h2>
           
           <p style={{
-            textAlign: 'center',
             color: '#666',
             fontSize: '18px',
             marginBottom: '48px',
@@ -513,56 +511,51 @@ function Landing() {
           </p>
           
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '28px',
-            maxWidth: '600px',
-            margin: '0 auto 32px auto'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: '32px',
+            marginBottom: '48px'
           }}>
-            {[
-              { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
-              { icon: '📋', title: 'Claim Reference Block', desc: 'Claim number, patient ID, dates of service' },
-              { icon: '❌', title: 'Denial Restatement', desc: 'Clear documentation of the denial reason' },
-              { icon: '⚕️', title: 'Medical Necessity', desc: 'Policy references and regulatory citations' },
-              { icon: '📝', title: 'Formal Appeal Request', desc: 'Professional reconsideration request language' },
-              { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
-            ].map((item, i) => (
-              <div key={i} style={{ 
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '20px'
-              }}>
-                <div style={{ fontSize: '36px', flexShrink: 0, width: '48px', textAlign: 'center' }}>
-                  {item.icon}
-                </div>
-                <div>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    color: '#1a1a1a',
-                    marginBottom: '4px'
-                  }}>
-                    {item.title}
-                  </div>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '15px',
-                    color: '#666',
-                    lineHeight: '1.5',
-                    fontWeight: 500
-                  }}>
-                    {item.desc}
-                  </div>
-                </div>
-              </div>
-            ))}
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🏥</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Provider & Payer Headers</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Complete identification and contact information</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Claim Reference Block</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Claim number, patient ID, dates of service</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>❌</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Denial Restatement</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Clear documentation of the denial reason</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚕️</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Medical Necessity</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Policy references and regulatory citations</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📝</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Formal Appeal Request</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Professional reconsideration request language</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>✍️</div>
+              <div style={{ fontFamily: '"Inter", sans-serif', fontSize: '18px', fontWeight: 700, color: '#1a1a1a', marginBottom: '8px' }}>Signature Block</div>
+              <div style={{ fontSize: '15px', color: '#666' }}>Provider signature area with NPI</div>
+            </div>
           </div>
           
           <div style={{
             paddingTop: '32px',
-            borderTop: '2px solid #f0f0f0',
-            textAlign: 'center'
+            borderTop: '2px solid #f0f0f0'
           }}>
             <div style={{
               display: 'inline-flex',

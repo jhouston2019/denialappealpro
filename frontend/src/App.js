@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import './App.css';
+// Force rebuild: 2026-02-11-v3
 
 // Lazy load pages for code splitting
 const LandingPro = lazy(() => import('./LandingPro'));

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// Cache bust: 2026-03-12-23:58
 
 function Landing() {
   const navigate = useNavigate();
@@ -481,7 +482,7 @@ function Landing() {
           </section>
         </div>
 
-        {/* What You Get Section */}
+        {/* What's Included Section */}
         <section style={{
           background: 'white',
           borderRadius: '24px',

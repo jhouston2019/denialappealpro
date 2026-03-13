@@ -517,7 +517,8 @@ function Landing() {
             flexDirection: 'column',
             gap: '28px',
             maxWidth: '600px',
-            margin: '0 auto 32px auto'
+            margin: '0 auto 32px auto',
+            textAlign: 'center'
           }}>
             {[
               { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
@@ -528,32 +529,28 @@ function Landing() {
               { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
             ].map((item, i) => (
               <div key={i} style={{ 
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '20px'
+                textAlign: 'center'
               }}>
-                <div style={{ fontSize: '36px', flexShrink: 0, width: '48px', textAlign: 'center' }}>
+                <div style={{ fontSize: '36px', marginBottom: '8px' }}>
                   {item.icon}
                 </div>
-                <div>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    color: '#1a1a1a',
-                    marginBottom: '4px'
-                  }}>
-                    {item.title}
-                  </div>
-                  <div style={{
-                    fontFamily: '"Inter", sans-serif',
-                    fontSize: '15px',
-                    color: '#666',
-                    lineHeight: '1.5',
-                    fontWeight: 500
-                  }}>
-                    {item.desc}
-                  </div>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: '#1a1a1a',
+                  marginBottom: '4px'
+                }}>
+                  {item.title}
+                </div>
+                <div style={{
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: '15px',
+                  color: '#666',
+                  lineHeight: '1.5',
+                  fontWeight: 500
+                }}>
+                  {item.desc}
                 </div>
               </div>
             ))}

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// Cache bust: 2026-03-12-23:58
 
 function Landing() {
   const navigate = useNavigate();
@@ -481,6 +480,112 @@ function Landing() {
             </ul>
           </section>
         </div>
+
+        {/* What You Get Section */}
+        <section style={{
+          background: 'white',
+          borderRadius: '24px',
+          padding: '60px 48px',
+          marginBottom: '60px',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+          position: 'relative'
+        }}>
+          <h2 style={{
+            fontFamily: '"Inter", sans-serif',
+            fontSize: '40px',
+            fontWeight: 800,
+            textAlign: 'center',
+            margin: '0 0 16px 0',
+            letterSpacing: '-1px',
+            color: '#1a1a1a'
+          }}>
+            What's Included
+          </h2>
+          
+          <p style={{
+            textAlign: 'center',
+            color: '#666',
+            fontSize: '18px',
+            marginBottom: '48px',
+            fontWeight: 500
+          }}>
+            Professional appeal letter with all required components
+          </p>
+          
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '28px',
+            maxWidth: '600px',
+            margin: '0 auto 32px auto'
+          }}>
+            {[
+              { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
+              { icon: '📋', title: 'Claim Reference Block', desc: 'Claim number, patient ID, dates of service' },
+              { icon: '❌', title: 'Denial Restatement', desc: 'Clear documentation of the denial reason' },
+              { icon: '⚕️', title: 'Medical Necessity', desc: 'Policy references and regulatory citations' },
+              { icon: '📝', title: 'Formal Appeal Request', desc: 'Professional reconsideration request language' },
+              { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
+            ].map((item, i) => (
+              <div key={i} style={{ 
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '20px'
+              }}>
+                <div style={{
+                  fontSize: '36px',
+                  flexShrink: 0,
+                  width: '48px',
+                  textAlign: 'center'
+                }}>
+                  {item.icon}
+                </div>
+                <div>
+                  <div style={{
+                    fontFamily: '"Inter", sans-serif',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: '#1a1a1a',
+                    marginBottom: '4px'
+                  }}>
+                    {item.title}
+                  </div>
+                  <div style={{
+                    fontFamily: '"Inter", sans-serif',
+                    fontSize: '15px',
+                    color: '#666',
+                    lineHeight: '1.5',
+                    fontWeight: 500
+                  }}>
+                    {item.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{
+            paddingTop: '32px',
+            borderTop: '2px solid #f0f0f0',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
+              color: 'white',
+              padding: '16px 32px',
+              borderRadius: '50px',
+              fontFamily: '"Inter", sans-serif',
+              fontSize: '16px',
+              fontWeight: 600
+            }}>
+              <span style={{ fontSize: '24px' }}>📄</span>
+              Delivered as PDF • Ready for portal, fax, or mail
+            </div>
+          </div>
+        </section>
 
         {/* CTA Section */}
         <section style={{

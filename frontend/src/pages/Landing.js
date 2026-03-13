@@ -513,7 +513,9 @@ function Landing() {
           </p>
           
           <div style={{
-            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
             marginBottom: '32px'
           }}>
             {[
@@ -524,7 +526,12 @@ function Landing() {
               { icon: '📝', title: 'Formal Appeal Request', desc: 'Professional reconsideration request language' },
               { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
             ].map((item, i) => (
-              <div key={i} style={{ marginBottom: '32px' }}>
+              <div key={i} style={{ 
+                marginBottom: '32px',
+                textAlign: 'center',
+                width: '100%',
+                maxWidth: '600px'
+              }}>
                 <div style={{
                   fontSize: '36px',
                   marginBottom: '8px'

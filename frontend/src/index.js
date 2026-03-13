@@ -20,11 +20,8 @@ root.render(
   </ErrorBoundary>
 );
 
-// Register service worker for offline capability
-serviceWorkerRegistration.register({
-  onSuccess: () => console.log('Service worker registered successfully'),
-  onUpdate: () => console.log('New content available, please refresh')
-});
+// Unregister service worker to clear cache
+serviceWorkerRegistration.unregister();
 
 // Report web vitals
 reportWebVitals((metric) => {

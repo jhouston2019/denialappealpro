@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import './App.css';
 
 // Lazy load pages for code splitting
-const Landing = lazy(() => import('./LandingPro'));
+const LandingPro = lazy(() => import('./LandingPro'));
+const LandingConsumer = lazy(() => import('./LandingConsumer'));
 const AppealForm = lazy(() => import('./pages/AppealForm'));
 const AppealFormWizard = lazy(() => import('./pages/AppealFormWizard'));
 const Pricing = lazy(() => import('./pages/Pricing'));
@@ -48,7 +49,8 @@ const PageLoader = () => (
 
 function AppContent() {
   const location = useLocation();
-  const isLandingPage = location.pathname === '/';
+  const landingPages = ['/', '/pro', '/appeal', '/denied'];
+  const isLandingPage = landingPages.includes(location.pathname);
 
   return (
     <div className="App">
@@ -60,7 +62,13 @@ function AppContent() {
       <main className="App-main" style={isLandingPage ? { padding: 0, maxWidth: 'none' } : {}}>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/" element={<Landing />} />
+            {/* Landing pages - dual routing strategy */}
+            <Route path="/" element={<LandingPro />} />
+            <Route path="/pro" element={<LandingPro />} />
+            <Route path="/appeal" element={<LandingConsumer />} />
+            <Route path="/denied" element={<LandingConsumer />} />
+            
+            {/* App pages */}
             <Route path="/submit" element={<AppealForm />} />
             <Route path="/appeal-form" element={<AppealFormWizard />} />
             <Route path="/pricing" element={<Pricing />} />

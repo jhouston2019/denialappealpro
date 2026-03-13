@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import './App.css';
 
 // Lazy load pages for code splitting
-const Landing = lazy(() => import('./pages/Landing'));
+const Landing = lazy(() => import('./LandingPro'));
 const AppealForm = lazy(() => import('./pages/AppealForm'));
 const AppealFormWizard = lazy(() => import('./pages/AppealFormWizard'));
 const Pricing = lazy(() => import('./pages/Pricing'));

@@ -67,6 +67,20 @@ class ProcessedWebhookEvent(db.Model):
     def __repr__(self):
         return f'<ProcessedWebhookEvent {self.event_id}>'
 
+class Admin(db.Model):
+    __tablename__ = 'admins'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    last_login = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Admin {self.username}>'
+
 class Appeal(db.Model):
     __tablename__ = 'appeals'
     

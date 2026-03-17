@@ -14,6 +14,8 @@ const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
 const AppealDownload = lazy(() => import('./pages/AppealDownload'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const AdminLogin = lazy(() => import('./pages/AdminLogin'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 
 // Loading component
 const PageLoader = () => (
@@ -51,16 +53,18 @@ const PageLoader = () => (
 function AppContent() {
   const location = useLocation();
   const landingPages = ['/', '/pro', '/appeal', '/denied'];
+  const adminPages = ['/admin/login', '/admin/dashboard'];
   const isLandingPage = landingPages.includes(location.pathname);
+  const isAdminPage = adminPages.some(page => location.pathname.startsWith('/admin'));
 
   return (
     <div className="App">
-      {!isLandingPage && (
+      {!isLandingPage && !isAdminPage && (
         <header className="App-header">
           <h1>Denial Appeal Pro</h1>
         </header>
       )}
-      <main className="App-main" style={isLandingPage ? { padding: 0, maxWidth: 'none' } : {}}>
+      <main className="App-main" style={(isLandingPage || isAdminPage) ? { padding: 0, maxWidth: 'none' } : {}}>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Landing pages - dual routing strategy */}
@@ -68,6 +72,10 @@ function AppContent() {
             <Route path="/pro" element={<LandingPro />} />
             <Route path="/appeal" element={<LandingConsumer />} />
             <Route path="/denied" element={<LandingConsumer />} />
+            
+            {/* Admin pages */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             
             {/* App pages */}
             <Route path="/submit" element={<AppealForm />} />
@@ -81,7 +89,7 @@ function AppContent() {
           </Routes>
         </Suspense>
       </main>
-      {!isLandingPage && (
+      {!isLandingPage && !isAdminPage && (
         <footer className="App-footer">
           <p>$10 per appeal</p>
           <p style={{ fontSize: '14px', marginTop: '10px' }}>

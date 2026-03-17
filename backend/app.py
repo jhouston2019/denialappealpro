@@ -10,7 +10,7 @@ import io
 from werkzeug.utils import secure_filename
 
 from config import Config
-from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent
+from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent, Admin
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
@@ -19,6 +19,7 @@ from credit_manager import CreditManager, PricingManager, initialize_pricing_dat
 from pdf_parser import parse_denial_pdf
 from timely_filing import calculate_timely_filing
 from denial_rules import get_denial_rule
+from admin_auth import admin_auth, require_admin
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
@@ -1027,6 +1028,248 @@ def get_ab_test_details(test_id):
         return jsonify({'error': 'A/B testing module not available'}), 501
     except Exception as e:
         return jsonify({'error': f'Failed to get test details: {str(e)}'}), 500
+
+# ============================================================================
+# ADMIN ROUTES
+# ============================================================================
+
+@app.route('/api/admin/login', methods=['POST'])
+@limiter.limit("5 per hour")
+def admin_login():
+    """Admin login endpoint"""
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        result = admin_auth.login(username, password)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'token': result['token'],
+                'admin': result['admin']
+            }), 200
+        else:
+            return jsonify({'error': result['error']}), 401
+            
+    except Exception as e:
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
+
+@app.route('/api/admin/logout', methods=['POST'])
+def admin_logout():
+    """Admin logout endpoint"""
+    try:
+        token = request.headers.get('Authorization')
+        if token and token.startswith('Bearer '):
+            token = token[7:]
+            admin_auth.destroy_session(token)
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/verify', methods=['GET'])
+@require_admin
+def admin_verify():
+    """Verify admin session is valid"""
+    admin = Admin.query.get(request.admin_id)
+    return jsonify({
+        'valid': True,
+        'admin': {
+            'id': admin.id,
+            'username': admin.username,
+            'email': admin.email
+        }
+    }), 200
+
+@app.route('/api/admin/dashboard/stats', methods=['GET'])
+@require_admin
+def admin_dashboard_stats():
+    """Get dashboard statistics"""
+    try:
+        # Total counts
+        total_appeals = Appeal.query.count()
+        total_users = User.query.count()
+        total_revenue = db.session.query(db.func.sum(Appeal.price_charged)).filter(
+            Appeal.payment_status == 'paid'
+        ).scalar() or 0
+        
+        # Recent appeals (last 30 days)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_appeals = Appeal.query.filter(Appeal.created_at >= thirty_days_ago).count()
+        
+        # AI quality metrics
+        avg_quality_score = db.session.query(db.func.avg(Appeal.ai_quality_score)).filter(
+            Appeal.ai_quality_score.isnot(None)
+        ).scalar()
+        
+        avg_citation_count = db.session.query(db.func.avg(Appeal.ai_citation_count)).filter(
+            Appeal.ai_citation_count.isnot(None)
+        ).scalar()
+        
+        # Outcome statistics
+        appeals_with_outcomes = Appeal.query.filter(Appeal.outcome_status.isnot(None)).count()
+        approved_appeals = Appeal.query.filter(Appeal.outcome_status == 'approved').count()
+        success_rate = (approved_appeals / appeals_with_outcomes * 100) if appeals_with_outcomes > 0 else 0
+        
+        total_recovered = db.session.query(db.func.sum(Appeal.outcome_amount_recovered)).filter(
+            Appeal.outcome_amount_recovered.isnot(None)
+        ).scalar() or 0
+        
+        return jsonify({
+            'totals': {
+                'appeals': total_appeals,
+                'users': total_users,
+                'revenue': float(total_revenue),
+                'recovered': float(total_recovered)
+            },
+            'recent': {
+                'appeals_30d': recent_appeals
+            },
+            'ai_quality': {
+                'avg_quality_score': round(float(avg_quality_score), 1) if avg_quality_score else None,
+                'avg_citation_count': round(float(avg_citation_count), 1) if avg_citation_count else None
+            },
+            'outcomes': {
+                'total_with_outcomes': appeals_with_outcomes,
+                'approved': approved_appeals,
+                'success_rate': round(success_rate, 1)
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/appeals', methods=['GET'])
+@require_admin
+def admin_get_appeals():
+    """Get all appeals with filters"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        status = request.args.get('status')
+        outcome_status = request.args.get('outcome_status')
+        
+        query = Appeal.query
+        
+        if status:
+            query = query.filter_by(status=status)
+        if outcome_status:
+            query = query.filter_by(outcome_status=outcome_status)
+        
+        query = query.order_by(Appeal.created_at.desc())
+        
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        appeals = [{
+            'id': a.id,
+            'appeal_id': a.appeal_id,
+            'payer': a.payer,
+            'claim_number': a.claim_number,
+            'patient_id': a.patient_id,
+            'provider_name': a.provider_name,
+            'denial_code': a.denial_code,
+            'billed_amount': float(a.billed_amount) if a.billed_amount else None,
+            'status': a.status,
+            'payment_status': a.payment_status,
+            'ai_quality_score': a.ai_quality_score,
+            'ai_citation_count': a.ai_citation_count,
+            'ai_model_used': a.ai_model_used,
+            'outcome_status': a.outcome_status,
+            'outcome_amount_recovered': float(a.outcome_amount_recovered) if a.outcome_amount_recovered else None,
+            'created_at': a.created_at.isoformat() if a.created_at else None,
+            'paid_at': a.paid_at.isoformat() if a.paid_at else None
+        } for a in paginated.items]
+        
+        return jsonify({
+            'appeals': appeals,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/appeals/<appeal_id>', methods=['GET'])
+@require_admin
+def admin_get_appeal_detail(appeal_id):
+    """Get detailed appeal information"""
+    try:
+        appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
+        if not appeal:
+            return jsonify({'error': 'Appeal not found'}), 404
+        
+        return jsonify({
+            'appeal_id': appeal.appeal_id,
+            'payer': appeal.payer,
+            'claim_number': appeal.claim_number,
+            'patient_id': appeal.patient_id,
+            'provider_name': appeal.provider_name,
+            'provider_npi': appeal.provider_npi,
+            'date_of_service': appeal.date_of_service.isoformat() if appeal.date_of_service else None,
+            'denial_reason': appeal.denial_reason,
+            'denial_code': appeal.denial_code,
+            'diagnosis_code': appeal.diagnosis_code,
+            'cpt_codes': appeal.cpt_codes,
+            'billed_amount': float(appeal.billed_amount) if appeal.billed_amount else None,
+            'appeal_level': appeal.appeal_level,
+            'status': appeal.status,
+            'payment_status': appeal.payment_status,
+            'ai_quality_score': appeal.ai_quality_score,
+            'ai_citation_count': appeal.ai_citation_count,
+            'ai_word_count': appeal.ai_word_count,
+            'ai_model_used': appeal.ai_model_used,
+            'ai_generation_method': appeal.ai_generation_method,
+            'outcome_status': appeal.outcome_status,
+            'outcome_date': appeal.outcome_date.isoformat() if appeal.outcome_date else None,
+            'outcome_amount_recovered': float(appeal.outcome_amount_recovered) if appeal.outcome_amount_recovered else None,
+            'outcome_notes': appeal.outcome_notes,
+            'created_at': appeal.created_at.isoformat() if appeal.created_at else None,
+            'paid_at': appeal.paid_at.isoformat() if appeal.paid_at else None,
+            'completed_at': appeal.completed_at.isoformat() if appeal.completed_at else None
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/users', methods=['GET'])
+@require_admin
+def admin_get_users():
+    """Get all users"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        query = User.query.order_by(User.created_at.desc())
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        users = [{
+            'id': u.id,
+            'email': u.email,
+            'subscription_tier': u.subscription_tier,
+            'subscription_credits': u.subscription_credits,
+            'bulk_credits': u.bulk_credits,
+            'total_credits': u.credit_balance,
+            'created_at': u.created_at.isoformat() if u.created_at else None,
+            'appeal_count': len(u.appeals)
+        } for u in paginated.items]
+        
+        return jsonify({
+            'users': users,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     with app.app_context():

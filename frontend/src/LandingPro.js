@@ -1253,8 +1253,22 @@ function LandingPro() {
               <a href="/terms" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', marginRight: '20px' }}>
                 Terms of Service
               </a>
-              <a href="/privacy" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>
+              <a href="/privacy" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', marginRight: '20px' }}>
                 Privacy Policy
+              </a>
+              <a 
+                href="/admin/login" 
+                style={{ 
+                  color: 'rgba(255,255,255,0.3)', 
+                  textDecoration: 'none',
+                  fontSize: '12px',
+                  opacity: 0.5,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.opacity = '1'}
+                onMouseLeave={(e) => e.target.style.opacity = '0.5'}
+              >
+                Admin
               </a>
             </p>
           </div>

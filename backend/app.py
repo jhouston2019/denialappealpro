@@ -853,6 +853,181 @@ def download_appeal(appeal_id):
             download_name=f"appeal_{appeal.claim_number}.pdf"
         )
 
+@app.route('/api/appeals/<appeal_id>/outcome', methods=['PUT'])
+def update_appeal_outcome(appeal_id):
+    """
+    Update the outcome of an appeal for tracking and analytics
+    
+    Expected payload:
+    {
+        "outcome_status": "approved|partially_approved|denied|pending_review|withdrawn",
+        "outcome_date": "YYYY-MM-DD",
+        "outcome_amount_recovered": 15000.00,
+        "outcome_notes": "Additional details about the outcome"
+    }
+    """
+    appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
+    
+    if not appeal:
+        return jsonify({'error': 'Appeal not found'}), 404
+    
+    data = request.json
+    
+    # Validate outcome_status
+    valid_statuses = ['approved', 'partially_approved', 'denied', 'pending_review', 'withdrawn']
+    outcome_status = data.get('outcome_status')
+    if outcome_status and outcome_status not in valid_statuses:
+        return jsonify({'error': f'Invalid outcome_status. Must be one of: {", ".join(valid_statuses)}'}), 400
+    
+    # Update outcome fields
+    if outcome_status:
+        appeal.outcome_status = outcome_status
+    
+    if data.get('outcome_date'):
+        try:
+            appeal.outcome_date = datetime.strptime(data['outcome_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid outcome_date format. Use YYYY-MM-DD'}), 400
+    
+    if data.get('outcome_amount_recovered') is not None:
+        appeal.outcome_amount_recovered = float(data['outcome_amount_recovered'])
+    
+    if data.get('outcome_notes'):
+        appeal.outcome_notes = data['outcome_notes']
+    
+    appeal.outcome_updated_at = datetime.utcnow()
+    
+    try:
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'appeal_id': appeal.appeal_id,
+            'outcome_status': appeal.outcome_status,
+            'outcome_date': appeal.outcome_date.isoformat() if appeal.outcome_date else None,
+            'outcome_amount_recovered': float(appeal.outcome_amount_recovered) if appeal.outcome_amount_recovered else None
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to update outcome: {str(e)}'}), 500
+
+@app.route('/api/analytics/outcomes', methods=['GET'])
+def get_outcome_analytics():
+    """
+    Get analytics on appeal outcomes for continuous improvement
+    
+    Returns success rates, average recovery amounts, and quality score correlations
+    """
+    # Get all appeals with outcomes
+    appeals_with_outcomes = Appeal.query.filter(Appeal.outcome_status.isnot(None)).all()
+    
+    if not appeals_with_outcomes:
+        return jsonify({
+            'total_appeals': 0,
+            'message': 'No outcome data available yet'
+        })
+    
+    # Calculate statistics
+    total = len(appeals_with_outcomes)
+    approved = sum(1 for a in appeals_with_outcomes if a.outcome_status == 'approved')
+    partially_approved = sum(1 for a in appeals_with_outcomes if a.outcome_status == 'partially_approved')
+    denied = sum(1 for a in appeals_with_outcomes if a.outcome_status == 'denied')
+    
+    success_rate = (approved + partially_approved) / total if total > 0 else 0
+    
+    # Calculate recovery statistics
+    total_billed = sum(float(a.billed_amount or 0) for a in appeals_with_outcomes)
+    total_recovered = sum(float(a.outcome_amount_recovered or 0) for a in appeals_with_outcomes)
+    recovery_rate = total_recovered / total_billed if total_billed > 0 else 0
+    
+    # Quality score analysis
+    appeals_with_quality = [a for a in appeals_with_outcomes if a.ai_quality_score is not None]
+    avg_quality_score = sum(a.ai_quality_score for a in appeals_with_quality) / len(appeals_with_quality) if appeals_with_quality else None
+    
+    # Quality correlation with success
+    successful_appeals = [a for a in appeals_with_outcomes if a.outcome_status in ['approved', 'partially_approved'] and a.ai_quality_score is not None]
+    avg_quality_successful = sum(a.ai_quality_score for a in successful_appeals) / len(successful_appeals) if successful_appeals else None
+    
+    denied_appeals = [a for a in appeals_with_outcomes if a.outcome_status == 'denied' and a.ai_quality_score is not None]
+    avg_quality_denied = sum(a.ai_quality_score for a in denied_appeals) / len(denied_appeals) if denied_appeals else None
+    
+    return jsonify({
+        'total_appeals': total,
+        'outcomes': {
+            'approved': approved,
+            'partially_approved': partially_approved,
+            'denied': denied,
+            'success_rate': round(success_rate * 100, 1)
+        },
+        'financial': {
+            'total_billed': round(total_billed, 2),
+            'total_recovered': round(total_recovered, 2),
+            'recovery_rate': round(recovery_rate * 100, 1)
+        },
+        'quality_metrics': {
+            'avg_quality_score': round(avg_quality_score, 1) if avg_quality_score else None,
+            'avg_quality_successful': round(avg_quality_successful, 1) if avg_quality_successful else None,
+            'avg_quality_denied': round(avg_quality_denied, 1) if avg_quality_denied else None,
+            'quality_impact': round(avg_quality_successful - avg_quality_denied, 1) if (avg_quality_successful and avg_quality_denied) else None
+        }
+    })
+
+@app.route('/api/analytics/optimization-insights', methods=['GET'])
+def get_optimization_insights():
+    """
+    Get data-driven insights for prompt optimization
+    
+    Returns recommendations based on outcome analysis
+    """
+    try:
+        from prompt_optimizer import prompt_optimizer
+        insights = prompt_optimizer.get_optimization_insights()
+        return jsonify(insights)
+    except ImportError:
+        return jsonify({'error': 'Optimization module not available'}), 501
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate insights: {str(e)}'}), 500
+
+@app.route('/api/analytics/ab-tests', methods=['GET'])
+def get_ab_tests():
+    """
+    Get status of all A/B tests
+    
+    Returns list of active tests and their current results
+    """
+    try:
+        from ab_testing import ab_testing
+        
+        results = {}
+        for test_id, test in ab_testing.active_tests.items():
+            if test['status'] == 'active':
+                test_results = ab_testing.get_test_results(test_id)
+                results[test_id] = test_results
+        
+        return jsonify({
+            'active_tests': len([t for t in ab_testing.active_tests.values() if t['status'] == 'active']),
+            'tests': results
+        })
+    except ImportError:
+        return jsonify({'error': 'A/B testing module not available'}), 501
+    except Exception as e:
+        return jsonify({'error': f'Failed to get test results: {str(e)}'}), 500
+
+@app.route('/api/analytics/ab-tests/<test_id>', methods=['GET'])
+def get_ab_test_details(test_id):
+    """
+    Get detailed results for a specific A/B test
+    
+    Returns statistical analysis and recommendation
+    """
+    try:
+        from ab_testing import ab_testing
+        results = ab_testing.get_test_results(test_id)
+        return jsonify(results)
+    except ImportError:
+        return jsonify({'error': 'A/B testing module not available'}), 501
+    except Exception as e:
+        return jsonify({'error': f'Failed to get test details: {str(e)}'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

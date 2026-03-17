@@ -118,5 +118,19 @@ class Appeal(db.Model):
     # Pricing
     price_charged = db.Column(db.Numeric(10, 2), nullable=False, default=10.00)
     
+    # AI Quality Metrics
+    ai_quality_score = db.Column(db.Integer)  # 0-100 score from validation
+    ai_citation_count = db.Column(db.Integer)  # Number of regulatory/clinical citations
+    ai_word_count = db.Column(db.Integer)  # Word count of generated appeal
+    ai_model_used = db.Column(db.String(50))  # e.g., "gpt-4-turbo-preview"
+    ai_generation_method = db.Column(db.String(50))  # "chain_of_thought" or "direct"
+    
+    # Outcome Tracking
+    outcome_status = db.Column(db.String(50))  # approved, partially_approved, denied, pending_review, withdrawn
+    outcome_date = db.Column(db.Date)  # Date of final outcome
+    outcome_amount_recovered = db.Column(db.Numeric(10, 2))  # Amount recovered if approved
+    outcome_notes = db.Column(db.Text)  # Additional outcome details
+    outcome_updated_at = db.Column(db.DateTime)  # Last outcome update timestamp
+    
     def __repr__(self):
         return f'<Appeal {self.appeal_id}>'

@@ -3,6 +3,9 @@ Advanced AI-powered appeal generation with multi-step reasoning and expert knowl
 This system generates appeals that are significantly superior to generic ChatGPT responses
 """
 import os
+import re
+import logging
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables FIRST before any other imports
@@ -22,6 +25,29 @@ from medical_knowledge_base import (
     CPT_DOCUMENTATION_REQUIREMENTS
 )
 
+# Import new optimization modules
+try:
+    from citation_validator import citation_validator
+    from prompt_optimizer import prompt_optimizer
+    from ab_testing import ab_testing
+    OPTIMIZATION_ENABLED = True
+    logger.info("Advanced optimization modules loaded: citation validation, prompt optimization, A/B testing")
+except ImportError as e:
+    OPTIMIZATION_ENABLED = False
+    logger.warning(f"Optimization modules not available - using default logic: {e}")
+
+# Configure structured logging
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/ai_generation.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 class AdvancedAIAppealGenerator:
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY')
@@ -30,16 +56,16 @@ class AdvancedAIAppealGenerator:
         if self.enabled:
             try:
                 self.client = OpenAI(api_key=self.api_key)
-                print("[OK] Advanced AI appeal generation enabled (OpenAI GPT-4)")
-                print("     Appeals will use expert-level AI reasoning and medical knowledge")
+                logger.info("Advanced AI appeal generation enabled (OpenAI GPT-4)")
+                logger.info("Appeals will use expert-level AI reasoning and medical knowledge")
             except Exception as e:
-                print(f"[WARNING] OpenAI initialization warning: {e}")
-                print("          Falling back to template-based appeals")
+                logger.warning(f"OpenAI initialization warning: {e}")
+                logger.warning("Falling back to template-based appeals")
                 self.enabled = False
         else:
-            print("[INFO] AI appeal generation not configured (using expert templates)")
-            print("       To enable AI-powered appeals, add OPENAI_API_KEY to .env")
-            print("       Get your API key from: https://platform.openai.com/api-keys")
+            logger.info("AI appeal generation not configured (using expert templates)")
+            logger.info("To enable AI-powered appeals, add OPENAI_API_KEY to .env")
+            logger.info("Get your API key from: https://platform.openai.com/api-keys")
     
     def generate_appeal_content(self, appeal):
         """
@@ -53,7 +79,7 @@ class AdvancedAIAppealGenerator:
         5. Tailors arguments to specific payer tactics
         """
         if not self.enabled:
-            print(f"[INFO] Generating template-based appeal for {appeal.appeal_id}")
+            logger.info(f"Generating template-based appeal for {appeal.appeal_id}")
             template = get_denial_template(appeal.denial_code)
             return self._format_template(template['template'], appeal)
         
@@ -61,33 +87,92 @@ class AdvancedAIAppealGenerator:
             # Step 1: Analyze denial and develop strategy
             strategy = self._analyze_denial_strategy(appeal)
             
-            # Step 2: For high-value or complex cases, use chain-of-thought reasoning
-            use_chain_of_thought = (
-                appeal.billed_amount > 5000 or  # High dollar amount
-                appeal.appeal_level in ['level_2', 'level_3'] or  # Higher appeal levels
-                appeal.denial_code in ['CO-50', 'CO-96']  # Complex denial types
-            )
+            # Step 2: Get relevant citations for real-time validation (prevents hallucinations)
+            relevant_citations = None
+            if OPTIMIZATION_ENABLED:
+                relevant_citations = citation_validator.get_relevant_citations(
+                    denial_code=appeal.denial_code,
+                    cpt_codes=appeal.cpt_codes,
+                    payer=getattr(appeal, 'payer', None)
+                )
+            
+            # Step 3: Determine generation method (data-driven if optimization enabled)
+            if OPTIMIZATION_ENABLED:
+                cot_decision = prompt_optimizer.should_use_chain_of_thought(appeal)
+                use_chain_of_thought = cot_decision['use_chain_of_thought']
+                logger.info(f"Generation method decision: {cot_decision['reason']} (confidence: {cot_decision['confidence']})")
+            else:
+                # Default logic
+                use_chain_of_thought = (
+                    appeal.billed_amount > 5000 or  # High dollar amount
+                    appeal.appeal_level in ['level_2', 'level_3'] or  # Higher appeal levels
+                    appeal.denial_code in ['CO-50', 'CO-96']  # Complex denial types
+                )
             
             if use_chain_of_thought:
-                print(f"[INFO] Using advanced chain-of-thought reasoning for {appeal.appeal_id} (${appeal.billed_amount:,.2f})")
-                primary_content = self._generate_with_reasoning(appeal, strategy)
+                logger.info(f"Using advanced chain-of-thought reasoning for {appeal.appeal_id} (${appeal.billed_amount:,.2f})")
+                primary_content = self._generate_with_reasoning(appeal, strategy, relevant_citations)
             else:
-                # Step 3: Generate primary appeal content with expert knowledge
-                primary_content = self._generate_primary_appeal(appeal, strategy)
+                # Step 4: Generate primary appeal content with expert knowledge
+                primary_content = self._generate_primary_appeal(appeal, strategy, relevant_citations)
             
             # Step 4: Validate quality
             quality_check = self._validate_appeal_quality(primary_content)
+            
+            # Step 5: Extract and verify citations
+            citations = self._extract_citations(primary_content)
+            verification = self._verify_citations(citations)
+            
+            # Step 6: Store quality metrics in appeal object (if it's a SQLAlchemy model)
+            if hasattr(appeal, 'ai_quality_score'):
+                appeal.ai_quality_score = quality_check['score']
+                appeal.ai_citation_count = sum(len(cites) for cites in citations.values())
+                appeal.ai_word_count = len(primary_content.split())
+                appeal.ai_model_used = "gpt-4-turbo-preview"
+                appeal.ai_generation_method = "chain_of_thought" if use_chain_of_thought else "direct"
+            
+            # Enhanced logging with citation verification
             if quality_check['passed']:
-                print(f"[OK] Advanced AI-generated appeal for {appeal.appeal_id} (Quality Score: {quality_check['score']}/100)")
+                logger.info(
+                    f"Advanced AI-generated appeal for {appeal.appeal_id}",
+                    extra={
+                        'appeal_id': appeal.appeal_id,
+                        'quality_score': quality_check['score'],
+                        'citation_count': appeal.ai_citation_count if hasattr(appeal, 'ai_citation_count') else 0,
+                        'verified_citations': len(verification['verified']),
+                        'verification_rate': verification['verification_rate'],
+                        'generation_method': 'chain_of_thought' if use_chain_of_thought else 'direct'
+                    }
+                )
             else:
-                print(f"[WARNING] Appeal quality below threshold (Score: {quality_check['score']}/100)")
-                print(f"          Issues: {', '.join(quality_check['issues'][:2])}")
+                logger.warning(
+                    f"Appeal quality below threshold for {appeal.appeal_id}",
+                    extra={
+                        'appeal_id': appeal.appeal_id,
+                        'quality_score': quality_check['score'],
+                        'issues': quality_check['issues']
+                    }
+                )
+            
+            # Warn about potential hallucinations
+            if verification['potential_hallucinations']:
+                logger.warning(
+                    f"Potential hallucinated citations detected in {appeal.appeal_id}",
+                    extra={
+                        'appeal_id': appeal.appeal_id,
+                        'hallucinations': [h['citation'] for h in verification['potential_hallucinations'][:3]]
+                    }
+                )
             
             return primary_content
             
         except Exception as e:
-            print(f"[WARNING] Error in advanced AI generation: {e}")
-            print(f"          Falling back to template-based appeal for {appeal.appeal_id}")
+            logger.error(
+                f"Error in advanced AI generation for {appeal.appeal_id}: {e}",
+                extra={'appeal_id': appeal.appeal_id, 'error': str(e)},
+                exc_info=True
+            )
+            logger.info(f"Falling back to template-based appeal for {appeal.appeal_id}")
             template = get_denial_template(appeal.denial_code)
             return self._format_template(template['template'], appeal)
     
@@ -95,10 +180,13 @@ class AdvancedAIAppealGenerator:
         """Analyze the denial and identify optimal strategic arguments"""
         return get_denial_strategy(appeal.denial_code)
     
-    def _generate_with_reasoning(self, appeal, strategy):
+    def _generate_with_reasoning(self, appeal, strategy, relevant_citations=None):
         """
         Use chain-of-thought reasoning for complex/high-value appeals
         This produces superior results by having the AI think through the case step-by-step
+        
+        Args:
+            relevant_citations: Pre-validated citations the AI can use (prevents hallucinations)
         """
         from denial_rules import get_denial_rule
         from timely_filing import calculate_timely_filing
@@ -162,10 +250,15 @@ Provide your strategic analysis in 150 words."""
         strategic_analysis = analysis_response.choices[0].message.content
         
         # Step 2: Generate appeal with strategic analysis context
-        return self._generate_primary_appeal(appeal, strategy, strategic_analysis=strategic_analysis)
+        return self._generate_primary_appeal(appeal, strategy, relevant_citations, strategic_analysis)
     
-    def _generate_primary_appeal(self, appeal, strategy, strategic_analysis=None):
-        """Generate the primary appeal content using advanced prompting"""
+    def _generate_primary_appeal(self, appeal, strategy, relevant_citations=None, strategic_analysis=None):
+        """
+        Generate the primary appeal content using advanced prompting
+        
+        Args:
+            relevant_citations: Pre-validated citations the AI can use (prevents hallucinations)
+        """
         
         # Import denial rules and timely filing calculator
         from denial_rules import get_denial_rule, get_required_sections, get_strategy
@@ -221,19 +314,32 @@ Provide your strategic analysis in 150 words."""
             strategic_analysis
         )
         
-        # Call OpenAI with advanced parameters optimized for professional legal/medical writing
-        response = self.client.chat.completions.create(
-            model="gpt-4-turbo-preview",
-            messages=[
+        # Add citation guidance to prevent hallucinations
+        if relevant_citations and OPTIMIZATION_ENABLED:
+            citation_guidance = citation_validator.format_citation_guidance(relevant_citations)
+            user_prompt += citation_guidance
+            logger.info(f"Added {len(relevant_citations['regulatory']) + len(relevant_citations['clinical'])} pre-validated citations to prompt")
+        
+        # Prepare base API parameters
+        api_params = {
+            'model': "gpt-4-turbo-preview",
+            'messages': [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.4,      # Lower = more focused, deterministic, professional
-            max_tokens=3000,      # Longer for comprehensive appeals with citations
-            top_p=0.85,           # Slightly lower for more precise language
-            frequency_penalty=0.4, # Higher to reduce repetition of arguments
-            presence_penalty=0.3   # Encourage diverse strategic angles
-        )
+            'temperature': 0.4,      # Lower = more focused, deterministic, professional
+            'max_tokens': 3000,      # Longer for comprehensive appeals with citations
+            'top_p': 0.85,           # Slightly lower for more precise language
+            'frequency_penalty': 0.4, # Higher to reduce repetition of arguments
+            'presence_penalty': 0.3   # Encourage diverse strategic angles
+        }
+        
+        # Apply A/B test parameter adjustments if optimization enabled
+        if OPTIMIZATION_ENABLED and hasattr(appeal, 'appeal_id'):
+            api_params = ab_testing.apply_test_parameters(appeal.appeal_id, api_params)
+        
+        # Call OpenAI with optimized parameters
+        response = self.client.chat.completions.create(**api_params)
         
         return response.choices[0].message.content
     
@@ -668,7 +774,29 @@ CPT-SPECIFIC APPEAL INTELLIGENCE
             'We believe that',
             'It is important to note',
             'As you can see',
-            'In conclusion'
+            'In conclusion',
+            'I feel that',
+            'I think that',
+            'It seems that',
+            'Perhaps',
+            'Maybe',
+            'Possibly',
+            'Hopefully',
+            'We hope that',
+            'We wish to',
+            'We would like to',
+            'May be',
+            'Might be',
+            'Could be',
+            'Should be considered',
+            'We ask that you',
+            'We kindly request',
+            'If possible',
+            'At your convenience',
+            'When you have time',
+            'We appreciate your consideration',
+            'Dear Sir or Madam',
+            'To Whom It May Concern'
         ]
         for phrase in generic_phrases:
             if phrase.lower() in appeal_content.lower():
@@ -705,6 +833,150 @@ CPT-SPECIFIC APPEAL INTELLIGENCE
             'issues': issues,
             'passed': score >= 70
         }
+    
+    def _extract_citations(self, appeal_content: str) -> dict:
+        """
+        Extract all regulatory, clinical, and legal citations from appeal content
+        Returns structured citation data for verification
+        """
+        citations = {
+            'regulatory': [],
+            'clinical_guidelines': [],
+            'case_law': [],
+            'statutes': [],
+            'cfr': [],
+            'usc': []
+        }
+        
+        # Extract CFR citations (e.g., "29 CFR 2560.503-1", "42 CFR 411.15")
+        cfr_pattern = r'\b(\d+)\s+CFR\s+([\d.]+(?:\([a-z0-9]+\))?(?:\([ivx]+\))?)'
+        cfr_matches = re.finditer(cfr_pattern, appeal_content, re.IGNORECASE)
+        for match in cfr_matches:
+            citations['cfr'].append(f"{match.group(1)} CFR {match.group(2)}")
+        
+        # Extract ERISA citations (e.g., "ERISA Section 503", "ERISA § 502(a)")
+        erisa_pattern = r'ERISA\s+(?:Section|§)\s+([\d]+(?:\([a-z0-9]+\))?)'
+        erisa_matches = re.finditer(erisa_pattern, appeal_content, re.IGNORECASE)
+        for match in erisa_matches:
+            citations['regulatory'].append(f"ERISA Section {match.group(1)}")
+        
+        # Extract USC citations (e.g., "42 USC 1395", "29 USC 1133")
+        usc_pattern = r'\b(\d+)\s+U\.?S\.?C\.?\s+([\d]+)'
+        usc_matches = re.finditer(usc_pattern, appeal_content, re.IGNORECASE)
+        for match in usc_matches:
+            citations['usc'].append(f"{match.group(1)} USC {match.group(2)}")
+        
+        # Extract ACA citations (e.g., "ACA Section 2719", "Affordable Care Act Section 1557")
+        aca_pattern = r'(?:ACA|Affordable Care Act)\s+Section\s+([\d]+)'
+        aca_matches = re.finditer(aca_pattern, appeal_content, re.IGNORECASE)
+        for match in aca_matches:
+            citations['regulatory'].append(f"ACA Section {match.group(1)}")
+        
+        # Extract clinical guideline references
+        guideline_orgs = ['ACC/AHA', 'NCCN', 'ACR', 'AAOS', 'ASAM', 'USPSTF', 'APA', 'ACOG', 'AAN', 'IDSA']
+        for org in guideline_orgs:
+            if org in appeal_content:
+                # Try to extract year and specific guideline name
+                pattern = rf'{re.escape(org)}\s+(\d{{4}})?\s*([^.]+?(?:Guidelines?|Criteria|Recommendations?))'
+                matches = re.finditer(pattern, appeal_content, re.IGNORECASE)
+                for match in matches:
+                    year = match.group(1) or ''
+                    guideline = match.group(2).strip()
+                    citations['clinical_guidelines'].append(f"{org} {year} {guideline}".strip())
+        
+        # Extract case law references (e.g., "Smith v. Aetna", "Doe v. United Healthcare")
+        case_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+v\.?\s+([A-Z][a-zA-Z\s]+?)(?:\s+\(|\s+,|\.|$)'
+        case_matches = re.finditer(case_pattern, appeal_content)
+        for match in case_matches:
+            citations['case_law'].append(f"{match.group(1)} v. {match.group(2).strip()}")
+        
+        return citations
+    
+    def _verify_citations(self, citations: dict) -> dict:
+        """
+        Verify extracted citations against known knowledge base
+        Returns verification results with hallucination warnings
+        """
+        verification = {
+            'verified': [],
+            'unverified': [],
+            'potential_hallucinations': [],
+            'verification_rate': 0.0
+        }
+        
+        total_citations = 0
+        verified_count = 0
+        
+        # Verify CFR citations against REGULATORY_REFERENCES
+        for cfr_cite in citations['cfr']:
+            total_citations += 1
+            # Check if this CFR citation exists in our knowledge base
+            found = False
+            for reg_key, reg_data in REGULATORY_REFERENCES.items():
+                if cfr_cite.lower() in reg_data['citation'].lower():
+                    verification['verified'].append({
+                        'citation': cfr_cite,
+                        'type': 'CFR',
+                        'source': reg_key
+                    })
+                    verified_count += 1
+                    found = True
+                    break
+            if not found:
+                verification['unverified'].append({
+                    'citation': cfr_cite,
+                    'type': 'CFR',
+                    'warning': 'Not found in knowledge base - verify accuracy'
+                })
+        
+        # Verify ERISA citations
+        for erisa_cite in citations['regulatory']:
+            if 'ERISA' in erisa_cite:
+                total_citations += 1
+                found = False
+                for reg_key, reg_data in REGULATORY_REFERENCES.items():
+                    if 'erisa' in reg_key.lower() and any(num in erisa_cite for num in ['503', '502', '510']):
+                        verification['verified'].append({
+                            'citation': erisa_cite,
+                            'type': 'ERISA',
+                            'source': reg_key
+                        })
+                        verified_count += 1
+                        found = True
+                        break
+                if not found:
+                    verification['unverified'].append({
+                        'citation': erisa_cite,
+                        'type': 'ERISA',
+                        'warning': 'Not found in knowledge base - verify accuracy'
+                    })
+        
+        # Verify clinical guidelines
+        for guideline in citations['clinical_guidelines']:
+            total_citations += 1
+            found = False
+            for clin_key, clin_data in CLINICAL_GUIDELINES.items():
+                if any(org in guideline.upper() for org in clin_key.upper().split('_')):
+                    verification['verified'].append({
+                        'citation': guideline,
+                        'type': 'Clinical Guideline',
+                        'source': clin_key
+                    })
+                    verified_count += 1
+                    found = True
+                    break
+            if not found:
+                verification['potential_hallucinations'].append({
+                    'citation': guideline,
+                    'type': 'Clinical Guideline',
+                    'warning': 'Guideline not in knowledge base - may be hallucinated or outdated'
+                })
+        
+        # Calculate verification rate
+        if total_citations > 0:
+            verification['verification_rate'] = verified_count / total_citations
+        
+        return verification
 
 # Singleton instance
 advanced_ai_generator = AdvancedAIAppealGenerator()

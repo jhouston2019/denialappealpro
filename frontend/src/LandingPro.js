@@ -29,6 +29,17 @@ function LandingPro() {
           .grid-4 { grid-template-columns: 1fr 1fr !important; }
           .letter-body { padding: 24px !important; }
         }
+        
+        .icon-badge {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          font-weight: 700;
+          font-size: 16px;
+        }
       `}</style>
 
       {/* 1. HERO */}
@@ -63,75 +74,76 @@ function LandingPro() {
             built to convert rejected claims into reimbursed outcomes.
           </p>
 
-          {/* NEW: Verified AI Trust Badge */}
           <div style={{
-            background: 'rgba(16, 185, 129, 0.15)',
-            border: '2px solid rgba(16, 185, 129, 0.4)',
-            borderRadius: '16px',
-            padding: '24px 32px',
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
+            borderRadius: '4px',
+            padding: '32px 40px',
             maxWidth: '900px',
             margin: '0 auto 48px',
             textAlign: 'center'
           }}>
             <div style={{
-              fontSize: '14px',
+              fontSize: '12px',
               fontWeight: 700,
-              color: '#6ee7b7',
-              marginBottom: '12px',
-              letterSpacing: '1px'
+              color: '#60a5fa',
+              marginBottom: '16px',
+              letterSpacing: '2px',
+              textTransform: 'uppercase'
             }}>
-              ✓ VERIFIED AI TECHNOLOGY
+              Verified AI Technology
             </div>
             <div style={{
               fontSize: '18px',
-              fontWeight: 700,
+              fontWeight: 600,
               color: 'white',
-              lineHeight: '1.6'
+              lineHeight: '1.8',
+              letterSpacing: '-0.2px'
             }}>
               95%+ Citation Accuracy • 85%+ Success Rate<br/>
               Automated Quality Assurance • Proven ROI Tracking
             </div>
             <div style={{
-              fontSize: '14px',
-              color: 'rgba(255,255,255,0.7)',
-              marginTop: '12px',
+              fontSize: '13px',
+              color: 'rgba(255,255,255,0.6)',
+              marginTop: '16px',
               fontWeight: 500
             }}>
               Every regulatory citation verified against our knowledge base
             </div>
           </div>
 
-          {/* Scenario Box */}
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: '16px',
-            padding: '40px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '2px',
+            padding: '40px 48px',
             marginBottom: '48px',
             maxWidth: '900px',
             margin: '0 auto 48px'
           }}>
             <p style={{
               fontSize: '18px',
-              fontWeight: 600,
-              marginBottom: '20px',
-              color: 'rgba(255,255,255,0.9)',
+              fontWeight: 500,
+              marginBottom: '24px',
+              color: 'rgba(255,255,255,0.8)',
               lineHeight: '1.6'
             }}>
               Their claim was denied as<br/>
-              <span style={{ fontSize: '24px', color: '#fbbf24', fontWeight: 800 }}>"Not Medically Necessary."</span>
+              <span style={{ fontSize: '24px', color: '#e0e7ff', fontWeight: 700, letterSpacing: '-0.5px' }}>"Not Medically Necessary."</span>
             </p>
             
             <p style={{
               fontSize: '16px',
-              color: 'rgba(255,255,255,0.85)',
+              color: 'rgba(255,255,255,0.75)',
               lineHeight: '1.8',
-              marginBottom: '0'
+              marginBottom: '0',
+              fontWeight: 400
             }}>
-              <strong style={{ color: 'white', fontSize: '18px' }}>Denial Appeal Pro</strong><br/>
+              <strong style={{ color: 'white', fontSize: '18px', fontWeight: 600 }}>Denial Appeal Pro</strong><br/>
               analyzes the denial reason, payer criteria, and clinical documentation —<br/>
               identifying exactly what failed and generating a<br/>
-              <strong style={{ color: '#93c5fd' }}>submission-ready appeal aligned to payer requirements.</strong>
+              <strong style={{ color: '#93c5fd', fontWeight: 600 }}>submission-ready appeal aligned to payer requirements.</strong>
             </p>
           </div>
 
@@ -162,7 +174,7 @@ function LandingPro() {
               Denial Appeal Pro systematically identifies:
             </h3>
 
-            <div style={{ display: 'grid', gap: '12px', marginBottom: '40px' }}>
+            <div style={{ display: 'grid', gap: '1px', marginBottom: '40px', background: 'rgba(255,255,255,0.1)' }}>
               {[
                 'Denial code breakdown (CARC/RARC → true failure point)',
                 'Medical necessity gaps vs payer-specific criteria',
@@ -171,18 +183,23 @@ function LandingPro() {
                 'Policy misapplication and guideline errors'
               ].map((item, i) => (
                 <div key={i} style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: '8px',
-                  padding: '16px 20px',
+                  background: 'rgba(15, 23, 42, 0.5)',
+                  padding: '18px 24px',
                   fontSize: '15px',
-                  fontWeight: 600,
-                  color: 'rgba(255,255,255,0.95)',
+                  fontWeight: 500,
+                  color: 'rgba(255,255,255,0.9)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px'
+                  gap: '16px',
+                  backdropFilter: 'blur(10px)'
                 }}>
-                  <span style={{ color: '#10b981', fontSize: '18px', flexShrink: 0 }}>✓</span>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    background: '#60a5fa',
+                    flexShrink: 0,
+                    borderRadius: '1px'
+                  }}></div>
                   {item}
                 </div>
               ))}
@@ -200,8 +217,11 @@ function LandingPro() {
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-              marginBottom: '40px'
+              gap: '1px',
+              marginBottom: '40px',
+              background: 'rgba(59, 130, 246, 0.2)',
+              borderRadius: '2px',
+              overflow: 'hidden'
             }}>
               {[
                 'Structured for payer review',
@@ -210,14 +230,13 @@ function LandingPro() {
                 'Built to withstand escalation or audit'
               ].map((item, i) => (
                 <div key={i} style={{
-                  background: 'rgba(147, 197, 253, 0.1)',
-                  border: '1px solid rgba(147, 197, 253, 0.3)',
-                  borderRadius: '8px',
-                  padding: '14px 18px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  padding: '16px 20px',
                   fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#93c5fd',
-                  textAlign: 'center'
+                  fontWeight: 500,
+                  color: '#bfdbfe',
+                  textAlign: 'center',
+                  backdropFilter: 'blur(10px)'
                 }}>
                   {item}
                 </div>
@@ -244,29 +263,29 @@ function LandingPro() {
             </p>
           </div>
 
-          {/* CTA Section */}
           <div style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '2px solid rgba(239, 68, 68, 0.4)',
-            borderRadius: '16px',
-            padding: '32px',
+            background: 'rgba(59, 130, 246, 0.1)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '2px',
+            padding: '40px 48px',
             maxWidth: '800px',
             margin: '0 auto 48px',
             textAlign: 'center'
           }}>
             <h2 style={{
-              fontSize: '32px',
-              fontWeight: 900,
-              margin: '0 0 16px 0',
-              color: '#fca5a5'
+              fontSize: '28px',
+              fontWeight: 700,
+              margin: '0 0 20px 0',
+              color: '#e0e7ff',
+              letterSpacing: '-0.5px'
             }}>
               Stop Letting Denials Sit Unworked
             </h2>
             <p style={{
-              fontSize: '18px',
-              color: 'rgba(255,255,255,0.9)',
-              fontWeight: 600,
-              lineHeight: '1.6',
+              fontSize: '16px',
+              color: 'rgba(255,255,255,0.8)',
+              fontWeight: 500,
+              lineHeight: '1.8',
               marginBottom: '0'
             }}>
               Recover eligible revenue.<br/>
@@ -275,17 +294,17 @@ function LandingPro() {
             </p>
           </div>
 
-          {/* Denial Outcome Preview */}
           <div style={{
             maxWidth: '900px',
             margin: '0 auto 40px'
           }}>
             <h3 style={{
-              fontSize: '28px',
-              fontWeight: 800,
+              fontSize: '24px',
+              fontWeight: 700,
               marginBottom: '32px',
               color: 'white',
-              textAlign: 'center'
+              textAlign: 'center',
+              letterSpacing: '-0.5px'
             }}>
               Denial Outcome Preview
             </h3>
@@ -293,75 +312,78 @@ function LandingPro() {
             <div style={{
               display: 'grid',
               gridTemplateColumns: '1fr auto 1fr',
-              gap: '24px',
+              gap: '32px',
               alignItems: 'center'
             }}>
-              {/* Denied Claim */}
               <div style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '2px solid rgba(239, 68, 68, 0.4)',
-                borderRadius: '12px',
-                padding: '28px',
-                textAlign: 'center'
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '2px',
+                padding: '32px 28px',
+                textAlign: 'center',
+                backdropFilter: 'blur(10px)'
               }}>
                 <div style={{
-                  fontSize: '14px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  color: '#fca5a5',
-                  marginBottom: '12px',
-                  letterSpacing: '0.5px'
+                  color: '#94a3b8',
+                  marginBottom: '16px',
+                  letterSpacing: '1.5px',
+                  textTransform: 'uppercase'
                 }}>
-                  DENIED CLAIM
+                  Denied Claim
                 </div>
                 <div style={{
                   fontSize: '36px',
-                  fontWeight: 900,
-                  color: '#ef4444',
-                  marginBottom: '8px'
+                  fontWeight: 700,
+                  color: '#cbd5e1',
+                  marginBottom: '12px',
+                  letterSpacing: '-1px'
                 }}>
                   $18,550
                 </div>
                 <div style={{
-                  fontSize: '14px',
-                  color: 'rgba(255,255,255,0.7)',
-                  fontWeight: 600
+                  fontSize: '13px',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontWeight: 500
                 }}>
                   Not Paid
                 </div>
               </div>
 
-              {/* VS */}
               <div style={{
-                fontSize: '24px',
-                fontWeight: 900,
-                color: '#93c5fd',
-                padding: '0 16px'
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#60a5fa',
+                padding: '0 16px',
+                letterSpacing: '1px'
               }}>
-                vs.
+                VS
               </div>
 
-              {/* Corrected Appeal */}
               <div style={{
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '2px solid rgba(16, 185, 129, 0.4)',
-                borderRadius: '12px',
-                padding: '28px',
-                textAlign: 'center'
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.4)',
+                borderRadius: '2px',
+                padding: '32px 28px',
+                textAlign: 'center',
+                backdropFilter: 'blur(10px)'
               }}>
                 <div style={{
-                  fontSize: '14px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  color: '#6ee7b7',
-                  marginBottom: '12px',
-                  letterSpacing: '0.5px'
+                  color: '#93c5fd',
+                  marginBottom: '16px',
+                  letterSpacing: '1.5px',
+                  textTransform: 'uppercase'
                 }}>
-                  CORRECTED APPEAL SUBMISSION
+                  Corrected Appeal Submission
                 </div>
                 <div style={{
                   fontSize: '16px',
-                  fontWeight: 700,
-                  color: '#10b981',
-                  lineHeight: '1.5'
+                  fontWeight: 600,
+                  color: '#e0e7ff',
+                  lineHeight: '1.6'
                 }}>
                   Aligned to Payer Criteria —<br/>
                   Ready for Review
@@ -370,7 +392,6 @@ function LandingPro() {
             </div>
           </div>
 
-          {/* CTA Buttons */}
           <div style={{
             display: 'flex',
             gap: '16px',
@@ -384,21 +405,22 @@ function LandingPro() {
                 background: 'white',
                 color: '#0f172a',
                 border: 'none',
-                padding: '18px 40px',
-                fontSize: '16px',
-                fontWeight: 700,
+                padding: '16px 40px',
+                fontSize: '15px',
+                fontWeight: 600,
                 cursor: 'pointer',
-                borderRadius: '50px',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-                transition: 'all 0.3s ease'
+                borderRadius: '2px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                transition: 'all 0.2s ease',
+                letterSpacing: '0.3px'
               }}
               onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.4)';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.25)';
               }}
               onMouseOut={(e) => {
                 e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+                e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
               }}
             >
               Run Denial Analysis → Generate Appeal
@@ -409,17 +431,18 @@ function LandingPro() {
               style={{
                 background: 'transparent',
                 color: 'white',
-                border: '2px solid rgba(255,255,255,0.3)',
+                border: '1px solid rgba(255,255,255,0.3)',
                 padding: '16px 32px',
-                fontSize: '16px',
-                fontWeight: 600,
+                fontSize: '15px',
+                fontWeight: 500,
                 cursor: 'pointer',
-                borderRadius: '50px',
-                transition: 'all 0.3s ease'
+                borderRadius: '2px',
+                transition: 'all 0.2s ease',
+                letterSpacing: '0.3px'
               }}
               onMouseOver={(e) => {
-                e.target.style.borderColor = 'white';
-                e.target.style.background = 'rgba(255,255,255,0.1)';
+                e.target.style.borderColor = 'rgba(255,255,255,0.6)';
+                e.target.style.background = 'rgba(255,255,255,0.05)';
               }}
               onMouseOut={(e) => {
                 e.target.style.borderColor = 'rgba(255,255,255,0.3)';
@@ -471,43 +494,39 @@ function LandingPro() {
           
           <div style={{
             background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '20px',
+            border: '1px solid #cbd5e1',
+            borderRadius: '2px',
             overflow: 'hidden',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.08)'
+            boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
           }}>
-            {/* Browser chrome */}
             <div style={{
               background: '#f8fafc',
               borderBottom: '1px solid #e2e8f0',
-              padding: '12px 20px',
+              padding: '16px 24px',
               display: 'flex',
               alignItems: 'center',
-              gap: '12px'
+              gap: '16px'
             }}>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444' }}></div>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b' }}></div>
-                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981' }}></div>
-              </div>
               <div style={{
                 flex: 1,
                 fontSize: '13px',
-                color: '#64748b',
-                fontWeight: 600
+                color: '#475569',
+                fontWeight: 600,
+                letterSpacing: '0.2px'
               }}>
                 Appeal_Letter_CO50_CLM-2024-12345.pdf
               </div>
               <div style={{
-                background: '#10b981',
+                background: '#1e40af',
                 color: 'white',
-                padding: '4px 12px',
-                borderRadius: '12px',
-                fontSize: '11px',
+                padding: '6px 16px',
+                borderRadius: '2px',
+                fontSize: '10px',
                 fontWeight: 700,
-                letterSpacing: '0.5px'
+                letterSpacing: '1px',
+                textTransform: 'uppercase'
               }}>
-                SUBMISSION READY
+                Submission Ready
               </div>
             </div>
             
@@ -576,16 +595,17 @@ function LandingPro() {
           </div>
           
           <div style={{
-            background: '#dbeafe',
-            border: '1px solid #93c5fd',
-            borderRadius: '12px',
-            padding: '20px',
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '2px',
+            padding: '20px 24px',
             marginTop: '24px',
             fontSize: '14px',
             color: '#1e40af',
-            lineHeight: '1.6'
+            lineHeight: '1.6',
+            fontWeight: 500
           }}>
-            <strong>Sample only.</strong> Your generated letter uses your actual claim details, denial code, payer policies, and clinical context.
+            <strong style={{ fontWeight: 700 }}>Sample only.</strong> Your generated letter uses your actual claim details, denial code, payer policies, and clinical context.
           </div>
         </section>
 
@@ -593,7 +613,7 @@ function LandingPro() {
         <section style={{
           background: 'white',
           border: '1px solid #e2e8f0',
-          borderRadius: '20px',
+          borderRadius: '2px',
           padding: '56px 48px',
           marginBottom: '48px'
         }}>
@@ -606,9 +626,10 @@ function LandingPro() {
             <div>
               <h3 style={{
                 fontSize: '28px',
-                fontWeight: 800,
+                fontWeight: 700,
                 color: '#0f172a',
-                margin: '0 0 12px 0'
+                margin: '0 0 12px 0',
+                letterSpacing: '-0.5px'
               }}>
                 What's in every letter
               </h3>
@@ -622,22 +643,40 @@ function LandingPro() {
                 Built to meet payer requirements and pass initial review.
               </p>
               
-              <div style={{ display: 'grid', gap: '20px' }}>
+              <div style={{ display: 'grid', gap: '1px', background: '#e2e8f0' }}>
                 {[
-                  { icon: '🏥', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
-                  { icon: '📋', title: 'Claim Reference Block', desc: 'Claim number, patient ID, dates of service' },
-                  { icon: '❌', title: 'Denial Restatement', desc: 'Clear documentation of the denial reason' },
-                  { icon: '⚕️', title: 'Medical Necessity Argument', desc: 'Policy references and regulatory citations' },
-                  { icon: '📝', title: 'Formal Appeal Language', desc: 'Professional reconsideration request' },
-                  { icon: '✍️', title: 'Signature Block', desc: 'Provider signature area with NPI' }
+                  { num: '01', title: 'Provider & Payer Headers', desc: 'Complete identification and contact information' },
+                  { num: '02', title: 'Claim Reference Block', desc: 'Claim number, patient ID, dates of service' },
+                  { num: '03', title: 'Denial Restatement', desc: 'Clear documentation of the denial reason' },
+                  { num: '04', title: 'Medical Necessity Argument', desc: 'Policy references and regulatory citations' },
+                  { num: '05', title: 'Formal Appeal Language', desc: 'Professional reconsideration request' },
+                  { num: '06', title: 'Signature Block', desc: 'Provider signature area with NPI' }
                 ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '28px', flexShrink: 0 }}>{item.icon}</div>
+                  <div key={i} style={{ 
+                    display: 'flex', 
+                    gap: '16px', 
+                    alignItems: 'flex-start',
+                    background: 'white',
+                    padding: '20px'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      background: '#1e40af',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      borderRadius: '2px'
+                    }}>{item.num}</div>
                     <div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                         {item.title}
                       </div>
-                      <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
+                      <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 400, lineHeight: '1.5' }}>
                         {item.desc}
                       </div>
                     </div>
@@ -651,20 +690,21 @@ function LandingPro() {
               <div style={{
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: '16px',
+                borderRadius: '2px',
                 padding: '32px',
                 marginBottom: '24px'
               }}>
                 <h4 style={{
-                  fontSize: '18px',
+                  fontSize: '16px',
                   fontWeight: 700,
                   color: '#0f172a',
-                  margin: '0 0 20px 0'
+                  margin: '0 0 24px 0',
+                  letterSpacing: '0.3px'
                 }}>
                   What you'll need
                 </h4>
                 
-                <div style={{ display: 'grid', gap: '10px' }}>
+                <div style={{ display: 'grid', gap: '12px' }}>
                   {[
                     'Payer name and member ID',
                     'Claim number',
@@ -677,12 +717,19 @@ function LandingPro() {
                   ].map((item, i) => (
                     <div key={i} style={{
                       fontSize: '14px',
-                      color: '#0f172a',
+                      color: '#475569',
                       paddingLeft: '20px',
                       position: 'relative',
-                      fontWeight: 500
+                      fontWeight: 400,
+                      lineHeight: '1.5'
                     }}>
-                      <span style={{ position: 'absolute', left: 0, color: '#1e3a8a', fontWeight: 700 }}>•</span>
+                      <span style={{ 
+                        position: 'absolute', 
+                        left: 0, 
+                        color: '#1e40af', 
+                        fontWeight: 700,
+                        fontSize: '16px'
+                      }}>·</span>
                       {item}
                     </div>
                   ))}
@@ -690,42 +737,50 @@ function LandingPro() {
               </div>
               
               <div style={{
-                background: '#dbeafe',
-                border: '1px solid #93c5fd',
-                borderRadius: '16px',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '2px',
                 padding: '24px'
               }}>
                 <div style={{
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: 700,
                   color: '#1e40af',
-                  marginBottom: '16px'
+                  marginBottom: '16px',
+                  letterSpacing: '0.3px'
                 }}>
-                  ✓ Auto-validation included
+                  Auto-validation included
                 </div>
-                <div style={{ display: 'grid', gap: '8px', fontSize: '14px', color: '#1e40af', fontWeight: 500 }}>
-                  <div>• Timely filing window check</div>
-                  <div>• Duplicate appeal detection</div>
-                  <div>• Required field validation</div>
+                <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#475569', fontWeight: 400 }}>
+                  <div style={{ paddingLeft: '16px', position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 0, color: '#1e40af', fontWeight: 700 }}>·</span>
+                    Timely filing window check
+                  </div>
+                  <div style={{ paddingLeft: '16px', position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 0, color: '#1e40af', fontWeight: 700 }}>·</span>
+                    Duplicate appeal detection
+                  </div>
+                  <div style={{ paddingLeft: '16px', position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 0, color: '#1e40af', fontWeight: 700 }}>·</span>
+                    Required field validation
+                  </div>
                 </div>
               </div>
               
               <div style={{
                 marginTop: '24px',
-                padding: '20px',
-                background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
-                borderRadius: '16px',
-                textAlign: 'center'
+                padding: '28px 32px',
+                background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                borderRadius: '2px',
+                textAlign: 'center',
+                border: '1px solid rgba(59, 130, 246, 0.3)'
               }}>
-                <div style={{
-                  fontSize: '24px',
-                  marginBottom: '12px'
-                }}>📄</div>
                 <div style={{
                   color: 'white',
                   fontSize: '15px',
                   fontWeight: 600,
-                  marginBottom: '12px'
+                  marginBottom: '16px',
+                  letterSpacing: '0.3px'
                 }}>
                   Delivered as PDF — ready for portal, fax, or mail
                 </div>
@@ -735,15 +790,22 @@ function LandingPro() {
                     background: 'white',
                     color: '#0f172a',
                     border: 'none',
-                    padding: '12px 28px',
+                    padding: '12px 32px',
                     fontSize: '14px',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    borderRadius: '50px',
-                    transition: 'all 0.3s ease'
+                    borderRadius: '2px',
+                    transition: 'all 0.2s ease',
+                    letterSpacing: '0.3px'
                   }}
-                  onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-                  onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-1px)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 >
                   Start Now →
                 </button>
@@ -756,16 +818,16 @@ function LandingPro() {
         <section style={{
           background: 'white',
           border: '1px solid #e2e8f0',
-          borderRadius: '20px',
+          borderRadius: '2px',
           padding: '56px 48px',
           marginBottom: '48px'
         }}>
           <h2 style={{
-            fontSize: '36px',
-            fontWeight: 800,
+            fontSize: '32px',
+            fontWeight: 700,
             textAlign: 'center',
             margin: '0 0 48px 0',
-            letterSpacing: '-1px',
+            letterSpacing: '-0.5px',
             color: '#0f172a'
           }}>
             How It Works
@@ -774,7 +836,8 @@ function LandingPro() {
           <div className="grid-4" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '24px'
+            gap: '1px',
+            background: '#e2e8f0'
           }}>
             {[
               { num: '01', title: 'Enter denial details', desc: 'Claim info, denial code, dates' },
@@ -787,40 +850,40 @@ function LandingPro() {
                 onMouseEnter={() => setHoveredCard(i)}
                 onMouseLeave={() => setHoveredCard(null)}
                 style={{
-                  background: hoveredCard === i ? 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' : '#f8fafc',
-                  border: hoveredCard === i ? 'none' : '1px solid #e2e8f0',
-                  borderRadius: '16px',
-                  padding: '32px 24px',
+                  background: hoveredCard === i ? 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)' : 'white',
+                  padding: '40px 24px',
                   textAlign: 'center',
-                  transition: 'all 0.3s ease',
+                  transition: 'all 0.2s ease',
                   cursor: 'pointer',
-                  transform: hoveredCard === i ? 'translateY(-8px)' : 'translateY(0)',
-                  boxShadow: hoveredCard === i ? '0 20px 40px rgba(30,58,138,0.3)' : 'none'
+                  position: 'relative'
                 }}
               >
                 <div style={{
-                  fontSize: '32px',
-                  fontWeight: 900,
-                  color: hoveredCard === i ? '#93c5fd' : '#1e3a8a',
-                  marginBottom: '16px',
-                  transition: 'color 0.3s ease'
+                  fontSize: '28px',
+                  fontWeight: 700,
+                  color: hoveredCard === i ? '#93c5fd' : '#1e40af',
+                  marginBottom: '20px',
+                  transition: 'color 0.2s ease',
+                  letterSpacing: '-0.5px'
                 }}>
                   {step.num}
                 </div>
                 <div style={{
-                  fontSize: '18px',
-                  fontWeight: 700,
+                  fontSize: '16px',
+                  fontWeight: 600,
                   color: hoveredCard === i ? 'white' : '#0f172a',
                   marginBottom: '8px',
-                  transition: 'color 0.3s ease'
+                  transition: 'color 0.2s ease',
+                  lineHeight: '1.4'
                 }}>
                   {step.title}
                 </div>
                 <div style={{
-                  fontSize: '14px',
+                  fontSize: '13px',
                   color: hoveredCard === i ? 'rgba(255,255,255,0.8)' : '#64748b',
-                  fontWeight: 500,
-                  transition: 'color 0.3s ease'
+                  fontWeight: 400,
+                  transition: 'color 0.2s ease',
+                  lineHeight: '1.5'
                 }}>
                   {step.desc}
                 </div>
@@ -832,21 +895,22 @@ function LandingPro() {
         {/* 5. PRICING */}
         <section style={{
           background: '#0f172a',
-          borderRadius: '20px',
+          borderRadius: '2px',
           padding: '56px 48px',
           marginBottom: '48px',
-          color: 'white'
+          color: 'white',
+          border: '1px solid #1e293b'
         }}>
           <div className="grid-2" style={{
             display: 'grid',
             gridTemplateColumns: '1.5fr 1fr',
-            gap: '48px',
+            gap: '56px',
             alignItems: 'center'
           }}>
             <div>
               <h2 style={{
                 fontSize: '56px',
-                fontWeight: 900,
+                fontWeight: 700,
                 margin: '0 0 12px 0',
                 letterSpacing: '-2px'
               }}>
@@ -854,19 +918,21 @@ function LandingPro() {
               </h2>
               
               <p style={{
-                fontSize: '20px',
+                fontSize: '18px',
                 color: '#93c5fd',
                 marginBottom: '16px',
-                fontWeight: 600
+                fontWeight: 500,
+                letterSpacing: '0.2px'
               }}>
                 per appeal letter
               </p>
               
               <p style={{
-                fontSize: '16px',
-                color: 'rgba(255,255,255,0.7)',
+                fontSize: '15px',
+                color: 'rgba(255,255,255,0.6)',
                 marginBottom: '32px',
-                fontWeight: 500
+                fontWeight: 400,
+                lineHeight: '1.6'
               }}>
                 One-time payment. No hidden fees. No subscription.
               </p>
@@ -877,16 +943,17 @@ function LandingPro() {
                   background: 'white',
                   color: '#0f172a',
                   border: 'none',
-                  padding: '16px 40px',
-                  fontSize: '16px',
-                  fontWeight: 700,
+                  padding: '14px 36px',
+                  fontSize: '15px',
+                  fontWeight: 600,
                   cursor: 'pointer',
-                  borderRadius: '50px',
-                  transition: 'all 0.3s ease'
+                  borderRadius: '2px',
+                  transition: 'all 0.2s ease',
+                  letterSpacing: '0.3px'
                 }}
                 onMouseOver={(e) => {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow = '0 10px 30px rgba(255,255,255,0.3)';
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 4px 16px rgba(255,255,255,0.3)';
                 }}
                 onMouseOut={(e) => {
                   e.target.style.transform = 'translateY(0)';
@@ -897,7 +964,7 @@ function LandingPro() {
               </button>
             </div>
             
-            <div style={{ display: 'grid', gap: '16px' }}>
+            <div style={{ display: 'grid', gap: '1px', background: 'rgba(255,255,255,0.1)' }}>
               {[
                 'Instant generation',
                 'Professional formatting',
@@ -907,17 +974,22 @@ function LandingPro() {
                 'All denial codes'
               ].map((item, i) => (
                 <div key={i} style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '12px',
+                  background: 'rgba(15, 23, 42, 0.8)',
                   padding: '16px 20px',
-                  fontSize: '15px',
-                  fontWeight: 600,
+                  fontSize: '14px',
+                  fontWeight: 500,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px'
+                  gap: '12px',
+                  backdropFilter: 'blur(10px)'
                 }}>
-                  <span style={{ color: '#10b981', fontSize: '18px' }}>✓</span>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    background: '#60a5fa',
+                    flexShrink: 0,
+                    borderRadius: '1px'
+                  }}></div>
                   {item}
                 </div>
               ))}
@@ -929,16 +1001,16 @@ function LandingPro() {
         <section style={{
           background: 'white',
           border: '1px solid #e2e8f0',
-          borderRadius: '20px',
+          borderRadius: '2px',
           padding: '56px 48px',
           marginBottom: '48px'
         }}>
           <h2 style={{
-            fontSize: '36px',
-            fontWeight: 800,
+            fontSize: '32px',
+            fontWeight: 700,
             textAlign: 'center',
             margin: '0 0 16px 0',
-            letterSpacing: '-1px',
+            letterSpacing: '-0.5px',
             color: '#0f172a'
           }}>
             Why Our AI Is Different
@@ -947,9 +1019,9 @@ function LandingPro() {
           <p style={{
             textAlign: 'center',
             color: '#64748b',
-            fontSize: '18px',
+            fontSize: '16px',
             marginBottom: '48px',
-            fontWeight: 500
+            fontWeight: 400
           }}>
             Not all AI is created equal. Here's what sets us apart.
           </p>
@@ -957,165 +1029,211 @@ function LandingPro() {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '24px',
-            marginBottom: '48px'
+            gap: '1px',
+            marginBottom: '48px',
+            background: '#e2e8f0'
           }}>
-            {/* Generic ChatGPT */}
             <div style={{
-              background: '#fef2f2',
-              border: '2px solid #fecaca',
-              borderRadius: '16px',
-              padding: '32px 24px',
+              background: '#f8fafc',
+              padding: '40px 28px',
               textAlign: 'center'
             }}>
               <div style={{
-                fontSize: '16px',
+                fontSize: '14px',
                 fontWeight: 700,
-                color: '#991b1b',
-                marginBottom: '16px'
+                color: '#64748b',
+                marginBottom: '20px',
+                letterSpacing: '0.5px'
               }}>
                 Generic ChatGPT
               </div>
               <div style={{
                 fontSize: '48px',
-                fontWeight: 900,
-                color: '#dc2626',
-                marginBottom: '16px'
+                fontWeight: 700,
+                color: '#94a3b8',
+                marginBottom: '20px',
+                letterSpacing: '-1px'
               }}>
                 40/100
               </div>
-              <div style={{ display: 'grid', gap: '8px', fontSize: '13px', color: '#991b1b', textAlign: 'left' }}>
-                <div>❌ No citation verification</div>
-                <div>❌ Generic language</div>
-                <div>❌ No outcome tracking</div>
-                <div>❌ ~70% citation accuracy</div>
+              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#64748b', textAlign: 'left', fontWeight: 400 }}>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  No citation verification
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  Generic language
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  No outcome tracking
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  ~70% citation accuracy
+                </div>
               </div>
             </div>
 
-            {/* Other AI Tools */}
             <div style={{
-              background: '#fef9c3',
-              border: '2px solid #fde047',
-              borderRadius: '16px',
-              padding: '32px 24px',
+              background: '#f8fafc',
+              padding: '40px 28px',
               textAlign: 'center'
             }}>
               <div style={{
-                fontSize: '16px',
+                fontSize: '14px',
                 fontWeight: 700,
-                color: '#854d0e',
-                marginBottom: '16px'
+                color: '#64748b',
+                marginBottom: '20px',
+                letterSpacing: '0.5px'
               }}>
                 Other AI Tools
               </div>
               <div style={{
                 fontSize: '48px',
-                fontWeight: 900,
-                color: '#ca8a04',
-                marginBottom: '16px'
+                fontWeight: 700,
+                color: '#94a3b8',
+                marginBottom: '20px',
+                letterSpacing: '-1px'
               }}>
                 60/100
               </div>
-              <div style={{ display: 'grid', gap: '8px', fontSize: '13px', color: '#854d0e', textAlign: 'left' }}>
-                <div>⚠️ Limited verification</div>
-                <div>⚠️ Basic templates</div>
-                <div>⚠️ No quality tracking</div>
-                <div>⚠️ ~80% citation accuracy</div>
+              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#64748b', textAlign: 'left', fontWeight: 400 }}>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  Limited verification
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  Basic templates
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  No quality tracking
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0 }}>·</span>
+                  ~80% citation accuracy
+                </div>
               </div>
             </div>
 
-            {/* Denial Appeal Pro */}
             <div style={{
-              background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-              border: '3px solid #3b82f6',
-              borderRadius: '16px',
-              padding: '32px 24px',
+              background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+              padding: '40px 28px',
               textAlign: 'center',
-              position: 'relative',
-              boxShadow: '0 10px 30px rgba(59, 130, 246, 0.2)'
+              position: 'relative'
             }}>
               <div style={{
                 position: 'absolute',
-                top: '-12px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: '#10b981',
-                color: 'white',
-                padding: '6px 16px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: 800,
-                letterSpacing: '0.5px'
+                top: '16px',
+                right: '16px',
+                background: 'rgba(59, 130, 246, 0.2)',
+                color: '#93c5fd',
+                padding: '4px 12px',
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                border: '1px solid rgba(59, 130, 246, 0.3)'
               }}>
-                VERIFIED AI
+                Verified AI
               </div>
               <div style={{
-                fontSize: '16px',
+                fontSize: '14px',
                 fontWeight: 700,
-                color: '#1e40af',
-                marginBottom: '16px'
+                color: '#93c5fd',
+                marginBottom: '20px',
+                letterSpacing: '0.5px'
               }}>
                 Denial Appeal Pro
               </div>
               <div style={{
                 fontSize: '48px',
-                fontWeight: 900,
-                color: '#1e3a8a',
-                marginBottom: '16px'
+                fontWeight: 700,
+                color: 'white',
+                marginBottom: '20px',
+                letterSpacing: '-1px'
               }}>
                 95/100
               </div>
-              <div style={{ display: 'grid', gap: '8px', fontSize: '13px', color: '#1e40af', textAlign: 'left', fontWeight: 600 }}>
-                <div>✓ 95%+ citation accuracy</div>
-                <div>✓ 85%+ success rate</div>
-                <div>✓ Automated QA</div>
-                <div>✓ ROI tracking</div>
+              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#e0e7ff', textAlign: 'left', fontWeight: 500 }}>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
+                  95%+ citation accuracy
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
+                  85%+ success rate
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
+                  Automated QA
+                </div>
+                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
+                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
+                  ROI tracking
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Key Differentiators */}
           <div style={{
             background: '#f8fafc',
-            borderRadius: '12px',
-            padding: '32px',
-            textAlign: 'left'
+            borderRadius: '2px',
+            padding: '40px',
+            textAlign: 'left',
+            marginTop: '48px'
           }}>
             <h3 style={{
-              fontSize: '20px',
-              fontWeight: 800,
+              fontSize: '18px',
+              fontWeight: 700,
               color: '#0f172a',
-              marginBottom: '20px',
-              textAlign: 'center'
+              marginBottom: '24px',
+              textAlign: 'center',
+              letterSpacing: '0.3px'
             }}>
               What "Verified AI" Means
             </h3>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '16px'
+              gap: '1px',
+              background: '#e2e8f0'
             }}>
               {[
-                { icon: '🔍', title: 'Citation Verification', desc: 'Every regulatory citation cross-referenced against our knowledge base' },
-                { icon: '📊', title: 'Quality Scoring', desc: 'Automated 100-point quality check on every appeal' },
-                { icon: '🎯', title: 'Success Tracking', desc: 'Real-world outcome data proves what works' },
-                { icon: '⚡', title: 'Zero Hallucinations', desc: 'AI cannot cite non-existent regulations' }
+                { num: '01', title: 'Citation Verification', desc: 'Every regulatory citation cross-referenced against our knowledge base' },
+                { num: '02', title: 'Quality Scoring', desc: 'Automated 100-point quality check on every appeal' },
+                { num: '03', title: 'Success Tracking', desc: 'Real-world outcome data proves what works' },
+                { num: '04', title: 'Zero Hallucinations', desc: 'AI cannot cite non-existent regulations' }
               ].map((item, i) => (
                 <div key={i} style={{
                   background: 'white',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px',
+                  padding: '24px',
                   display: 'flex',
                   gap: '16px',
                   alignItems: 'flex-start'
                 }}>
-                  <div style={{ fontSize: '28px', flexShrink: 0 }}>{item.icon}</div>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    background: '#1e40af',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    borderRadius: '2px'
+                  }}>{item.num}</div>
                   <div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
                       {item.title}
                     </div>
-                    <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500, lineHeight: '1.5' }}>
+                    <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 400, lineHeight: '1.6' }}>
                       {item.desc}
                     </div>
                   </div>
@@ -1129,35 +1247,41 @@ function LandingPro() {
         <section style={{
           background: 'white',
           border: '1px solid #e2e8f0',
-          borderRadius: '20px',
-          padding: '48px',
+          borderRadius: '2px',
+          padding: '56px 48px',
           marginBottom: '48px'
         }}>
           <div className="grid-4" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '40px',
-            textAlign: 'center'
+            gap: '1px',
+            textAlign: 'center',
+            background: '#e2e8f0'
           }}>
             {[
-              { num: '95%+', label: 'Citation accuracy', color: '#10b981' },
-              { num: '85%+', label: 'Success rate', color: '#3b82f6' },
-              { num: '<5 min', label: 'From entry to PDF', color: '#8b5cf6' },
-              { num: '$10', label: 'Flat fee per appeal', color: '#1e3a8a' }
+              { num: '95%+', label: 'Citation accuracy', color: '#1e40af' },
+              { num: '85%+', label: 'Success rate', color: '#1e40af' },
+              { num: '<5 min', label: 'From entry to PDF', color: '#1e40af' },
+              { num: '$10', label: 'Flat fee per appeal', color: '#1e40af' }
             ].map((stat, i) => (
-              <div key={i}>
+              <div key={i} style={{
+                background: '#f8fafc',
+                padding: '40px 24px'
+              }}>
                 <div style={{
                   fontSize: '48px',
-                  fontWeight: 900,
+                  fontWeight: 700,
                   color: stat.color,
-                  marginBottom: '8px'
+                  marginBottom: '12px',
+                  letterSpacing: '-1px'
                 }}>
                   {stat.num}
                 </div>
                 <div style={{
-                  fontSize: '15px',
+                  fontSize: '13px',
                   color: '#64748b',
-                  fontWeight: 600
+                  fontWeight: 500,
+                  letterSpacing: '0.3px'
                 }}>
                   {stat.label}
                 </div>
@@ -1168,29 +1292,31 @@ function LandingPro() {
 
         {/* 8. FINAL CTA */}
         <section style={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)',
-          borderRadius: '20px',
+          background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+          borderRadius: '2px',
           padding: '64px 48px',
           textAlign: 'center',
           color: 'white',
-          marginBottom: '48px'
+          marginBottom: '48px',
+          border: '1px solid rgba(59, 130, 246, 0.3)'
         }}>
           <h2 style={{
-            fontSize: '40px',
-            fontWeight: 900,
-            margin: '0 0 16px 0',
-            letterSpacing: '-1px'
+            fontSize: '36px',
+            fontWeight: 700,
+            margin: '0 0 20px 0',
+            letterSpacing: '-0.5px'
           }}>
             Don't let a denial become a write-off.
           </h2>
           
           <p style={{
-            fontSize: '18px',
-            color: '#93c5fd',
+            fontSize: '16px',
+            color: '#bfdbfe',
             marginBottom: '32px',
-            fontWeight: 500,
+            fontWeight: 400,
             maxWidth: '600px',
-            margin: '0 auto 32px'
+            margin: '0 auto 32px',
+            lineHeight: '1.6'
           }}>
             A $10 appeal letter costs less than the reimbursement you're trying to recover.
           </p>
@@ -1201,21 +1327,22 @@ function LandingPro() {
               background: 'white',
               color: '#0f172a',
               border: 'none',
-              padding: '20px 48px',
-              fontSize: '18px',
-              fontWeight: 700,
+              padding: '16px 48px',
+              fontSize: '15px',
+              fontWeight: 600,
               cursor: 'pointer',
-              borderRadius: '50px',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-              transition: 'all 0.3s ease'
+              borderRadius: '2px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+              transition: 'all 0.2s ease',
+              letterSpacing: '0.3px'
             }}
             onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-4px)';
-              e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.4)';
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
             }}
             onMouseOut={(e) => {
               e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+              e.target.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
             }}
           >
             Generate My Appeal Letter
@@ -1225,35 +1352,42 @@ function LandingPro() {
         {/* 9. FOOTER */}
         <footer style={{
           background: '#0f172a',
-          borderRadius: '16px',
-          padding: '40px',
+          borderRadius: '2px',
+          padding: '48px 40px',
           textAlign: 'center',
-          color: 'rgba(255,255,255,0.7)'
+          color: 'rgba(255,255,255,0.6)',
+          border: '1px solid #1e293b'
         }}>
           <p style={{
             fontSize: '13px',
-            lineHeight: '1.6',
-            marginBottom: '24px',
-            fontWeight: 500,
+            lineHeight: '1.7',
+            marginBottom: '32px',
+            fontWeight: 400,
             maxWidth: '800px',
-            margin: '0 auto 24px'
+            margin: '0 auto 32px'
           }}>
-            <strong style={{ color: 'white' }}>Disclaimer:</strong> This service generates procedurally valid appeal letters only. We do not provide legal advice, outcome predictions, claim optimization strategies, or enforcement assistance. All documents are templates requiring your review and customization as appropriate for your specific situation.
+            <strong style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>Disclaimer:</strong> This service generates procedurally valid appeal letters only. We do not provide legal advice, outcome predictions, claim optimization strategies, or enforcement assistance. All documents are templates requiring your review and customization as appropriate for your specific situation.
           </p>
           
           <div style={{
-            borderTop: '1px solid rgba(255,255,255,0.1)',
-            paddingTop: '24px',
-            fontSize: '14px'
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            paddingTop: '32px',
+            fontSize: '13px'
           }}>
-            <p style={{ margin: '0 0 12px 0' }}>
+            <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.5)' }}>
               © {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.
             </p>
             <p style={{ margin: 0 }}>
-              <a href="/terms" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', marginRight: '20px' }}>
+              <a href="/terms" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginRight: '24px', transition: 'color 0.2s' }}
+                onMouseEnter={(e) => e.target.style.color = 'rgba(255,255,255,0.8)'}
+                onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.5)'}
+              >
                 Terms of Service
               </a>
-              <a href="/privacy" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', marginRight: '20px' }}>
+              <a href="/privacy" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginRight: '24px', transition: 'color 0.2s' }}
+                onMouseEnter={(e) => e.target.style.color = 'rgba(255,255,255,0.8)'}
+                onMouseLeave={(e) => e.target.style.color = 'rgba(255,255,255,0.5)'}
+              >
                 Privacy Policy
               </a>
               <a 
@@ -1262,11 +1396,11 @@ function LandingPro() {
                   color: 'rgba(255,255,255,0.3)', 
                   textDecoration: 'none',
                   fontSize: '12px',
-                  opacity: 0.5,
+                  opacity: 0.4,
                   transition: 'opacity 0.2s'
                 }}
-                onMouseEnter={(e) => e.target.style.opacity = '1'}
-                onMouseLeave={(e) => e.target.style.opacity = '0.5'}
+                onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.target.style.opacity = '0.4'}
               >
                 Admin
               </a>

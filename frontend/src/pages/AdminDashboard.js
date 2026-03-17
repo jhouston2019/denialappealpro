@@ -405,7 +405,7 @@ const AppealsTab = ({ appeals, onViewDetail, selectedAppeal, onCloseDetail }) =>
                   </td>
                   <td style={styles.td}>
                     <button
-                      onClick={() => viewAppealDetail(appeal.appeal_id)}
+                      onClick={() => onViewDetail(appeal.appeal_id)}
                       style={styles.viewBtn}
                     >
                       View

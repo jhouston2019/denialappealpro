@@ -20,6 +20,7 @@ from pdf_parser import parse_denial_pdf
 from timely_filing import calculate_timely_filing
 from denial_rules import get_denial_rule
 from admin_auth import admin_auth, require_admin
+from auto_setup_admin import auto_setup_admin
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
@@ -1276,4 +1277,6 @@ if __name__ == '__main__':
         db.create_all()
         # Initialize pricing data
         initialize_pricing_data()
+        # Auto-setup admin system
+        auto_setup_admin()
     app.run(debug=True, port=5000)

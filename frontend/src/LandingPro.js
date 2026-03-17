@@ -35,61 +35,309 @@ function LandingPro() {
       <section style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)',
         padding: '80px 24px 100px',
-        textAlign: 'center',
         color: 'white'
       }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <div style={{
-            display: 'inline-block',
-            background: 'rgba(147, 197, 253, 0.15)',
-            border: '1px solid rgba(147, 197, 253, 0.3)',
-            padding: '8px 20px',
-            borderRadius: '50px',
-            fontSize: '13px',
-            fontWeight: 600,
-            marginBottom: '24px',
-            letterSpacing: '0.5px'
-          }}>
-            For billing managers & practice administrators
-          </div>
-          
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <h1 style={{
-            fontSize: '56px',
+            fontSize: '48px',
             fontWeight: 900,
-            margin: '0 0 24px 0',
-            letterSpacing: '-2px',
-            lineHeight: '1.1'
+            margin: '0 0 16px 0',
+            letterSpacing: '-1.5px',
+            lineHeight: '1.2',
+            textAlign: 'center'
           }}>
-            Your denied claim, appealed in 5 minutes.
+            Why Medical Billing & Revenue Cycle Teams<br/>Use Denial Appeal Pro
           </h1>
           
           <p style={{
             fontSize: '20px',
             color: '#93c5fd',
-            marginBottom: '24px',
+            marginBottom: '48px',
             fontWeight: 600,
-            lineHeight: '1.5'
+            lineHeight: '1.6',
+            textAlign: 'center',
+            maxWidth: '900px',
+            margin: '0 auto 48px'
           }}>
-            Most payers give you 90–180 days to appeal.
+            Because it's the industry-standard denial reversal engine —<br/>
+            built to convert rejected claims into reimbursed outcomes.
           </p>
-          
-          <p style={{
-            fontSize: '18px',
-            color: 'rgba(255,255,255,0.85)',
-            marginBottom: '40px',
-            lineHeight: '1.7',
-            fontWeight: 500,
+
+          {/* Scenario Box */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '16px',
+            padding: '40px',
+            marginBottom: '48px',
+            maxWidth: '900px',
+            margin: '0 auto 48px'
+          }}>
+            <p style={{
+              fontSize: '18px',
+              fontWeight: 600,
+              marginBottom: '20px',
+              color: 'rgba(255,255,255,0.9)',
+              lineHeight: '1.6'
+            }}>
+              Their claim was denied as<br/>
+              <span style={{ fontSize: '24px', color: '#fbbf24', fontWeight: 800 }}>"Not Medically Necessary."</span>
+            </p>
+            
+            <p style={{
+              fontSize: '16px',
+              color: 'rgba(255,255,255,0.85)',
+              lineHeight: '1.8',
+              marginBottom: '0'
+            }}>
+              <strong style={{ color: 'white', fontSize: '18px' }}>Denial Appeal Pro</strong><br/>
+              analyzes the denial reason, payer criteria, and clinical documentation —<br/>
+              identifying exactly what failed and generating a<br/>
+              <strong style={{ color: '#93c5fd' }}>submission-ready appeal aligned to payer requirements.</strong>
+            </p>
+          </div>
+
+          {/* Core Value Prop */}
+          <div style={{
+            maxWidth: '900px',
+            margin: '0 auto 48px',
+            textAlign: 'left'
+          }}>
+            <p style={{
+              fontSize: '17px',
+              color: 'rgba(255,255,255,0.9)',
+              lineHeight: '1.8',
+              marginBottom: '32px',
+              fontWeight: 500
+            }}>
+              Across medical billing environments,<br/>
+              many denials are not final decisions —<br/>
+              they result from documentation gaps, coding misalignment, or incorrect application of payer policy.
+            </p>
+
+            <h3 style={{
+              fontSize: '22px',
+              fontWeight: 800,
+              marginBottom: '24px',
+              color: 'white'
+            }}>
+              Denial Appeal Pro systematically identifies:
+            </h3>
+
+            <div style={{ display: 'grid', gap: '12px', marginBottom: '40px' }}>
+              {[
+                'Denial code breakdown (CARC/RARC → true failure point)',
+                'Medical necessity gaps vs payer-specific criteria',
+                'Missing or insufficient clinical documentation',
+                'CPT/ICD coding misalignment',
+                'Policy misapplication and guideline errors'
+              ].map((item, i) => (
+                <div key={i} style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '8px',
+                  padding: '16px 20px',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: 'rgba(255,255,255,0.95)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  <span style={{ color: '#10b981', fontSize: '18px', flexShrink: 0 }}>✓</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{
+              fontSize: '22px',
+              fontWeight: 800,
+              marginBottom: '20px',
+              color: 'white'
+            }}>
+              All outputs are:
+            </h3>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '12px',
+              marginBottom: '40px'
+            }}>
+              {[
+                'Structured for payer review',
+                'Aligned to appeal-level requirements',
+                'Ready for submission (portal, fax, or mail)',
+                'Built to withstand escalation or audit'
+              ].map((item, i) => (
+                <div key={i} style={{
+                  background: 'rgba(147, 197, 253, 0.1)',
+                  border: '1px solid rgba(147, 197, 253, 0.3)',
+                  borderRadius: '8px',
+                  padding: '14px 18px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#93c5fd',
+                  textAlign: 'center'
+                }}>
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Positioning Statement */}
+          <div style={{
             maxWidth: '700px',
+            margin: '0 auto 48px',
+            textAlign: 'center'
+          }}>
+            <p style={{
+              fontSize: '24px',
+              fontWeight: 800,
+              color: 'white',
+              lineHeight: '1.4',
+              marginBottom: '12px',
+              fontStyle: 'italic'
+            }}>
+              You're not writing an appeal.<br/>
+              You're correcting the decision pathway.
+            </p>
+          </div>
+
+          {/* CTA Section */}
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '2px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '800px',
+            margin: '0 auto 48px',
+            textAlign: 'center'
+          }}>
+            <h2 style={{
+              fontSize: '32px',
+              fontWeight: 900,
+              margin: '0 0 16px 0',
+              color: '#fca5a5'
+            }}>
+              Stop Letting Denials Sit Unworked
+            </h2>
+            <p style={{
+              fontSize: '18px',
+              color: 'rgba(255,255,255,0.9)',
+              fontWeight: 600,
+              lineHeight: '1.6',
+              marginBottom: '0'
+            }}>
+              Recover eligible revenue.<br/>
+              Correct the submission.<br/>
+              Resubmit with precision.
+            </p>
+          </div>
+
+          {/* Denial Outcome Preview */}
+          <div style={{
+            maxWidth: '900px',
             margin: '0 auto 40px'
           }}>
-            Don't lose a reimbursable claim to paperwork. Enter your denial details, pay $10, download a submission-ready PDF.
-          </p>
-          
+            <h3 style={{
+              fontSize: '28px',
+              fontWeight: 800,
+              marginBottom: '32px',
+              color: 'white',
+              textAlign: 'center'
+            }}>
+              Denial Outcome Preview
+            </h3>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto 1fr',
+              gap: '24px',
+              alignItems: 'center'
+            }}>
+              {/* Denied Claim */}
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '2px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '12px',
+                padding: '28px',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#fca5a5',
+                  marginBottom: '12px',
+                  letterSpacing: '0.5px'
+                }}>
+                  DENIED CLAIM
+                </div>
+                <div style={{
+                  fontSize: '36px',
+                  fontWeight: 900,
+                  color: '#ef4444',
+                  marginBottom: '8px'
+                }}>
+                  $18,550
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontWeight: 600
+                }}>
+                  Not Paid
+                </div>
+              </div>
+
+              {/* VS */}
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 900,
+                color: '#93c5fd',
+                padding: '0 16px'
+              }}>
+                vs.
+              </div>
+
+              {/* Corrected Appeal */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '2px solid rgba(16, 185, 129, 0.4)',
+                borderRadius: '12px',
+                padding: '28px',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#6ee7b7',
+                  marginBottom: '12px',
+                  letterSpacing: '0.5px'
+                }}>
+                  CORRECTED APPEAL SUBMISSION
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  color: '#10b981',
+                  lineHeight: '1.5'
+                }}>
+                  Aligned to Payer Criteria —<br/>
+                  Ready for Review
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA Buttons */}
           <div style={{
             display: 'flex',
             gap: '16px',
             justifyContent: 'center',
-            marginBottom: '40px',
+            marginBottom: '32px',
             flexWrap: 'wrap'
           }}>
             <button 
@@ -115,7 +363,7 @@ function LandingPro() {
                 e.target.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
               }}
             >
-              Write My Appeal — $10
+              Run Denial Analysis → Generate Appeal
             </button>
             
             <button 
@@ -143,19 +391,18 @@ function LandingPro() {
               See a Sample Letter ↓
             </button>
           </div>
-          
-          <div style={{
-            display: 'flex',
-            gap: '32px',
-            justifyContent: 'center',
-            fontSize: '14px',
-            color: 'rgba(255,255,255,0.7)',
-            fontWeight: 600
+
+          {/* Optional High-Conversion Subline */}
+          <p style={{
+            fontSize: '16px',
+            color: 'rgba(255,255,255,0.8)',
+            fontWeight: 600,
+            textAlign: 'center',
+            fontStyle: 'italic'
           }}>
-            <div>✓ HIPAA compliant</div>
-            <div>✓ Instant PDF</div>
-            <div>✓ 30+ denial codes covered</div>
-          </div>
+            Every denial has a reason.<br/>
+            This shows you exactly how to overturn it.
+          </p>
         </div>
       </section>
 

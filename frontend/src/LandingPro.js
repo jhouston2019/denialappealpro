@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ComparisonTable from './components/ComparisonTable';
 // Build: 2026-02-11-v2
 
 function LandingPro() {
@@ -28,6 +29,8 @@ function LandingPro() {
           .grid-2 { grid-template-columns: 1fr !important; }
           .grid-4 { grid-template-columns: 1fr 1fr !important; }
           .letter-body { padding: 24px !important; }
+          .before-after-grid { grid-template-columns: 1fr !important; }
+          .decision-grid { grid-template-columns: 1fr !important; }
         }
         
         .icon-badge {
@@ -453,7 +456,7 @@ function LandingPro() {
             </button>
           </div>
 
-          {/* Optional High-Conversion Subline */}
+          {/* CTA SUPPORT LINE */}
           <p style={{
             fontSize: '16px',
             color: 'rgba(255,255,255,0.8)',
@@ -461,13 +464,65 @@ function LandingPro() {
             textAlign: 'center',
             fontStyle: 'italic'
           }}>
-            Every denial has a reason.<br/>
-            This shows you exactly how to overturn it.
+            See exactly how your appeal will be structured before you submit it.
           </p>
         </div>
       </section>
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '72px 24px' }}>
+        
+        {/* PARITY LAYER - PROFESSIONAL ALIGNMENT */}
+        <section style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '48px 56px',
+          marginBottom: '72px',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '18px',
+            color: '#0f172a',
+            lineHeight: '1.8',
+            fontWeight: 500,
+            maxWidth: '900px',
+            margin: '0 auto',
+            marginBottom: '24px'
+          }}>
+            Medical billing professionals and appeal specialists follow a structured process to challenge denied claims — identifying the denial reason, applying correct coding logic, and submitting a formal appeal.
+          </p>
+          <p style={{
+            fontSize: '18px',
+            color: '#1e40af',
+            lineHeight: '1.8',
+            fontWeight: 600,
+            maxWidth: '900px',
+            margin: '0 auto'
+          }}>
+            This system applies that same structured approach — instantly and without percentage-based fees.
+          </p>
+        </section>
+
+        {/* REALITY LINE */}
+        <section style={{
+          background: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '32px 48px',
+          marginBottom: '72px',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '17px',
+            color: '#475569',
+            lineHeight: '1.7',
+            fontWeight: 500,
+            maxWidth: '800px',
+            margin: '0 auto'
+          }}>
+            Most claim denials follow predictable patterns. The real challenge is responding with the correct appeal structure.
+          </p>
+        </section>
         
         {/* 2. SAMPLE LETTER SECTION */}
         <section id="sample-letter" style={{ marginBottom: '72px' }}>
@@ -486,11 +541,442 @@ function LandingPro() {
             textAlign: 'center',
             color: '#64748b',
             fontSize: '18px',
-            marginBottom: '48px',
+            marginBottom: '16px',
             fontWeight: 500
           }}>
             A real, professionally formatted appeal letter — not a form-filled template.
           </p>
+
+          {/* OUTPUT CONFIDENCE LINE */}
+          <p style={{
+            textAlign: 'center',
+            color: '#1e40af',
+            fontSize: '15px',
+            marginBottom: '48px',
+            fontWeight: 600,
+            fontStyle: 'italic'
+          }}>
+            Each appeal is generated using structured logic designed to match how professional medical appeals are prepared.
+          </p>
+
+          {/* EVIDENCE LAYER - DETAILED EXAMPLES */}
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '2px',
+            padding: '40px',
+            marginBottom: '48px'
+          }}>
+            <h3 style={{
+              fontSize: '24px',
+              fontWeight: 700,
+              color: '#0f172a',
+              marginBottom: '32px',
+              textAlign: 'center'
+            }}>
+              Denial Type Examples
+            </h3>
+
+            {/* Medical Necessity Example */}
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#1e40af',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '16px'
+              }}>
+                Denial Type: Medical Necessity
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Denial (Input):
+                </div>
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '2px',
+                  padding: '16px',
+                  fontSize: '14px',
+                  color: '#991b1b',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.6'
+                }}>
+                  "Claim denied due to lack of medical necessity. CPT code 97110 not supported by documentation."
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  System Analysis:
+                </div>
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '2px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'grid', gap: '8px', fontSize: '14px', color: '#1e40af', lineHeight: '1.6' }}>
+                    <div>• Denial reason identified: medical necessity</div>
+                    <div>• CPT code flagged: 97110</div>
+                    <div>• Documentation support required</div>
+                    <div>• Appeal deadline applicable</div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Generated Appeal (Excerpt):
+                </div>
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '2px',
+                  padding: '20px',
+                  fontSize: '14px',
+                  color: '#166534',
+                  lineHeight: '1.8',
+                  fontFamily: 'Georgia, serif'
+                }}>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    "This letter is submitted in response to the denial of services associated with CPT code 97110.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    The services provided were medically necessary based on the patient's documented condition and treatment plan.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    Supporting clinical documentation is available to substantiate the necessity and appropriateness of the services rendered.
+                  </p>
+                  <p style={{ margin: '0' }}>
+                    We respectfully request reconsideration of this claim based on the provided information."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Coding Denial Example */}
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#1e40af',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '16px'
+              }}>
+                Denial Type: Coding Error
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Denial (Input):
+                </div>
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '2px',
+                  padding: '16px',
+                  fontSize: '14px',
+                  color: '#991b1b',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.6'
+                }}>
+                  "Claim denied. CPT code 99214 does not match diagnosis code provided."
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  System Analysis:
+                </div>
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '2px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'grid', gap: '8px', fontSize: '14px', color: '#1e40af', lineHeight: '1.6' }}>
+                    <div>• Denial reason identified: coding mismatch</div>
+                    <div>• CPT/ICD alignment issue detected</div>
+                    <div>• Coding correction or justification required</div>
+                    <div>• Timely filing window verified</div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Generated Appeal (Excerpt):
+                </div>
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '2px',
+                  padding: '20px',
+                  fontSize: '14px',
+                  color: '#166534',
+                  lineHeight: '1.8',
+                  fontFamily: 'Georgia, serif'
+                }}>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    "This letter addresses the denial based on coding alignment concerns.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    The CPT code submitted accurately reflects the services provided and is appropriately supported by the diagnosis code on file.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    We request review of the coding relationship and reconsideration of the claim.
+                  </p>
+                  <p style={{ margin: '0' }}>
+                    Additional documentation is available upon request to support the coding submitted."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Prior Authorization Example */}
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#1e40af',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '16px'
+              }}>
+                Denial Type: Prior Authorization
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Denial (Input):
+                </div>
+                <div style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '2px',
+                  padding: '16px',
+                  fontSize: '14px',
+                  color: '#991b1b',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.6'
+                }}>
+                  "Services denied. Prior authorization not obtained before service date."
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  System Analysis:
+                </div>
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '2px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'grid', gap: '8px', fontSize: '14px', color: '#1e40af', lineHeight: '1.6' }}>
+                    <div>• Denial reason identified: authorization requirement</div>
+                    <div>• Service date and authorization timeline reviewed</div>
+                    <div>• Retroactive authorization pathway applicable</div>
+                    <div>• Appeal submission deadline calculated</div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '8px'
+                }}>
+                  Generated Appeal (Excerpt):
+                </div>
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '2px',
+                  padding: '20px',
+                  fontSize: '14px',
+                  color: '#166534',
+                  lineHeight: '1.8',
+                  fontFamily: 'Georgia, serif'
+                }}>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    "This letter requests reconsideration of the denial related to authorization requirements.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    The services rendered were medically necessary and clinically appropriate at the time of service.
+                  </p>
+                  <p style={{ margin: '0 0 12px 0' }}>
+                    We respectfully request retroactive authorization review based on the clinical circumstances documented.
+                  </p>
+                  <p style={{ margin: '0' }}>
+                    Supporting documentation demonstrating medical necessity is available for review."
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* BEFORE vs AFTER MICRO EVIDENCE */}
+          <div className="before-after-grid" style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '24px',
+            marginBottom: '48px'
+          }}>
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '24px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#dc2626',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '12px'
+              }}>
+                Before
+              </div>
+              <div style={{
+                fontSize: '15px',
+                color: '#64748b',
+                lineHeight: '1.6',
+                fontWeight: 500,
+                marginBottom: '16px'
+              }}>
+                "Unclear how to respond to a denial"
+              </div>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#16a34a',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '12px'
+              }}>
+                After
+              </div>
+              <div style={{
+                fontSize: '15px',
+                color: '#0f172a',
+                lineHeight: '1.6',
+                fontWeight: 600
+              }}>
+                "Structured appeal aligned with denial reason"
+              </div>
+            </div>
+
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '24px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#dc2626',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '12px'
+              }}>
+                Before
+              </div>
+              <div style={{
+                fontSize: '15px',
+                color: '#64748b',
+                lineHeight: '1.6',
+                fontWeight: 500,
+                marginBottom: '16px'
+              }}>
+                "Generic or incomplete appeal"
+              </div>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#16a34a',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginBottom: '12px'
+              }}>
+                After
+              </div>
+              <div style={{
+                fontSize: '15px',
+                color: '#0f172a',
+                lineHeight: '1.6',
+                fontWeight: 600
+              }}>
+                "Targeted appeal based on denial classification"
+              </div>
+            </div>
+          </div>
           
           <div style={{
             background: 'white',
@@ -606,6 +1092,73 @@ function LandingPro() {
             fontWeight: 500
           }}>
             <strong style={{ fontWeight: 700 }}>Sample only.</strong> Your generated letter uses your actual claim details, denial code, payer policies, and clinical context.
+          </div>
+
+          {/* WHAT YOU RECEIVE */}
+          <div style={{
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '2px',
+            padding: '40px',
+            marginTop: '48px'
+          }}>
+            <h3 style={{
+              fontSize: '24px',
+              fontWeight: 700,
+              color: '#0f172a',
+              marginBottom: '24px',
+              textAlign: 'center'
+            }}>
+              What You Receive
+            </h3>
+            
+            <div style={{
+              display: 'grid',
+              gap: '1px',
+              background: '#e2e8f0',
+              marginBottom: '24px'
+            }}>
+              {[
+                'Structured medical appeal letter ready for submission',
+                'Denial reason identification and classification',
+                'Proper appeal framing and language',
+                'Clear next steps for submission'
+              ].map((item, i) => (
+                <div key={i} style={{
+                  background: 'white',
+                  padding: '16px 20px',
+                  fontSize: '15px',
+                  color: '#0f172a',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    background: '#1e40af',
+                    flexShrink: 0,
+                    borderRadius: '1px'
+                  }}></div>
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '20px',
+              textAlign: 'center',
+              fontSize: '14px',
+              color: '#475569',
+              fontWeight: 500,
+              fontStyle: 'italic'
+            }}>
+              Structured to match standard medical appeal practices.
+            </div>
           </div>
         </section>
 
@@ -814,6 +1367,82 @@ function LandingPro() {
           </div>
         </section>
 
+        {/* PROCESS ALIGNMENT */}
+        <section style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '48px 56px',
+          marginBottom: '48px'
+        }}>
+          <h2 style={{
+            fontSize: '28px',
+            fontWeight: 700,
+            textAlign: 'center',
+            margin: '0 0 32px 0',
+            letterSpacing: '-0.5px',
+            color: '#0f172a'
+          }}>
+            Structured Like Professional Appeals
+          </h2>
+
+          <div style={{
+            display: 'grid',
+            gap: '1px',
+            background: '#e2e8f0',
+            marginBottom: '32px'
+          }}>
+            {[
+              'Identifies denial reason and classification',
+              'Applies appropriate appeal logic and coding context',
+              'Generates structured appeal language',
+              'Organizes supporting points for review'
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: 'white',
+                padding: '20px 24px',
+                fontSize: '15px',
+                color: '#0f172a',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  background: '#1e40af',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  borderRadius: '2px'
+                }}>
+                  {(i + 1).toString().padStart(2, '0')}
+                </div>
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '2px',
+            padding: '20px',
+            textAlign: 'center',
+            fontSize: '14px',
+            color: '#475569',
+            fontWeight: 500,
+            fontStyle: 'italic'
+          }}>
+            This reflects the same structured methodology used in standard medical appeal preparation.
+          </div>
+        </section>
+
         {/* 4. HOW IT WORKS */}
         <section style={{
           background: 'white',
@@ -889,6 +1518,356 @@ function LandingPro() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* TRADITIONAL APPEAL SERVICES COMPARISON */}
+        <section style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '56px 48px',
+          marginBottom: '48px'
+        }}>
+          <h2 style={{
+            fontSize: '32px',
+            fontWeight: 700,
+            textAlign: 'center',
+            margin: '0 0 48px 0',
+            letterSpacing: '-0.5px',
+            color: '#0f172a'
+          }}>
+            Traditional Appeal Services vs Denial Appeal Pro
+          </h2>
+
+          <div className="grid-2" style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '32px'
+          }}>
+            {/* Left Side - Traditional */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '40px 32px'
+            }}>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#64748b',
+                marginBottom: '24px',
+                textAlign: 'center'
+              }}>
+                Medical Billing / Appeal Specialists
+              </h3>
+
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {[
+                  { icon: '💰', text: '25%–40% of recovered amount' },
+                  { icon: '👤', text: 'Manual case review' },
+                  { icon: '⏱️', text: 'Multi-day turnaround' },
+                  { icon: '💬', text: 'Requires back-and-forth communication' }
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '2px',
+                    padding: '16px 20px',
+                    fontSize: '15px',
+                    color: '#475569',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <span style={{ fontSize: '20px' }}>{item.icon}</span>
+                    {item.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Side - Denial Appeal Pro */}
+            <div style={{
+              background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+              border: '2px solid #3b82f6',
+              borderRadius: '2px',
+              padding: '40px 32px',
+              position: 'relative'
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: '-12px',
+                right: '24px',
+                background: '#1e40af',
+                color: 'white',
+                padding: '4px 16px',
+                borderRadius: '2px',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '1px',
+                textTransform: 'uppercase'
+              }}>
+                FLAT FEE
+              </div>
+
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#1e40af',
+                marginBottom: '24px',
+                textAlign: 'center'
+              }}>
+                Denial Appeal Pro
+              </h3>
+
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {[
+                  { icon: '✓', text: 'Flat cost per appeal' },
+                  { icon: '✓', text: 'Immediate structured output' },
+                  { icon: '✓', text: 'No delays' },
+                  { icon: '✓', text: 'Ready-to-submit appeal letter' }
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    background: 'white',
+                    border: '1px solid #93c5fd',
+                    borderRadius: '2px',
+                    padding: '16px 20px',
+                    fontSize: '15px',
+                    color: '#1e40af',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <span style={{ 
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: '#16a34a'
+                    }}>{item.icon}</span>
+                    {item.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* INSTITUTIONAL LAYER - DECISION CONTROL */}
+        <section style={{
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '56px 48px',
+          marginBottom: '48px'
+        }}>
+          <h2 style={{
+            fontSize: '32px',
+            fontWeight: 700,
+            textAlign: 'center',
+            margin: '0 0 16px 0',
+            letterSpacing: '-0.5px',
+            color: '#0f172a'
+          }}>
+            Built with Appeal Decision Guardrails
+          </h2>
+
+          <p style={{
+            textAlign: 'center',
+            color: '#64748b',
+            fontSize: '17px',
+            marginBottom: '48px',
+            fontWeight: 500
+          }}>
+            Not all denials require the same level of response or escalation.
+          </p>
+
+          <div className="decision-grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '24px',
+            marginBottom: '40px'
+          }}>
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px 28px'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: '#1e40af',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                marginBottom: '20px'
+              }}>
+                01
+              </div>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#0f172a',
+                marginBottom: '12px'
+              }}>
+                Standard Denial Appeals
+              </h3>
+              <p style={{
+                fontSize: '15px',
+                color: '#475569',
+                lineHeight: '1.7',
+                margin: 0,
+                fontWeight: 400
+              }}>
+                Many denials (medical necessity, coding, authorization) follow structured appeal patterns.
+              </p>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px 28px'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: '#1e40af',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                marginBottom: '20px'
+              }}>
+                02
+              </div>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#0f172a',
+                marginBottom: '12px'
+              }}>
+                When Complexity Increases
+              </h3>
+              <p style={{
+                fontSize: '15px',
+                color: '#475569',
+                lineHeight: '1.7',
+                margin: 0,
+                fontWeight: 400
+              }}>
+                High-value claims, multiple denials, or complex treatment cases may require additional review.
+              </p>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px 28px'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: '#1e40af',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                marginBottom: '20px'
+              }}>
+                03
+              </div>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#0f172a',
+                marginBottom: '12px'
+              }}>
+                Professional Threshold
+              </h3>
+              <p style={{
+                fontSize: '15px',
+                color: '#475569',
+                lineHeight: '1.7',
+                margin: 0,
+                fontWeight: 400
+              }}>
+                In more complex cases, working with a billing specialist or provider may be appropriate.
+              </p>
+            </div>
+
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '32px 28px'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: '#1e40af',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                marginBottom: '20px'
+              }}>
+                04
+              </div>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#0f172a',
+                marginBottom: '12px'
+              }}>
+                Structured First Appeal
+              </h3>
+              <p style={{
+                fontSize: '15px',
+                color: '#475569',
+                lineHeight: '1.7',
+                margin: 0,
+                fontWeight: 400
+              }}>
+                This system ensures your initial appeal is properly structured before escalation.
+              </p>
+            </div>
+          </div>
+
+          {/* DECISION CONTROL LINE */}
+          <div style={{
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            borderRadius: '2px',
+            padding: '24px 32px',
+            textAlign: 'center'
+          }}>
+            <p style={{
+              fontSize: '17px',
+              color: '#1e40af',
+              lineHeight: '1.6',
+              margin: 0,
+              fontWeight: 600,
+              fontStyle: 'italic'
+            }}>
+              The goal is to challenge the denial correctly — and escalate only when necessary.
+            </p>
           </div>
         </section>
 
@@ -997,251 +1976,8 @@ function LandingPro() {
           </div>
         </section>
 
-        {/* 6. VERIFIED AI COMPARISON */}
-        <section style={{
-          background: 'white',
-          border: '1px solid #e2e8f0',
-          borderRadius: '2px',
-          padding: '56px 48px',
-          marginBottom: '48px'
-        }}>
-          <h2 style={{
-            fontSize: '32px',
-            fontWeight: 700,
-            textAlign: 'center',
-            margin: '0 0 16px 0',
-            letterSpacing: '-0.5px',
-            color: '#0f172a'
-          }}>
-            Why Our AI Is Different
-          </h2>
-          
-          <p style={{
-            textAlign: 'center',
-            color: '#64748b',
-            fontSize: '16px',
-            marginBottom: '48px',
-            fontWeight: 400
-          }}>
-            Not all AI is created equal. Here's what sets us apart.
-          </p>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '1px',
-            marginBottom: '48px',
-            background: '#e2e8f0'
-          }}>
-            <div style={{
-              background: '#f8fafc',
-              padding: '40px 28px',
-              textAlign: 'center'
-            }}>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#64748b',
-                marginBottom: '20px',
-                letterSpacing: '0.5px'
-              }}>
-                Generic ChatGPT
-              </div>
-              <div style={{
-                fontSize: '48px',
-                fontWeight: 700,
-                color: '#94a3b8',
-                marginBottom: '20px',
-                letterSpacing: '-1px'
-              }}>
-                40/100
-              </div>
-              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#64748b', textAlign: 'left', fontWeight: 400 }}>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  No citation verification
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  Generic language
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  No outcome tracking
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  ~70% citation accuracy
-                </div>
-              </div>
-            </div>
-
-            <div style={{
-              background: '#f8fafc',
-              padding: '40px 28px',
-              textAlign: 'center'
-            }}>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#64748b',
-                marginBottom: '20px',
-                letterSpacing: '0.5px'
-              }}>
-                Other AI Tools
-              </div>
-              <div style={{
-                fontSize: '48px',
-                fontWeight: 700,
-                color: '#94a3b8',
-                marginBottom: '20px',
-                letterSpacing: '-1px'
-              }}>
-                60/100
-              </div>
-              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#64748b', textAlign: 'left', fontWeight: 400 }}>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  Limited verification
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  Basic templates
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  No quality tracking
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0 }}>·</span>
-                  ~80% citation accuracy
-                </div>
-              </div>
-            </div>
-
-            <div style={{
-              background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-              padding: '40px 28px',
-              textAlign: 'center',
-              position: 'relative'
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'rgba(59, 130, 246, 0.2)',
-                color: '#93c5fd',
-                padding: '4px 12px',
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700,
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                border: '1px solid rgba(59, 130, 246, 0.3)'
-              }}>
-                Verified AI
-              </div>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#93c5fd',
-                marginBottom: '20px',
-                letterSpacing: '0.5px'
-              }}>
-                Denial Appeal Pro
-              </div>
-              <div style={{
-                fontSize: '48px',
-                fontWeight: 700,
-                color: 'white',
-                marginBottom: '20px',
-                letterSpacing: '-1px'
-              }}>
-                95/100
-              </div>
-              <div style={{ display: 'grid', gap: '10px', fontSize: '13px', color: '#e0e7ff', textAlign: 'left', fontWeight: 500 }}>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
-                  95%+ citation accuracy
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
-                  85%+ success rate
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
-                  Automated QA
-                </div>
-                <div style={{ paddingLeft: '16px', position: 'relative', lineHeight: '1.5' }}>
-                  <span style={{ position: 'absolute', left: 0, color: '#60a5fa' }}>·</span>
-                  ROI tracking
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            background: '#f8fafc',
-            borderRadius: '2px',
-            padding: '40px',
-            textAlign: 'left',
-            marginTop: '48px'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: 700,
-              color: '#0f172a',
-              marginBottom: '24px',
-              textAlign: 'center',
-              letterSpacing: '0.3px'
-            }}>
-              What "Verified AI" Means
-            </h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '1px',
-              background: '#e2e8f0'
-            }}>
-              {[
-                { num: '01', title: 'Citation Verification', desc: 'Every regulatory citation cross-referenced against our knowledge base' },
-                { num: '02', title: 'Quality Scoring', desc: 'Automated 100-point quality check on every appeal' },
-                { num: '03', title: 'Success Tracking', desc: 'Real-world outcome data proves what works' },
-                { num: '04', title: 'Zero Hallucinations', desc: 'AI cannot cite non-existent regulations' }
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: 'white',
-                  padding: '24px',
-                  display: 'flex',
-                  gap: '16px',
-                  alignItems: 'flex-start'
-                }}>
-                  <div style={{
-                    width: '28px',
-                    height: '28px',
-                    background: '#1e40af',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                    borderRadius: '2px'
-                  }}>{item.num}</div>
-                  <div>
-                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 400, lineHeight: '1.6' }}>
-                      {item.desc}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* 6. COMPARISON TABLE */}
+        <ComparisonTable />
 
         {/* 7. STATS ROW */}
         <section style={{

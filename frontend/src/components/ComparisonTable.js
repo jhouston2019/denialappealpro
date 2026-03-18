@@ -631,6 +631,35 @@ function ComparisonTable() {
             </div>
           </div>
         </div>
+
+        {/* OBJECTION HANDLING - WILL THIS IMPROVE RESULTS? */}
+        <div style={{
+          background: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: '2px',
+          padding: '24px 32px',
+          marginTop: '32px',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '15px',
+            color: '#475569',
+            lineHeight: '1.7',
+            marginBottom: '8px',
+            fontWeight: 500
+          }}>
+            Denials are not random — they follow patterns.
+          </p>
+          <p style={{
+            fontSize: '15px',
+            color: '#0f172a',
+            lineHeight: '1.7',
+            margin: 0,
+            fontWeight: 600
+          }}>
+            Applying structured appeal logic consistently across every case increases the likelihood of recovery over time.
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -156,17 +156,28 @@ function LandingPro() {
             margin: '0 auto 48px',
             textAlign: 'left'
           }}>
-            <p style={{
-              fontSize: '17px',
-              color: 'rgba(255,255,255,0.9)',
-              lineHeight: '1.8',
-              marginBottom: '32px',
-              fontWeight: 500
-            }}>
-              Across medical billing environments,<br/>
-              many denials are not final decisions —<br/>
-              they result from documentation gaps, coding misalignment, or incorrect application of payer policy.
-            </p>
+          <p style={{
+            fontSize: '17px',
+            color: 'rgba(255,255,255,0.9)',
+            lineHeight: '1.8',
+            marginBottom: '20px',
+            fontWeight: 500
+          }}>
+            Across medical billing environments,<br/>
+            many denials are not final decisions —<br/>
+            they result from documentation gaps, coding misalignment, or incorrect application of payer policy.
+          </p>
+
+          <p style={{
+            fontSize: '16px',
+            color: '#93c5fd',
+            lineHeight: '1.7',
+            marginBottom: '32px',
+            fontWeight: 600,
+            fontStyle: 'italic'
+          }}>
+            Most teams already appeal denials — but inconsistent structure and limited capacity leave significant revenue unrecovered.
+          </p>
 
             <h3 style={{
               fontSize: '22px',
@@ -462,9 +473,19 @@ function LandingPro() {
             color: 'rgba(255,255,255,0.8)',
             fontWeight: 600,
             textAlign: 'center',
-            fontStyle: 'italic'
+            fontStyle: 'italic',
+            marginBottom: '12px'
           }}>
             See exactly how your appeal will be structured before you submit it.
+          </p>
+
+          <p style={{
+            fontSize: '15px',
+            color: '#bfdbfe',
+            fontWeight: 500,
+            textAlign: 'center'
+          }}>
+            No workflow overhaul required — apply this to your existing denial process immediately.
           </p>
         </div>
       </section>
@@ -552,11 +573,21 @@ function LandingPro() {
             textAlign: 'center',
             color: '#1e40af',
             fontSize: '15px',
-            marginBottom: '48px',
+            marginBottom: '12px',
             fontWeight: 600,
             fontStyle: 'italic'
           }}>
             Each appeal is generated using structured logic designed to match how professional medical appeals are prepared.
+          </p>
+
+          <p style={{
+            textAlign: 'center',
+            color: '#475569',
+            fontSize: '14px',
+            marginBottom: '48px',
+            fontWeight: 500
+          }}>
+            Each appeal is generated based on denial type, coding, and documentation requirements — not reused templates.
           </p>
 
           {/* EVIDENCE LAYER - DETAILED EXAMPLES */}
@@ -1251,11 +1282,21 @@ function LandingPro() {
                   fontSize: '16px',
                   fontWeight: 700,
                   color: '#0f172a',
-                  margin: '0 0 24px 0',
+                  margin: '0 0 12px 0',
                   letterSpacing: '0.3px'
                 }}>
                   What you'll need
                 </h4>
+
+                <p style={{
+                  fontSize: '13px',
+                  color: '#1e40af',
+                  marginBottom: '20px',
+                  fontWeight: 500,
+                  fontStyle: 'italic'
+                }}>
+                  Designed to integrate into existing billing and appeal workflows without disruption.
+                </p>
                 
                 <div style={{ display: 'grid', gap: '12px' }}>
                   {[
@@ -1455,12 +1496,22 @@ function LandingPro() {
             fontSize: '32px',
             fontWeight: 700,
             textAlign: 'center',
-            margin: '0 0 48px 0',
+            margin: '0 0 16px 0',
             letterSpacing: '-0.5px',
             color: '#0f172a'
           }}>
             How It Works
           </h2>
+
+          <p style={{
+            textAlign: 'center',
+            color: '#1e40af',
+            fontSize: '15px',
+            marginBottom: '48px',
+            fontWeight: 600
+          }}>
+            Reduces time per appeal while increasing consistency — allowing teams to handle more denials without adding staff.
+          </p>
           
           <div className="grid-4" style={{
             display: 'grid',
@@ -1909,11 +1960,22 @@ function LandingPro() {
               <p style={{
                 fontSize: '15px',
                 color: 'rgba(255,255,255,0.6)',
-                marginBottom: '32px',
+                marginBottom: '12px',
                 fontWeight: 400,
                 lineHeight: '1.6'
               }}>
                 One-time payment. No hidden fees. No subscription.
+              </p>
+
+              <p style={{
+                fontSize: '14px',
+                color: '#93c5fd',
+                marginBottom: '32px',
+                fontWeight: 500,
+                fontStyle: 'italic',
+                lineHeight: '1.6'
+              }}>
+                Small improvements in overturn rates can translate into significant recovered revenue at scale.
               </p>
               
               <button 
@@ -2048,13 +2110,26 @@ function LandingPro() {
           <p style={{
             fontSize: '16px',
             color: '#bfdbfe',
-            marginBottom: '32px',
+            marginBottom: '12px',
             fontWeight: 400,
             maxWidth: '600px',
-            margin: '0 auto 32px',
+            margin: '0 auto 12px',
             lineHeight: '1.6'
           }}>
             A $10 appeal letter costs less than the reimbursement you're trying to recover.
+          </p>
+
+          <p style={{
+            fontSize: '15px',
+            color: '#93c5fd',
+            marginBottom: '32px',
+            fontWeight: 500,
+            maxWidth: '650px',
+            margin: '0 auto 32px',
+            lineHeight: '1.6',
+            fontStyle: 'italic'
+          }}>
+            The advantage is consistency — applying the right appeal structure across every denial, not just a portion of them.
           </p>
           
           <button 

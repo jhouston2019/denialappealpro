@@ -6,74 +6,54 @@ function ComparisonTable() {
 
   const comparisonData = [
     {
-      capability: 'Denial Code Classification',
-      chatGPT: 'AI guessing',
-      genericAI: 'AI guessing',
-      denialAppealPro: 'Deterministic CARC/RARC mapping',
-      highlight: true
+      capability: 'Denial Classification',
+      manual: 'Read manually, varies by staff',
+      denialAppealPro: 'Systematically categorized by denial type and code'
     },
     {
-      capability: 'Risk Detection',
-      chatGPT: 'None',
-      genericAI: 'None',
-      denialAppealPro: '50+ danger patterns',
-      highlight: true
+      capability: 'Appeal Strategy',
+      manual: 'Inconsistent or guesswork',
+      denialAppealPro: 'Denial-specific appeal logic applied every time'
     },
     {
-      capability: 'Payer Policy Rules',
-      chatGPT: 'Generic knowledge',
-      genericAI: 'Generic knowledge',
-      denialAppealPro: 'Payer-specific playbooks',
-      highlight: true
+      capability: 'CPT / ICD-10 Alignment',
+      manual: 'Often incomplete or missed',
+      denialAppealPro: 'Aligned with coding and documentation standards'
     },
     {
-      capability: 'Evidence Guidance',
-      chatGPT: '"Attach documents"',
-      genericAI: '"Attach documents"',
-      denialAppealPro: 'ATTACH/EXCLUDE rules',
-      highlight: true
+      capability: 'Supporting Documentation',
+      manual: 'Attached inconsistently',
+      denialAppealPro: 'Clearly defined based on denial requirements'
     },
     {
-      capability: 'Deadline Precision',
-      chatGPT: '~30 days',
-      genericAI: '~30 days',
-      denialAppealPro: 'Exact days + escalation',
-      highlight: true
+      capability: 'Appeal Language',
+      manual: 'Generic or reused templates',
+      denialAppealPro: 'Structured, payer-aware, and defensible'
     },
     {
-      capability: 'Safety Controls',
-      chatGPT: 'None',
-      genericAI: 'None',
-      denialAppealPro: 'Multi-layer guardrails',
-      highlight: true
+      capability: 'Turnaround Time',
+      manual: 'Days to weeks per appeal',
+      denialAppealPro: 'Minutes per appeal'
+    },
+    {
+      capability: 'Volume Handling',
+      manual: 'Limited by staff capacity',
+      denialAppealPro: 'Scales across large denial volumes'
     },
     {
       capability: 'Consistency',
-      chatGPT: 'Varies each time',
-      genericAI: 'Varies each time',
-      denialAppealPro: 'Deterministic logic',
-      highlight: true
+      manual: 'Varies by experience level',
+      denialAppealPro: 'Standardized across all appeals'
     },
     {
-      capability: 'Citation Accuracy',
-      chatGPT: '~70%',
-      genericAI: '~80%',
-      denialAppealPro: '95%+ verified',
-      highlight: true
+      capability: 'Compliance Risk',
+      manual: 'Higher due to manual errors',
+      denialAppealPro: 'Structured process reduces variability'
     },
     {
-      capability: 'Success Tracking',
-      chatGPT: 'None',
-      genericAI: 'None',
-      denialAppealPro: '85%+ success rate',
-      highlight: true
-    },
-    {
-      capability: 'Quality Assurance',
-      chatGPT: 'None',
-      genericAI: 'None',
-      denialAppealPro: 'Automated QA scoring',
-      highlight: true
+      capability: 'Revenue Recovery Potential',
+      manual: 'Partial and inconsistent',
+      denialAppealPro: 'Maximized through systematic appeals'
     }
   ];
 
@@ -93,28 +73,17 @@ function ComparisonTable() {
         letterSpacing: '-0.5px',
         color: '#0f172a'
       }}>
-        Denial Appeal Pro vs. Generic AI Tools
+        Why Medical Billing Teams Use Denial Appeal Pro
       </h2>
       
       <p style={{
         textAlign: 'center',
         color: '#64748b',
-        fontSize: '16px',
-        marginBottom: '16px',
-        fontWeight: 400
-      }}>
-        Not all AI is built for medical billing. Here's what makes us different.
-      </p>
-
-      <p style={{
-        textAlign: 'center',
-        color: '#1e40af',
         fontSize: '15px',
         marginBottom: '48px',
-        fontWeight: 600,
-        fontStyle: 'italic'
+        fontWeight: 400
       }}>
-        This is a structured system — not a generic AI tool or template generator.
+        Because denial recovery requires structured, repeatable appeal logic — not inconsistent manual workflows.
       </p>
 
       {/* Comparison Table */}
@@ -143,9 +112,9 @@ function ComparisonTable() {
                 fontWeight: 700,
                 color: '#0f172a',
                 letterSpacing: '0.3px',
-                width: '25%'
+                width: '35%'
               }}>
-                AI Capability
+                What Drives Successful Appeals
               </th>
               <th style={{
                 padding: '20px 24px',
@@ -156,22 +125,9 @@ function ComparisonTable() {
                 fontWeight: 700,
                 color: '#64748b',
                 letterSpacing: '0.3px',
-                width: '25%'
+                width: '32.5%'
               }}>
-                ChatGPT
-              </th>
-              <th style={{
-                padding: '20px 24px',
-                textAlign: 'center',
-                borderBottom: '2px solid #e2e8f0',
-                borderRight: '1px solid #e2e8f0',
-                fontSize: '14px',
-                fontWeight: 700,
-                color: '#64748b',
-                letterSpacing: '0.3px',
-                width: '25%'
-              }}>
-                Generic AI
+                Manual / Generic Process
               </th>
               <th style={{
                 padding: '20px 24px',
@@ -181,7 +137,7 @@ function ComparisonTable() {
                 fontWeight: 700,
                 color: '#1e40af',
                 letterSpacing: '0.3px',
-                width: '25%',
+                width: '32.5%',
                 background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
               }}>
                 Denial Appeal Pro
@@ -208,43 +164,31 @@ function ComparisonTable() {
                   padding: '18px 24px',
                   borderBottom: index < comparisonData.length - 1 ? '1px solid #e2e8f0' : 'none',
                   borderRight: '1px solid #e2e8f0',
-                  textAlign: 'center',
+                  textAlign: 'left',
                   fontSize: '14px',
                   color: '#64748b',
                   fontWeight: 400,
-                  lineHeight: '1.5'
+                  lineHeight: '1.6'
                 }}>
-                  {row.chatGPT}
+                  {row.manual}
                 </td>
                 <td style={{
                   padding: '18px 24px',
                   borderBottom: index < comparisonData.length - 1 ? '1px solid #e2e8f0' : 'none',
-                  borderRight: '1px solid #e2e8f0',
-                  textAlign: 'center',
+                  textAlign: 'left',
                   fontSize: '14px',
-                  color: '#64748b',
-                  fontWeight: 400,
-                  lineHeight: '1.5'
-                }}>
-                  {row.genericAI}
-                </td>
-                <td style={{
-                  padding: '18px 24px',
-                  borderBottom: index < comparisonData.length - 1 ? '1px solid #e2e8f0' : 'none',
-                  textAlign: 'center',
-                  fontSize: '14px',
-                  color: '#059669',
+                  color: '#1e40af',
                   fontWeight: 600,
-                  lineHeight: '1.5',
+                  lineHeight: '1.6',
                   background: index % 2 === 0 ? '#f0fdf4' : '#ecfdf5'
                 }}>
                   <span style={{
                     display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
+                    alignItems: 'flex-start',
+                    gap: '8px'
                   }}>
-                    <span style={{ color: '#059669', fontSize: '16px' }}>✓</span>
-                    {row.denialAppealPro}
+                    <span style={{ color: '#059669', fontSize: '16px', flexShrink: 0, marginTop: '2px' }}>✓</span>
+                    <span>{row.denialAppealPro}</span>
                   </span>
                 </td>
               </tr>
@@ -253,201 +197,174 @@ function ComparisonTable() {
         </table>
       </div>
 
-      {/* Key Differentiators */}
+      {/* POST-TABLE STATEMENT */}
       <div style={{
-        background: '#eff6ff',
-        border: '1px solid #bfdbfe',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
         borderRadius: '2px',
         padding: '32px 40px',
-        marginTop: '40px'
-      }}>
-        <h3 style={{
-          fontSize: '18px',
-          fontWeight: 700,
-          color: '#1e40af',
-          marginBottom: '24px',
-          textAlign: 'center',
-          letterSpacing: '0.3px'
-        }}>
-          Why These Differences Matter
-        </h3>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '24px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '20px 24px',
-            borderRadius: '2px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#1e40af',
-              marginBottom: '8px',
-              letterSpacing: '0.3px'
-            }}>
-              Denial-Specific & Procedural
-            </div>
-            <div style={{
-              fontSize: '13px',
-              color: '#475569',
-              lineHeight: '1.6',
-              fontWeight: 400
-            }}>
-              This is a structured system aligned with standard appeal practices — not a generic AI tool. Built specifically for denial appeals with payer-specific logic and regulatory knowledge.
-            </div>
-          </div>
-
-          <div style={{
-            background: 'white',
-            padding: '20px 24px',
-            borderRadius: '2px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#1e40af',
-              marginBottom: '8px',
-              letterSpacing: '0.3px'
-            }}>
-              Verified & Validated
-            </div>
-            <div style={{
-              fontSize: '13px',
-              color: '#475569',
-              lineHeight: '1.6',
-              fontWeight: 400
-            }}>
-              Every citation is verified against our regulatory knowledge base. No hallucinations, no made-up policies, no guessing.
-            </div>
-          </div>
-
-          <div style={{
-            background: 'white',
-            padding: '20px 24px',
-            borderRadius: '2px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#1e40af',
-              marginBottom: '8px',
-              letterSpacing: '0.3px'
-            }}>
-              Operates Within Professional Frameworks
-            </div>
-            <div style={{
-              fontSize: '13px',
-              color: '#475569',
-              lineHeight: '1.6',
-              fontWeight: 400
-            }}>
-              Structured, procedural approach aligned with standard medical appeal practices. Deterministic logic ensures consistent, high-quality appeals.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Footer */}
-      <div style={{
         marginTop: '40px',
-        padding: '32px',
-        background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
-        borderRadius: '2px',
         textAlign: 'center'
       }}>
+        <p style={{
+          fontSize: '16px',
+          color: '#475569',
+          lineHeight: '1.8',
+          marginBottom: '20px',
+          fontWeight: 500
+        }}>
+          Most denied claims are never fully appealed — not because they can't be overturned,
+          but because the process is inconsistent, time-intensive, and difficult to scale.
+        </p>
+        <p style={{
+          fontSize: '16px',
+          color: '#0f172a',
+          lineHeight: '1.8',
+          margin: 0,
+          fontWeight: 600
+        }}>
+          Denial Appeal Pro applies structured appeal logic across every case —
+          turning revenue recovery into a repeatable system.
+        </p>
+      </div>
+
+      {/* MICRO PROOF BLOCK */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '2px',
+        padding: '40px',
+        marginTop: '40px'
+      }}>
+        <div style={{
+          fontSize: '12px',
+          fontWeight: 700,
+          color: '#1e40af',
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+          marginBottom: '24px',
+          textAlign: 'center'
+        }}>
+          Example
+        </div>
+
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '32px'
+          gridTemplateColumns: '1fr',
+          gap: '24px'
         }}>
-          <div>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 700,
-              color: 'white',
-              marginBottom: '8px',
-              letterSpacing: '-1px'
-            }}>
-              95%+
-            </div>
+          {/* Denied Claim */}
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '2px',
+            padding: '20px 24px'
+          }}>
             <div style={{
               fontSize: '13px',
-              color: '#bfdbfe',
-              fontWeight: 500,
-              letterSpacing: '0.3px'
+              fontWeight: 700,
+              color: '#991b1b',
+              marginBottom: '8px',
+              letterSpacing: '0.5px'
             }}>
-              Citation Accuracy
+              Denied Claim: $4,200
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: '#991b1b',
+              fontWeight: 500
+            }}>
+              Reason: CO-50 – Not medically necessary
             </div>
           </div>
 
-          <div>
+          {/* Two-column comparison */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: '24px'
+          }}>
+            {/* Manual Appeal */}
             <div style={{
-              fontSize: '36px',
-              fontWeight: 700,
-              color: 'white',
-              marginBottom: '8px',
-              letterSpacing: '-1px'
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '2px',
+              padding: '20px 24px'
             }}>
-              85%+
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#64748b',
+                marginBottom: '12px',
+                letterSpacing: '0.5px'
+              }}>
+                Manual Appeal
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: '#475569',
+                lineHeight: '1.6',
+                fontWeight: 400
+              }}>
+                Generic reconsideration request with limited documentation
+              </div>
             </div>
+
+            {/* Denial Appeal Pro */}
             <div style={{
-              fontSize: '13px',
-              color: '#bfdbfe',
-              fontWeight: 500,
-              letterSpacing: '0.3px'
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '2px',
+              padding: '20px 24px'
             }}>
-              Success Rate
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#1e40af',
+                marginBottom: '12px',
+                letterSpacing: '0.5px'
+              }}>
+                Denial Appeal Pro
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: '#1e40af',
+                lineHeight: '1.6',
+                fontWeight: 500
+              }}>
+                Structured appeal with coding alignment, documentation requirements, and medical necessity positioning
+              </div>
             </div>
           </div>
 
-          <div>
-            <div style={{
-              fontSize: '36px',
-              fontWeight: 700,
-              color: 'white',
-              marginBottom: '8px',
-              letterSpacing: '-1px'
-            }}>
-              50+
-            </div>
+          {/* Result */}
+          <div style={{
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: '2px',
+            padding: '20px 24px',
+            textAlign: 'center'
+          }}>
             <div style={{
               fontSize: '13px',
-              color: '#bfdbfe',
-              fontWeight: 500,
-              letterSpacing: '0.3px'
-            }}>
-              Risk Patterns Detected
-            </div>
-          </div>
-
-          <div>
-            <div style={{
-              fontSize: '36px',
               fontWeight: 700,
-              color: 'white',
+              color: '#166534',
               marginBottom: '8px',
-              letterSpacing: '-1px'
+              letterSpacing: '0.5px'
             }}>
-              100%
+              Result
             </div>
             <div style={{
-              fontSize: '13px',
-              color: '#bfdbfe',
-              fontWeight: 500,
-              letterSpacing: '0.3px'
+              fontSize: '14px',
+              color: '#166534',
+              fontWeight: 600
             }}>
-              Automated QA
+              Stronger appeal position and higher likelihood of reversal
             </div>
           </div>
         </div>
       </div>
+
 
       {/* REVENUE IMPACT SECTION */}
       <div style={{

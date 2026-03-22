@@ -47,7 +47,7 @@ const AdminLogin = () => {
       <div style={styles.loginBox}>
         <div style={styles.header}>
           <h2 style={styles.title}>Admin Login</h2>
-          <p style={styles.subtitle}>Denial Appeal Pro Administration</p>
+          <p style={styles.subtitle}>Medical Denial Appeal Pro Administration</p>
         </div>
 
         {error && (

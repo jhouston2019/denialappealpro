@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { useUser } from '../context/UserContext';
+import UsageTracker from '../components/UsageTracker';
+import UpgradeModal from '../components/UpgradeModal';
+import UpgradeCTA from '../components/UpgradeCTA';
 
 function AppealDownload() {
   const { appealId } = useParams();
   const navigate = useNavigate();
+  const { userEmail, setUser } = useUser();
   const [appeal, setAppeal] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeData, setUpgradeData] = useState(null);
+
+  const handleUpgradeNeeded = (usageStats) => {
+    if (usageStats.upgrade_status === 'limit_reached' || usageStats.upgrade_status === 'approaching_limit') {
+      setUpgradeData(usageStats);
+      setShowUpgradeModal(true);
+    }
+  };
 
   useEffect(() => {
     fetchAppeal();
@@ -21,6 +35,16 @@ function AppealDownload() {
         return;
       }
       setAppeal(response.data);
+      
+      // Get user info and save to context if available
+      if (response.data.user_id && !userEmail) {
+        try {
+          const userResponse = await api.get(`/api/user/${response.data.user_id}`);
+          setUser(userResponse.data.email, response.data.user_id);
+        } catch (err) {
+          console.error('Error fetching user:', err);
+        }
+      }
     } catch (error) {
       alert('Appeal not found');
       navigate('/');
@@ -64,6 +88,24 @@ function AppealDownload() {
 
   return (
     <div className="download-container">
+      {/* Usage Tracker - Show if user email is available */}
+      {userEmail && (
+        <div style={{ maxWidth: '900px', margin: '0 auto 2rem' }}>
+          <UsageTracker email={userEmail} onUpgradeNeeded={handleUpgradeNeeded} />
+        </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && upgradeData && (
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          currentTier={upgradeData.subscription_tier}
+          usageStats={upgradeData}
+          nextTier={null}
+        />
+      )}
+
       <h2>Appeal Ready</h2>
       
       {/* Important Review Notice */}
@@ -97,15 +139,25 @@ function AppealDownload() {
 
       <div style={{ maxWidth: '500px', margin: '2rem auto', background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         <p style={{ marginBottom: '1rem' }}>Claim Number: <strong>{appeal.claim_number}</strong></p>
-        <p style={{ marginBottom: '1rem' }}>Payer: <strong>{appeal.payer_name}</strong></p>
+        <p style={{ marginBottom: '1rem' }}>Payer: <strong>{appeal.payer || appeal.payer_name}</strong></p>
         <p style={{ marginBottom: '2rem', color: '#28a745' }}>✓ Appeal generated and ready for download</p>
         <button className="btn btn-primary btn-large" onClick={handleDownload} style={{ width: '100%' }}>
           Download Appeal PDF
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/history')} style={{ width: '100%', marginTop: '1rem' }}>
+        <button className="btn btn-secondary" onClick={() => navigate('/appeal-form')} style={{ width: '100%', marginTop: '1rem' }}>
+          Process Next Denial
+        </button>
+        <button className="btn btn-secondary" onClick={() => navigate('/history')} style={{ width: '100%', marginTop: '0.5rem' }}>
           View History
         </button>
       </div>
+
+      {/* Upgrade CTA */}
+      {upgradeData && (
+        <div style={{ maxWidth: '900px', margin: '2rem auto 0' }}>
+          <UpgradeCTA usageStats={upgradeData} />
+        </div>
+      )}
     </div>
   );
 }

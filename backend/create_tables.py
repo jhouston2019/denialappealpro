@@ -1,5 +1,5 @@
 """
-Create database tables for Denial Appeal Pro
+Create database tables for Medical Denial Appeal Pro
 Run this script to initialize the database
 """
 from app import app, db

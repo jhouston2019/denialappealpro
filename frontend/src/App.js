@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { UserProvider } from './context/UserContext';
 import './App.css';
 // Force rebuild: 2026-02-11-v3
 
@@ -16,6 +17,8 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const SubscriptionSuccess = lazy(() => import('./pages/SubscriptionSuccess'));
+const BillingManagement = lazy(() => import('./pages/BillingManagement'));
 
 // Loading component
 const PageLoader = () => (
@@ -54,17 +57,19 @@ function AppContent() {
   const location = useLocation();
   const landingPages = ['/', '/pro', '/appeal', '/denied'];
   const adminPages = ['/admin/login', '/admin/dashboard'];
+  const successPages = ['/subscription/success', '/credits/success'];
   const isLandingPage = landingPages.includes(location.pathname);
   const isAdminPage = adminPages.some(page => location.pathname.startsWith('/admin'));
+  const isSuccessPage = successPages.some(page => location.pathname.startsWith(page));
 
   return (
     <div className="App">
-      {!isLandingPage && !isAdminPage && (
+      {!isLandingPage && !isAdminPage && !isSuccessPage && (
         <header className="App-header">
-          <h1>Denial Appeal Pro</h1>
+          <h1>Medical Denial Appeal Pro</h1>
         </header>
       )}
-      <main className="App-main" style={(isLandingPage || isAdminPage) ? { padding: 0, maxWidth: 'none' } : {}}>
+      <main className="App-main" style={(isLandingPage || isAdminPage || isSuccessPage) ? { padding: 0, maxWidth: 'none' } : {}}>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Landing pages - dual routing strategy */}
@@ -84,14 +89,16 @@ function AppContent() {
             <Route path="/history" element={<AppealHistory />} />
             <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
             <Route path="/download/:appealId" element={<AppealDownload />} />
+            <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+            <Route path="/billing" element={<BillingManagement />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
           </Routes>
         </Suspense>
       </main>
-      {!isLandingPage && !isAdminPage && (
+      {!isLandingPage && !isAdminPage && !isSuccessPage && (
         <footer className="App-footer">
-          <p>$10 per appeal</p>
+          <p>Starting at $29/month</p>
           <p style={{ fontSize: '14px', marginTop: '10px' }}>
             <a href="/terms" style={{ color: '#1e3a8a', marginRight: '20px' }}>Terms of Service</a>
             <a href="/privacy" style={{ color: '#1e3a8a' }}>Privacy Policy</a>
@@ -105,7 +112,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <UserProvider>
+        <AppContent />
+      </UserProvider>
     </Router>
   );
 }

@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { useUser } from '../context/UserContext';
+import UsageTracker from '../components/UsageTracker';
+import UpgradeModal from '../components/UpgradeModal';
+import UpgradeCTA from '../components/UpgradeCTA';
 
 function AppealFormWizard() {
   const navigate = useNavigate();
+  const { userEmail, setUser } = useUser();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [parsedData, setParsedData] = useState(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeData, setUpgradeData] = useState(null);
   const [formData, setFormData] = useState({
-    email: '',
+    email: userEmail || '',
     payer: '',
     claim_number: '',
     patient_id: '',
@@ -24,6 +31,19 @@ function AppealFormWizard() {
     appeal_level: 'level_1',
     denial_letter: null
   });
+
+  useEffect(() => {
+    if (userEmail && !formData.email) {
+      setFormData(prev => ({ ...prev, email: userEmail }));
+    }
+  }, [userEmail]);
+
+  const handleUpgradeNeeded = (usageStats) => {
+    if (usageStats.upgrade_status === 'limit_reached' || usageStats.upgrade_status === 'approaching_limit') {
+      setUpgradeData(usageStats);
+      setShowUpgradeModal(true);
+    }
+  };
 
   const appealLevels = [
     { value: 'level_1', label: 'Level 1 - First Appeal' },
@@ -85,6 +105,11 @@ function AppealFormWizard() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Save email to context when entered
+    if (name === 'email' && value) {
+      setUser(value, null);
+    }
   };
 
   const nextStep = () => {
@@ -126,11 +151,23 @@ function AppealFormWizard() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
+      // Save user ID to context
+      if (response.data.user_id) {
+        setUser(formData.email, response.data.user_id);
+      }
+
       // Check if user has credits
       if (response.data.credit_balance > 0) {
         // User has credits - generate immediately
         const generateResponse = await api.post(`/api/appeals/generate/${response.data.appeal_id}`);
         if (generateResponse.data.status === 'completed') {
+          // Check for upgrade triggers after generation
+          if (generateResponse.data.usage_stats) {
+            const usageStats = generateResponse.data.usage_stats;
+            if (usageStats.upgrade_status) {
+              handleUpgradeNeeded(usageStats);
+            }
+          }
           navigate(`/download/${response.data.appeal_id}`);
         }
       } else {
@@ -149,6 +186,181 @@ function AppealFormWizard() {
       setLoading(false);
     }
   };
+
+  const renderStep3 = () => (
+    <div>
+      <h2 style={{ marginBottom: '20px' }}>Step 3: Additional Details</h2>
+      <p style={{ color: '#666', marginBottom: '30px' }}>
+        Provide additional information to strengthen your appeal.
+      </p>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+          Appeal Level *
+        </label>
+        <select
+          name="appeal_level"
+          value={formData.appeal_level}
+          onChange={handleChange}
+          style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '16px',
+            border: '2px solid #ddd',
+            borderRadius: '8px'
+          }}
+        >
+          {appealLevels.map(level => (
+            <option key={level.value} value={level.value}>{level.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Patient ID *
+          </label>
+          <input
+            type="text"
+            name="patient_id"
+            value={formData.patient_id}
+            onChange={handleChange}
+            required
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Billed Amount
+          </label>
+          <input
+            type="number"
+            name="billed_amount"
+            value={formData.billed_amount}
+            onChange={handleChange}
+            step="0.01"
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Provider Name *
+          </label>
+          <input
+            type="text"
+            name="provider_name"
+            value={formData.provider_name}
+            onChange={handleChange}
+            required
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Provider NPI *
+          </label>
+          <input
+            type="text"
+            name="provider_npi"
+            value={formData.provider_npi}
+            onChange={handleChange}
+            required
+            maxLength="10"
+            pattern="\d{10}"
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            CPT Codes
+          </label>
+          <input
+            type="text"
+            name="cpt_codes"
+            value={formData.cpt_codes}
+            onChange={handleChange}
+            placeholder="e.g., 99213, 99214"
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Diagnosis Code (ICD-10)
+          </label>
+          <input
+            type="text"
+            name="diagnosis_code"
+            value={formData.diagnosis_code}
+            onChange={handleChange}
+            placeholder="e.g., M54.5"
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '16px',
+              border: '2px solid #ddd',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+          Timely Filing Deadline
+        </label>
+        <input
+          type="date"
+          name="timely_filing_deadline"
+          value={formData.timely_filing_deadline}
+          onChange={handleChange}
+          style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '16px',
+            border: '2px solid #ddd',
+            borderRadius: '8px'
+          }}
+        />
+      </div>
+    </div>
+  );
 
   const renderStep1 = () => (
     <div>
@@ -514,6 +726,22 @@ function AppealFormWizard() {
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px' }}>
+      {/* Usage Tracker - Show if email is entered */}
+      {formData.email && (
+        <UsageTracker email={formData.email} onUpgradeNeeded={handleUpgradeNeeded} />
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && upgradeData && (
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          currentTier={upgradeData.subscription_tier}
+          usageStats={upgradeData}
+          nextTier={null}
+        />
+      )}
+
       {/* Progress Indicator */}
       <div style={{ marginBottom: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>

@@ -9,11 +9,30 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     stripe_customer_id = db.Column(db.String(255), unique=True, index=True)
-    subscription_tier = db.Column(db.String(50))  # starter, growth, pro, or null
+    subscription_tier = db.Column(db.String(50))  # starter, core, scale, or null
     
     # SEPARATED CREDIT POOLS - subscription resets, bulk accumulates
     subscription_credits = db.Column(db.Integer, default=0, nullable=False)
     bulk_credits = db.Column(db.Integer, default=0, nullable=False)
+    
+    # USAGE TRACKING - for usage-based pricing
+    appeals_generated_monthly = db.Column(db.Integer, default=0, nullable=False)
+    appeals_generated_weekly = db.Column(db.Integer, default=0, nullable=False)
+    appeals_generated_today = db.Column(db.Integer, default=0, nullable=False)
+    
+    # USAGE RESET TRACKING
+    last_monthly_reset = db.Column(db.Date)
+    last_weekly_reset = db.Column(db.Date)
+    last_daily_reset = db.Column(db.Date)
+    
+    # PLAN LIMITS - cached from subscription tier
+    plan_limit = db.Column(db.Integer, default=0, nullable=False)
+    
+    # OVERAGE TRACKING
+    overage_count = db.Column(db.Integer, default=0, nullable=False)
+    
+    # BILLING STATUS
+    billing_status = db.Column(db.String(50), default='active')  # active, suspended, cancelled
     
     # DEPRECATED - kept for backward compatibility, computed property
     @property
@@ -33,12 +52,17 @@ class SubscriptionPlan(db.Model):
     __tablename__ = 'subscription_plans'
     
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)  # starter, growth, pro
+    name = db.Column(db.String(50), unique=True, nullable=False)  # starter, core, scale
     monthly_price = db.Column(db.Numeric(10, 2), nullable=False)
     included_credits = db.Column(db.Integer, nullable=False)
     overage_price = db.Column(db.Numeric(10, 2), nullable=False)
     stripe_price_id = db.Column(db.String(255), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    @property
+    def included_appeals(self):
+        """Alias for included_credits - for usage-based model"""
+        return self.included_credits
     
     def __repr__(self):
         return f'<SubscriptionPlan {self.name}>'

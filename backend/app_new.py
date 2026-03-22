@@ -22,7 +22,7 @@ from denial_rules import get_denial_rule
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
-print("DENIAL APPEAL PRO - BACKEND SERVER")
+print("MEDICAL DENIAL APPEAL PRO - BACKEND SERVER")
 print("="*60)
 validate_environment(strict=False)
 

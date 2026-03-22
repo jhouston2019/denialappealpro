@@ -60,7 +60,7 @@ function LandingPro() {
             lineHeight: '1.2',
             textAlign: 'center'
           }}>
-            Why Medical Billing & Revenue Cycle Teams<br/>Use Denial Appeal Pro
+            Why Medical Billing & Revenue Cycle Teams<br/>Use Medical Denial Appeal Pro
           </h1>
           
           <p style={{
@@ -143,7 +143,7 @@ function LandingPro() {
               marginBottom: '0',
               fontWeight: 400
             }}>
-              <strong style={{ color: 'white', fontSize: '18px', fontWeight: 600 }}>Denial Appeal Pro</strong><br/>
+              <strong style={{ color: 'white', fontSize: '18px', fontWeight: 600 }}>Medical Denial Appeal Pro</strong><br/>
               analyzes the denial reason, payer criteria, and clinical documentation —<br/>
               identifying exactly what failed and generating a<br/>
               <strong style={{ color: '#93c5fd', fontWeight: 600 }}>submission-ready appeal aligned to payer requirements.</strong>
@@ -179,13 +179,13 @@ function LandingPro() {
             Most teams already appeal denials — but inconsistent structure and limited capacity leave significant revenue unrecovered.
           </p>
 
-            <h3 style={{
-              fontSize: '22px',
-              fontWeight: 800,
-              marginBottom: '24px',
-              color: 'white'
-            }}>
-              Denial Appeal Pro systematically identifies:
+              <h3 style={{
+                fontSize: '22px',
+                fontWeight: 800,
+                marginBottom: '24px',
+                color: 'white'
+              }}>
+                Medical Denial Appeal Pro systematically identifies:
             </h3>
 
             <div style={{ display: 'grid', gap: '1px', marginBottom: '40px', background: 'rgba(255,255,255,0.1)' }}>
@@ -1588,7 +1588,7 @@ function LandingPro() {
             letterSpacing: '-0.5px',
             color: '#0f172a'
           }}>
-            Traditional Appeal Services vs Denial Appeal Pro
+            Traditional Appeal Services vs Medical Denial Appeal Pro
           </h2>
 
           <div className="grid-2" style={{
@@ -1639,7 +1639,7 @@ function LandingPro() {
               </div>
             </div>
 
-            {/* Right Side - Denial Appeal Pro */}
+            {/* Right Side - Medical Denial Appeal Pro */}
             <div style={{
               background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
               border: '2px solid #3b82f6',
@@ -1670,7 +1670,7 @@ function LandingPro() {
                 marginBottom: '24px',
                 textAlign: 'center'
               }}>
-                Denial Appeal Pro
+                Medical Denial Appeal Pro
               </h3>
 
               <div style={{ display: 'grid', gap: '16px' }}>
@@ -2186,7 +2186,7 @@ function LandingPro() {
             fontSize: '13px'
           }}>
             <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.5)' }}>
-              © {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.
+              © {new Date().getFullYear()} Medical Denial Appeal Pro. All rights reserved.
             </p>
             <p style={{ margin: 0 }}>
               <a href="/terms" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginRight: '24px', transition: 'color 0.2s' }}

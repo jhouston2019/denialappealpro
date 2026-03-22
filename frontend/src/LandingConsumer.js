@@ -815,7 +815,7 @@ function LandingConsumer() {
             fontSize: '13px'
           }}>
             <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.5)' }}>
-              © {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.
+              © {new Date().getFullYear()} Medical Denial Appeal Pro. All rights reserved.
             </p>
             <p style={{ margin: 0 }}>
               <a href="/terms" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginRight: '24px', transition: 'color 0.2s' }}

@@ -1,5 +1,5 @@
 """
-Environment variable validation for Denial Appeal Pro
+Environment variable validation for Medical Denial Appeal Pro
 Validates required configuration on startup
 """
 import os
@@ -172,7 +172,7 @@ class EnvironmentValidator:
     @classmethod
     def run_all_checks(cls, strict=False):
         """Run all validation checks"""
-        print("\n" + "STARTING DENIAL APPEAL PRO" + "\n")
+        print("\n" + "STARTING MEDICAL DENIAL APPEAL PRO" + "\n")
         
         # Validate environment variables
         is_valid, warnings, errors = cls.validate(strict=strict)

@@ -11,7 +11,7 @@ function PrivacyPolicy() {
       <section style={{ marginBottom: '30px' }}>
         <h2>1. Introduction</h2>
         <p>
-          Denial Appeal Pro ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy 
+          Medical Denial Appeal Pro ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy 
           explains how we collect, use, disclose, and safeguard your information when you use our Service.
         </p>
         <p>
@@ -244,7 +244,7 @@ function PrivacyPolicy() {
         textAlign: 'center'
       }}>
         <p style={{ margin: 0, color: '#666' }}>
-          By using Denial Appeal Pro, you acknowledge that you have read and understood this Privacy Policy.
+          By using Medical Denial Appeal Pro, you acknowledge that you have read and understood this Privacy Policy.
         </p>
       </div>
     </div>

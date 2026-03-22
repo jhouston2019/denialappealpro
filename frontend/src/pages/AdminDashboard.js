@@ -108,7 +108,7 @@ const AdminDashboard = () => {
     <div style={styles.container}>
       <nav style={styles.navbar}>
         <div style={styles.navContent}>
-          <h1 style={styles.logo}>Denial Appeal Pro Admin</h1>
+          <h1 style={styles.logo}>Medical Denial Appeal Pro Admin</h1>
           <div style={styles.navRight}>
             <span style={styles.username}>{adminUser.username}</span>
             <button onClick={handleLogout} style={styles.logoutBtn}>

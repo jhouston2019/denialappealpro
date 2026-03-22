@@ -73,7 +73,7 @@ function ComparisonTable() {
         letterSpacing: '-0.5px',
         color: '#0f172a'
       }}>
-        Why Medical Billing Teams Use Denial Appeal Pro
+        Why Medical Billing Teams Use Medical Denial Appeal Pro
       </h2>
       
       <p style={{
@@ -140,7 +140,7 @@ function ComparisonTable() {
                 width: '32.5%',
                 background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
               }}>
-                Denial Appeal Pro
+                Medical Denial Appeal Pro
               </th>
             </tr>
           </thead>
@@ -223,7 +223,7 @@ function ComparisonTable() {
           margin: 0,
           fontWeight: 600
         }}>
-          Denial Appeal Pro applies structured appeal logic across every case —
+          Medical Denial Appeal Pro applies structured appeal logic across every case —
           turning revenue recovery into a repeatable system.
         </p>
       </div>
@@ -310,7 +310,7 @@ function ComparisonTable() {
               </div>
             </div>
 
-            {/* Denial Appeal Pro */}
+            {/* Medical Denial Appeal Pro */}
             <div style={{
               background: '#eff6ff',
               border: '1px solid #bfdbfe',
@@ -324,7 +324,7 @@ function ComparisonTable() {
                 marginBottom: '12px',
                 letterSpacing: '0.5px'
               }}>
-                Denial Appeal Pro
+                Medical Denial Appeal Pro
               </div>
               <div style={{
                 fontSize: '14px',
@@ -492,7 +492,7 @@ function ComparisonTable() {
             fontWeight: 500,
             textAlign: 'center'
           }}>
-            Denial Appeal Pro applies structured appeal logic across every claim — allowing you to pursue more denials with consistency and speed.
+            Medical Denial Appeal Pro applies structured appeal logic across every claim — allowing you to pursue more denials with consistency and speed.
           </p>
         </div>
 
@@ -611,7 +611,7 @@ function ComparisonTable() {
               letterSpacing: '0.5px',
               textTransform: 'uppercase'
             }}>
-              With Denial Appeal Pro
+              With Medical Denial Appeal Pro
             </div>
             <div style={{
               fontSize: '15px',

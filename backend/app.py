@@ -21,10 +21,11 @@ from timely_filing import calculate_timely_filing
 from denial_rules import get_denial_rule
 from admin_auth import admin_auth, require_admin
 from auto_setup_admin import auto_setup_admin
+from stripe_billing import StripeBilling
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
-print("DENIAL APPEAL PRO - BACKEND SERVER")
+print("MEDICAL DENIAL APPEAL PRO - BACKEND SERVER")
 print("="*60)
 validate_environment(strict=False)
 
@@ -89,7 +90,7 @@ def create_subscription():
     try:
         data = request.json
         email = data.get('email')
-        tier = data.get('tier')  # starter, growth, pro
+        tier = data.get('tier')  # starter, core, scale
         
         if not email or not tier:
             return jsonify({'error': 'Email and tier are required'}), 400
@@ -126,7 +127,8 @@ def create_subscription():
             metadata={
                 'user_id': user.id,
                 'tier': tier,
-                'type': 'subscription'
+                'type': 'subscription',
+                'plan_limit': tier_info['included_appeals']
             }
         )
         
@@ -379,7 +381,7 @@ def submit_appeal():
 @app.route('/api/appeals/generate/<appeal_id>', methods=['POST'])
 @limiter.limit("10 per hour")
 def generate_appeal_with_credits(appeal_id):
-    """Generate appeal using credits or retail payment"""
+    """Generate appeal using credits or retail payment - WITH USAGE TRACKING"""
     try:
         appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
         if not appeal:
@@ -417,11 +419,22 @@ def generate_appeal_with_credits(appeal_id):
                         appeal.last_generated_at = datetime.utcnow()
                         db.session.commit()
                         
+                        # INCREMENT USAGE TRACKING
+                        CreditManager.increment_usage(user.id)
+                        
+                        # Get updated usage stats
+                        usage_stats = CreditManager.get_usage_stats(user.id)
+                        
+                        # REPORT OVERAGE TO STRIPE if user is over limit
+                        if usage_stats.get('overage_count', 0) > 0 and user.stripe_subscription_id:
+                            StripeBilling.report_overage_usage(user.id, quantity=1)
+                        
                         return jsonify({
                             'message': 'Appeal generated successfully using credit',
                             'appeal_id': appeal_id,
                             'status': 'completed',
-                            'credit_balance': user.credit_balance
+                            'credit_balance': user.credit_balance,
+                            'usage_stats': usage_stats
                         }), 200
                     except Exception as e:
                         appeal.status = 'failed'
@@ -481,53 +494,163 @@ def create_payment(appeal_id):
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
+# STRIPE BILLING ENDPOINTS
+# ============================================================================
+
+@app.route('/api/stripe/create-checkout', methods=['POST'])
+@limiter.limit("10 per hour")
+def create_stripe_checkout():
+    """
+    Create Stripe checkout session for subscription
+    Uses new StripeBilling service with metered overage billing
+    """
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        plan = data.get('plan')  # starter, core, scale
+        
+        if not user_id or not plan:
+            return jsonify({'error': 'user_id and plan are required'}), 400
+        
+        # Get origin for redirect URLs
+        origin = request.headers.get('Origin', Config.DOMAIN)
+        success_url = f"{origin}/subscription/success?session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{origin}/pricing"
+        
+        # Create checkout session with metered billing
+        result = StripeBilling.create_checkout_session(
+            user_id=user_id,
+            plan=plan,
+            success_url=success_url,
+            cancel_url=cancel_url
+        )
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"❌ Error creating checkout: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stripe/create-portal', methods=['POST'])
+@limiter.limit("10 per hour")
+def create_stripe_portal():
+    """
+    Create Stripe customer portal session for self-service billing management
+    Allows users to upgrade, downgrade, cancel, and update payment methods
+    """
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'error': 'user_id is required'}), 400
+        
+        # Get origin for return URL
+        origin = request.headers.get('Origin', Config.DOMAIN)
+        return_url = f"{origin}/dashboard"
+        
+        # Create portal session
+        result = StripeBilling.create_portal_session(
+            user_id=user_id,
+            return_url=return_url
+        )
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"❌ Error creating portal: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stripe/subscription/<int:user_id>', methods=['GET'])
+def get_stripe_subscription(user_id):
+    """Get detailed subscription information from Stripe"""
+    try:
+        info = StripeBilling.get_subscription_info(user_id)
+        if not info:
+            return jsonify({'error': 'No subscription found'}), 404
+        
+        return jsonify(info), 200
+        
+    except Exception as e:
+        print(f"❌ Error getting subscription: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stripe/upgrade', methods=['POST'])
+@limiter.limit("5 per hour")
+def upgrade_stripe_subscription():
+    """Upgrade user subscription to a higher tier"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        new_plan = data.get('plan')  # core or scale
+        
+        if not user_id or not new_plan:
+            return jsonify({'error': 'user_id and plan are required'}), 400
+        
+        # Upgrade subscription
+        success = StripeBilling.upgrade_subscription(user_id, new_plan)
+        
+        if success:
+            return jsonify({'status': 'success', 'message': f'Upgraded to {new_plan}'}), 200
+        else:
+            return jsonify({'error': 'Upgrade failed'}), 500
+        
+    except Exception as e:
+        print(f"❌ Error upgrading subscription: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
 # STRIPE WEBHOOK HANDLER (Enhanced)
 # ============================================================================
 
 @app.route('/api/stripe/webhook', methods=['POST'])
 def stripe_webhook():
+    """
+    Enhanced Stripe webhook handler
+    Handles all subscription lifecycle events and metered billing
+    """
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
     
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, app.config['STRIPE_WEBHOOK_SECRET']
-        )
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    # Verify webhook signature
+    event = StripeBilling.verify_webhook_signature(payload, sig_header)
+    if not event:
+        return jsonify({'error': 'Invalid signature'}), 400
     
     event_id = event['id']
+    event_type = event['type']
     
     # HARD WEBHOOK IDEMPOTENCY - rely on unique constraint
     try:
         with db.session.begin():
-            db.session.add(ProcessedWebhookEvent(event_id=event_id, event_type=event['type']))
+            db.session.add(ProcessedWebhookEvent(event_id=event_id, event_type=event_type))
             db.session.flush()
     except Exception:
         # IntegrityError from unique constraint = duplicate event
+        print(f"⚠️  Duplicate webhook event: {event_id}")
         return jsonify({'status': 'duplicate'}), 200
     
+    print(f"📨 Processing webhook: {event_type}")
+    
     # Handle checkout.session.completed
-    if event['type'] == 'checkout.session.completed':
+    if event_type == 'checkout.session.completed':
         session = event['data']['object']
         metadata = session.get('metadata', {})
-        event_type = metadata.get('type')
+        payment_type = metadata.get('type')
         
-        if event_type == 'subscription':
-            # Handle subscription purchase
+        if payment_type == 'subscription':
+            # NEW: Use StripeBilling service for subscription activation
+            StripeBilling.handle_checkout_completed(session)
+            
+            # LEGACY: Also update credit manager for backward compatibility
             user_id = metadata.get('user_id')
             tier = metadata.get('tier')
-            
             if user_id and tier:
-                user = User.query.get(user_id)
-                if user:
-                    # Set subscription tier
-                    CreditManager.set_subscription(user_id, tier)
-                    # Allocate monthly credits
-                    CreditManager.allocate_monthly_credits(user_id)
-                    print(f"✓ Subscription activated for user {user_id}: {tier}")
+                CreditManager.set_subscription(user_id, tier)
+                CreditManager.update_plan_limit(user_id)
+                CreditManager.allocate_monthly_credits(user_id)
         
-        elif event_type == 'credit_pack':
+        elif payment_type == 'credit_pack':
             # Handle credit pack purchase
             user_id = metadata.get('user_id')
             credits = int(metadata.get('credits', 0))
@@ -536,7 +659,7 @@ def stripe_webhook():
                 CreditManager.add_credits(user_id, credits, reason='purchase')
                 print(f"✓ Added {credits} credits to user {user_id}")
         
-        elif event_type == 'retail':
+        elif payment_type == 'retail':
             # Handle retail appeal payment
             appeal_id = metadata.get('appeal_id')
             
@@ -564,6 +687,11 @@ def stripe_webhook():
                         appeal.completed_at = datetime.utcnow()
                         appeal.last_generated_at = datetime.utcnow()
                         db.session.commit()
+                        
+                        # INCREMENT USAGE TRACKING for retail appeals
+                        if appeal.user_id:
+                            CreditManager.increment_usage(appeal.user_id)
+                        
                         print(f"✓ Appeal generated for {appeal_id}")
                     except Exception as e:
                         appeal.status = 'failed'
@@ -571,27 +699,37 @@ def stripe_webhook():
                         print(f"❌ Appeal generation failed: {e}")
     
     # Handle invoice.paid (for recurring subscriptions)
-    elif event['type'] == 'invoice.paid':
+    elif event_type == 'invoice.paid':
         invoice = event['data']['object']
-        customer_id = invoice.get('customer')
         
-        # Find user by Stripe customer ID
+        # NEW: Use StripeBilling service to reset usage counters
+        StripeBilling.handle_invoice_paid(invoice)
+        
+        # LEGACY: Also allocate credits for backward compatibility
+        customer_id = invoice.get('customer')
         user = User.query.filter_by(stripe_customer_id=customer_id).first()
         if user and user.subscription_tier:
-            # Allocate monthly credits
             CreditManager.allocate_monthly_credits(user.id)
-            print(f"✓ Monthly credits allocated for user {user.id}")
+    
+    # Handle customer.subscription.updated
+    elif event_type == 'customer.subscription.updated':
+        subscription = event['data']['object']
+        
+        # NEW: Use StripeBilling service to handle upgrades/downgrades
+        StripeBilling.handle_subscription_updated(subscription)
     
     # Handle customer.subscription.deleted
-    elif event['type'] == 'customer.subscription.deleted':
+    elif event_type == 'customer.subscription.deleted':
         subscription = event['data']['object']
-        customer_id = subscription.get('customer')
         
-        # Find user and cancel subscription
+        # NEW: Use StripeBilling service to handle cancellation
+        StripeBilling.handle_subscription_deleted(subscription)
+        
+        # LEGACY: Also update credit manager
+        customer_id = subscription.get('customer')
         user = User.query.filter_by(stripe_customer_id=customer_id).first()
         if user:
             CreditManager.cancel_subscription(user.id)
-            print(f"✓ Subscription canceled for user {user.id}")
     
     # Event already marked as processed at start of function
     return jsonify({'status': 'success'}), 200
@@ -701,6 +839,63 @@ def get_user_info(user_id):
         if not stats:
             return jsonify({'error': 'User not found'}), 404
         return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/email/<email>', methods=['GET'])
+def get_user_by_email(email):
+    """Get user information by email"""
+    try:
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        stats = CreditManager.get_user_stats(user.id)
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/usage/<int:user_id>', methods=['GET'])
+def get_usage_stats(user_id):
+    """Get detailed usage statistics"""
+    try:
+        stats = CreditManager.get_usage_stats(user_id)
+        if not stats:
+            return jsonify({'error': 'User not found'}), 404
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/usage/email/<email>', methods=['GET'])
+def get_usage_by_email(email):
+    """Get usage statistics by email"""
+    try:
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        stats = CreditManager.get_usage_stats(user.id)
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/upgrade/suggestions/<int:user_id>', methods=['GET'])
+def get_upgrade_suggestions(user_id):
+    """Get upgrade suggestions based on usage"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        usage_stats = CreditManager.get_usage_stats(user_id)
+        next_tier = PricingManager.get_next_tier(user.subscription_tier)
+        
+        return jsonify({
+            'current_tier': user.subscription_tier,
+            'usage_stats': usage_stats,
+            'next_tier': next_tier,
+            'should_upgrade': usage_stats['upgrade_status'] in ['approaching_limit', 'limit_reached']
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -52,6 +52,15 @@ class Config:
     STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
     STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
     
+    # Stripe Price IDs for subscription plans
+    STRIPE_STARTER_PRICE_ID = os.getenv('STRIPE_STARTER_PRICE_ID', 'price_starter_placeholder')
+    STRIPE_CORE_PRICE_ID = os.getenv('STRIPE_CORE_PRICE_ID', 'price_core_placeholder')
+    STRIPE_SCALE_PRICE_ID = os.getenv('STRIPE_SCALE_PRICE_ID', 'price_scale_placeholder')
+    STRIPE_OVERAGE_PRICE_ID = os.getenv('STRIPE_OVERAGE_PRICE_ID', 'price_overage_placeholder')
+    
+    # Domain for Stripe redirects
+    DOMAIN = os.getenv('DOMAIN', 'http://localhost:3000')
+    
     PRICE_PER_APPEAL = float(os.getenv('PRICE_PER_APPEAL', '10.00'))
     
     # Local folders (used for development or if Supabase not configured)

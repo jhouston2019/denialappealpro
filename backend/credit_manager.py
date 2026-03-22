@@ -1,9 +1,10 @@
 """
 Credit Management System
 Handles credit allocation, deduction, and subscription management
+PLUS usage-based tracking for SaaS model
 """
 
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from models import db, User, SubscriptionPlan, CreditPack, Appeal
 from typing import Optional, Dict
 
@@ -162,33 +163,152 @@ class CreditManager:
             "completed_appeals": completed_appeals,
             "member_since": user.created_at.isoformat()
         }
+    
+    @staticmethod
+    def reset_usage_counters_if_needed(user_id: int) -> None:
+        """Reset usage counters based on time periods"""
+        user = User.query.with_for_update().filter_by(id=user_id).first()
+        if not user:
+            return
+        
+        today = date.today()
+        
+        # Reset daily counter
+        if user.last_daily_reset != today:
+            user.appeals_generated_today = 0
+            user.last_daily_reset = today
+        
+        # Reset weekly counter (Monday = 0)
+        week_start = today - timedelta(days=today.weekday())
+        if not user.last_weekly_reset or user.last_weekly_reset < week_start:
+            user.appeals_generated_weekly = 0
+            user.last_weekly_reset = today
+        
+        # Reset monthly counter
+        month_start = today.replace(day=1)
+        if not user.last_monthly_reset or user.last_monthly_reset < month_start:
+            user.appeals_generated_monthly = 0
+            user.overage_count = 0
+            user.last_monthly_reset = today
+        
+        db.session.commit()
+    
+    @staticmethod
+    def increment_usage(user_id: int) -> bool:
+        """Increment usage counters after appeal generation"""
+        try:
+            user = User.query.with_for_update().filter_by(id=user_id).first()
+            if not user:
+                return False
+            
+            # Reset counters if needed
+            CreditManager.reset_usage_counters_if_needed(user_id)
+            
+            # Increment all counters
+            user.appeals_generated_today += 1
+            user.appeals_generated_weekly += 1
+            user.appeals_generated_monthly += 1
+            
+            # Track overage if over plan limit
+            if user.plan_limit > 0 and user.appeals_generated_monthly > user.plan_limit:
+                user.overage_count = user.appeals_generated_monthly - user.plan_limit
+            
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error incrementing usage: {e}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def get_usage_stats(user_id: int) -> Dict:
+        """Get detailed usage statistics for display"""
+        user = User.query.get(user_id)
+        if not user:
+            return None
+        
+        # Reset counters if needed before returning stats
+        CreditManager.reset_usage_counters_if_needed(user_id)
+        
+        # Refresh user object after potential reset
+        db.session.refresh(user)
+        
+        usage_percentage = 0
+        if user.plan_limit > 0:
+            usage_percentage = min(100, (user.appeals_generated_monthly / user.plan_limit) * 100)
+        
+        # Determine upgrade trigger status
+        upgrade_status = None
+        if usage_percentage >= 100:
+            upgrade_status = "limit_reached"
+        elif usage_percentage >= 90:
+            upgrade_status = "approaching_limit"
+        elif usage_percentage >= 70:
+            upgrade_status = "warning"
+        
+        return {
+            "user_id": user.id,
+            "email": user.email,
+            "subscription_tier": user.subscription_tier,
+            "plan_limit": user.plan_limit,
+            "appeals_generated_monthly": user.appeals_generated_monthly,
+            "appeals_generated_weekly": user.appeals_generated_weekly,
+            "appeals_generated_today": user.appeals_generated_today,
+            "usage_percentage": round(usage_percentage, 1),
+            "overage_count": user.overage_count,
+            "billing_status": user.billing_status,
+            "upgrade_status": upgrade_status,
+            "can_generate": user.billing_status == 'active'
+        }
+    
+    @staticmethod
+    def update_plan_limit(user_id: int) -> bool:
+        """Update user's plan limit based on subscription tier"""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return False
+            
+            if user.subscription_tier:
+                tier_info = PricingManager.get_subscription_tier(user.subscription_tier)
+                if tier_info:
+                    user.plan_limit = tier_info['included_appeals']
+            else:
+                user.plan_limit = 0
+            
+            db.session.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating plan limit: {e}")
+            db.session.rollback()
+            return False
 
 class PricingManager:
     """Manage pricing tiers and credit packs"""
     
-    # Subscription tiers
+    # Subscription tiers - USAGE-BASED MODEL
     SUBSCRIPTION_TIERS = {
         "starter": {
             "name": "Starter",
+            "monthly_price": 29.00,
+            "included_appeals": 50,
+            "overage_price": 0.50
+        },
+        "core": {
+            "name": "Core",
             "monthly_price": 99.00,
-            "included_credits": 20,
-            "overage_price": 8.00
+            "included_appeals": 300,
+            "overage_price": 0.50
         },
-        "growth": {
-            "name": "Growth",
-            "monthly_price": 299.00,
-            "included_credits": 75,
-            "overage_price": 7.00
-        },
-        "pro": {
-            "name": "Pro",
-            "monthly_price": 599.00,
-            "included_credits": 200,
-            "overage_price": 6.00
+        "scale": {
+            "name": "Scale",
+            "monthly_price": 249.00,
+            "included_appeals": 1000,
+            "overage_price": 0.50
         }
     }
     
-    # Bulk credit packs
+    # Bulk credit packs - DEPRECATED but kept for backward compatibility
     CREDIT_PACKS = {
         "pack_25": {
             "name": "25 Credits",
@@ -246,31 +366,52 @@ class PricingManager:
         return PricingManager.CREDIT_PACKS
     
     @staticmethod
-    def calculate_overage_cost(user_id: int, credits_needed: int) -> float:
-        """Calculate cost for overage credits"""
+    def calculate_overage_cost(user_id: int, appeals_count: int) -> float:
+        """Calculate cost for overage appeals"""
         user = User.query.get(user_id)
         if not user or not user.subscription_tier:
-            return credits_needed * PricingManager.RETAIL_PRICE
+            return appeals_count * PricingManager.RETAIL_PRICE
         
-        plan = SubscriptionPlan.query.filter_by(name=user.subscription_tier).first()
-        if not plan:
-            return credits_needed * PricingManager.RETAIL_PRICE
+        tier_info = PricingManager.get_subscription_tier(user.subscription_tier)
+        if not tier_info:
+            return appeals_count * PricingManager.RETAIL_PRICE
         
-        return float(plan.overage_price) * credits_needed
+        return float(tier_info['overage_price']) * appeals_count
+    
+    @staticmethod
+    def get_next_tier(current_tier: str) -> Optional[Dict]:
+        """Get the next tier for upgrade suggestions"""
+        tier_order = ["starter", "core", "scale"]
+        if not current_tier or current_tier not in tier_order:
+            return PricingManager.SUBSCRIPTION_TIERS.get("starter")
+        
+        current_index = tier_order.index(current_tier)
+        if current_index < len(tier_order) - 1:
+            next_tier_name = tier_order[current_index + 1]
+            return {
+                "tier_id": next_tier_name,
+                **PricingManager.SUBSCRIPTION_TIERS[next_tier_name]
+            }
+        return None
 
 def initialize_pricing_data():
     """Initialize subscription plans and credit packs in database"""
     try:
-        # Create subscription plans
+        # Create subscription plans with NEW pricing structure
         for tier_id, tier_data in PricingManager.SUBSCRIPTION_TIERS.items():
             existing = SubscriptionPlan.query.filter_by(name=tier_id).first()
-            if not existing:
+            if existing:
+                # Update existing plans with new pricing
+                existing.monthly_price = tier_data["monthly_price"]
+                existing.included_credits = tier_data["included_appeals"]
+                existing.overage_price = tier_data["overage_price"]
+            else:
                 plan = SubscriptionPlan(
                     name=tier_id,
                     monthly_price=tier_data["monthly_price"],
-                    included_credits=tier_data["included_credits"],
+                    included_credits=tier_data["included_appeals"],
                     overage_price=tier_data["overage_price"],
-                    stripe_price_id=f"price_{tier_id}_placeholder"  # Replace with actual Stripe price IDs
+                    stripe_price_id=f"price_{tier_id}_placeholder"
                 )
                 db.session.add(plan)
         
@@ -282,7 +423,7 @@ def initialize_pricing_data():
                     name=pack_data["name"],
                     credits=pack_data["credits"],
                     price=pack_data["price"],
-                    stripe_price_id=f"price_{pack_id}_placeholder"  # Replace with actual Stripe price IDs
+                    stripe_price_id=f"price_{pack_id}_placeholder"
                 )
                 db.session.add(pack)
         

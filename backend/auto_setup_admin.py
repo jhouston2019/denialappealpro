@@ -35,7 +35,7 @@ def auto_setup_admin():
             # Get credentials from environment or use defaults
             default_username = os.getenv('ADMIN_USERNAME', 'admin')
             default_password = os.getenv('ADMIN_PASSWORD', 'DenialAppeal2026!')
-            default_email = os.getenv('ADMIN_EMAIL', 'admin@denialappealpro.com')
+            default_email = os.getenv('ADMIN_EMAIL', 'admin@medicaldenialappealpro.com')
             
             admin = admin_auth.create_admin(
                 username=default_username,

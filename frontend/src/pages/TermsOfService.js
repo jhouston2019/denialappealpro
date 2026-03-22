@@ -11,7 +11,7 @@ function TermsOfService() {
       <section style={{ marginBottom: '30px' }}>
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By accessing and using Denial Appeal Pro ("Service"), you accept and agree to be bound by the terms 
+          By accessing and using Medical Denial Appeal Pro ("Service"), you accept and agree to be bound by the terms 
           and provision of this agreement. If you do not agree to these Terms of Service, please do not use 
           the Service.
         </p>
@@ -20,7 +20,7 @@ function TermsOfService() {
       <section style={{ marginBottom: '30px' }}>
         <h2>2. Description of Service</h2>
         <p>
-          Denial Appeal Pro is a software tool that generates template appeal letters for insurance claim denials. 
+          Medical Denial Appeal Pro is a software tool that generates template appeal letters for insurance claim denials. 
           The Service provides document templates and formatting assistance only.
         </p>
         <p style={{ background: '#fff3cd', padding: '15px', borderLeft: '4px solid #ffc107', marginTop: '15px' }}>
@@ -78,7 +78,7 @@ function TermsOfService() {
       <section style={{ marginBottom: '30px' }}>
         <h2>6. Indemnification</h2>
         <p>
-          You agree to indemnify, defend, and hold harmless Denial Appeal Pro and its officers, directors, 
+          You agree to indemnify, defend, and hold harmless Medical Denial Appeal Pro and its officers, directors, 
           employees, and agents from and against any claims, liabilities, damages, losses, and expenses, 
           including reasonable attorney's fees, arising out of or in any way connected with:
         </p>
@@ -102,7 +102,7 @@ function TermsOfService() {
       <section style={{ marginBottom: '30px' }}>
         <h2>8. Intellectual Property</h2>
         <p>
-          The Service and its original content, features, and functionality are owned by Denial Appeal Pro and 
+          The Service and its original content, features, and functionality are owned by Medical Denial Appeal Pro and 
           are protected by international copyright, trademark, patent, trade secret, and other intellectual 
           property laws.
         </p>
@@ -176,7 +176,7 @@ function TermsOfService() {
         textAlign: 'center'
       }}>
         <p style={{ margin: 0, color: '#666' }}>
-          By using Denial Appeal Pro, you acknowledge that you have read, understood, and agree to be bound by 
+          By using Medical Denial Appeal Pro, you acknowledge that you have read, understood, and agree to be bound by 
           these Terms of Service.
         </p>
       </div>

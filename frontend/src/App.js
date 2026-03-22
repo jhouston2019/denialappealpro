@@ -117,7 +117,7 @@ const Navbar = ({ transparent }) => {
             letterSpacing: '-0.3px',
             whiteSpace: 'nowrap',
           }}>
-            Medical Denial Appeal Pro
+            Denial Appeal Pro
           </span>
         </Link>
 
@@ -292,7 +292,7 @@ function AppContent() {
       </main>
       {!isLandingPage && !isAdminPage && !isSuccessPage && (
         <footer className="App-footer">
-          <p style={{ margin: '0 0 8px 0' }}>© {new Date().getFullYear()} Medical Denial Appeal Pro. All rights reserved.</p>
+          <p style={{ margin: '0 0 8px 0' }}>© {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.</p>
           <p style={{ fontSize: '13px', margin: 0 }}>
             <a href="/terms" style={{ color: '#64748b', marginRight: '20px', textDecoration: 'none' }}>Terms of Service</a>
             <a href="/privacy" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</a>

@@ -64,7 +64,7 @@ class EmailService:
                     </ol>
                     
                     <p style="margin-top: 30px; color: #666; font-size: 14px;">
-                        Thank you for using Medical Denial Appeal Pro
+                        Thank you for using Denial Appeal Pro
                     </p>
                 </div>
             </body>
@@ -103,7 +103,7 @@ class EmailService:
                     </ol>
                     
                     <p style="margin-top: 30px; color: #666; font-size: 14px;">
-                        Thank you for using Medical Denial Appeal Pro
+                        Thank you for using Denial Appeal Pro
                     </p>
                 </div>
             </body>

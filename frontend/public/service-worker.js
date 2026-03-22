@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
 // Cache name
-const CACHE_NAME = 'medical-denial-appeal-pro-v1';
+const CACHE_NAME = 'denial-appeal-pro-v1';
 
 // Files to cache
 const urlsToCache = [

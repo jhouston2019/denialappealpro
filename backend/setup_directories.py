@@ -1,5 +1,5 @@
 """
-Setup script to create required directories for Medical Denial Appeal Pro
+Setup script to create required directories for Denial Appeal Pro
 Run this before starting the application for the first time
 """
 import os

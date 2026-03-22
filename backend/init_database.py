@@ -1,5 +1,5 @@
 """
-Database initialization script for Medical Denial Appeal Pro
+Database initialization script for Denial Appeal Pro
 Creates all required database tables
 """
 import sys

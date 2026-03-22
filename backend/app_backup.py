@@ -18,7 +18,7 @@ from env_validator import validate_environment
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
-print("MEDICAL DENIAL APPEAL PRO - BACKEND SERVER")
+print("DENIAL APPEAL PRO - BACKEND SERVER")
 print("="*60)
 validate_environment(strict=False)
 

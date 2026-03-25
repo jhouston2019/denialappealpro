@@ -10,7 +10,7 @@ import io
 from werkzeug.utils import secure_filename
 
 from config import Config
-from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent, Admin
+from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent, Admin, ClaimStatusEvent
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
@@ -22,6 +22,8 @@ from denial_rules import get_denial_rule
 from admin_auth import admin_auth, require_admin
 from auto_setup_admin import auto_setup_admin
 from stripe_billing import StripeBilling
+from customer_portal import init_customer_portal
+from onboarding_api import register_onboarding_routes
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
@@ -55,6 +57,8 @@ else:
 stripe.api_key = stripe_key
 
 generator = AppealGenerator(app.config['GENERATED_FOLDER'])
+init_customer_portal(app, limiter, generator)
+register_onboarding_routes(app, limiter, generator)
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
@@ -66,6 +70,30 @@ def allowed_file(filename):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+
+@app.route('/api/internal/retention/<command>', methods=['POST'])
+def internal_retention_run(command):
+    """Cron hook: POST with header X-Retention-Key matching RETENTION_CRON_SECRET."""
+    secret = os.getenv('RETENTION_CRON_SECRET')
+    if not secret or request.headers.get('X-Retention-Key') != secret:
+        return jsonify({'error': 'Forbidden'}), 403
+    import retention_jobs
+
+    if command == 'daily':
+        retention_jobs.run_daily_weekday()
+    elif command == 'weekly':
+        retention_jobs.run_weekly()
+    elif command == 'reactivation':
+        retention_jobs.run_reactivation()
+    elif command == 'all':
+        retention_jobs.run_daily_weekday()
+        retention_jobs.run_weekly()
+        retention_jobs.run_reactivation()
+    else:
+        return jsonify({'error': 'Unknown command'}), 400
+    return jsonify({'ok': True, 'command': command})
+
 
 # ============================================================================
 # PRICING & SUBSCRIPTION ROUTES
@@ -352,10 +380,20 @@ def submit_appeal():
             status='pending',
             payment_status='unpaid',
             price_charged=app.config['PRICE_PER_APPEAL'],
-            credit_used=False
+            credit_used=False,
+            queue_status='pending',
         )
         
         db.session.add(appeal)
+        db.session.flush()
+        db.session.add(
+            ClaimStatusEvent(
+                appeal_db_id=appeal.id,
+                user_id=user.id,
+                event_type='created',
+                message='Appeal submitted',
+            )
+        )
         db.session.commit()
         
         return jsonify({
@@ -398,39 +436,39 @@ def generate_appeal_with_credits(appeal_id):
                 'message': 'This retail appeal has already been generated. Purchase credits for additional appeals.'
             }), 400
         
-        # Check if user has credits
         if appeal.user_id:
             user = User.query.get(appeal.user_id)
-            if user and user.credit_balance > 0:
-                # Use credit
-                if CreditManager.deduct_credit(user.id):
+            if user:
+                allowed, _used, used_free_trial = CreditManager.try_begin_generation(user.id)
+                if allowed:
                     appeal.credit_used = True
-                    appeal.payment_status = 'paid'
+                    appeal.payment_status = 'free_trial' if used_free_trial else 'paid'
                     appeal.status = 'paid'
                     appeal.generation_count += 1
                     db.session.commit()
-                    
-                    # Generate appeal
                     try:
                         pdf_path = generator.generate_appeal(appeal)
                         appeal.appeal_letter_path = pdf_path
                         appeal.status = 'completed'
                         appeal.completed_at = datetime.utcnow()
                         appeal.last_generated_at = datetime.utcnow()
+                        if getattr(appeal, 'queue_status', None) is not None:
+                            appeal.queue_status = 'generated'
                         db.session.commit()
-                        
-                        # INCREMENT USAGE TRACKING
-                        CreditManager.increment_usage(user.id)
-                        
-                        # Get updated usage stats
+                        CreditManager.increment_usage(user.id, used_free_trial=used_free_trial)
                         usage_stats = CreditManager.get_usage_stats(user.id)
-                        
-                        # REPORT OVERAGE TO STRIPE if user is over limit
-                        if usage_stats.get('overage_count', 0) > 0 and user.stripe_subscription_id:
-                            StripeBilling.report_overage_usage(user.id, quantity=1)
-                        
+                        sub_id = getattr(user, 'stripe_subscription_id', None)
+                        if (
+                            usage_stats.get('overage_count', 0) > 0
+                            and sub_id
+                            and not used_free_trial
+                        ):
+                            try:
+                                StripeBilling.report_overage_usage(user.id, quantity=1)
+                            except Exception:
+                                pass
                         return jsonify({
-                            'message': 'Appeal generated successfully using credit',
+                            'message': 'Appeal generated successfully',
                             'appeal_id': appeal_id,
                             'status': 'completed',
                             'credit_balance': user.credit_balance,
@@ -441,7 +479,6 @@ def generate_appeal_with_credits(appeal_id):
                         db.session.commit()
                         return jsonify({'error': f'Generation failed: {str(e)}'}), 500
         
-        # No credits available - require payment
         return jsonify({
             'error': 'No credits available',
             'message': 'Please purchase credits or pay for this appeal',
@@ -659,6 +696,18 @@ def stripe_webhook():
                 CreditManager.add_credits(user_id, credits, reason='purchase')
                 print(f"✓ Added {credits} credits to user {user_id}")
         
+        elif payment_type == 'onboarding_retail':
+            appeal_id = metadata.get('appeal_id')
+            if appeal_id:
+                appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
+                if appeal and appeal.user_id is None:
+                    appeal.payment_status = 'paid'
+                    appeal.status = 'awaiting_account'
+                    appeal.paid_at = datetime.utcnow()
+                    appeal.stripe_payment_intent_id = session.get('payment_intent')
+                    db.session.commit()
+                    print(f"✓ Onboarding retail paid; awaiting account signup for {appeal_id}")
+        
         elif payment_type == 'retail':
             # Handle retail appeal payment
             appeal_id = metadata.get('appeal_id')
@@ -686,6 +735,8 @@ def stripe_webhook():
                         appeal.status = 'completed'
                         appeal.completed_at = datetime.utcnow()
                         appeal.last_generated_at = datetime.utcnow()
+                        if getattr(appeal, 'queue_status', None) is not None:
+                            appeal.queue_status = 'generated'
                         db.session.commit()
                         
                         # INCREMENT USAGE TRACKING for retail appeals

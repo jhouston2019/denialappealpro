@@ -24,7 +24,8 @@ def test_usage_tracking():
         user.subscription_tier = 'starter'
         CreditManager.update_plan_limit(user.id)
         db.session.commit()
-        print(f"✓ Set to Starter plan (limit: 50 appeals/month)")
+        starter_limit = PricingManager.get_subscription_tier('starter')['included_appeals']
+        print(f"✓ Set to Starter plan (limit: {starter_limit} appeals/month)")
         
         # Test 1: Initial usage
         print("\n--- Test 1: Initial Usage ---")
@@ -33,26 +34,26 @@ def test_usage_tracking():
         assert stats['appeals_generated_monthly'] == 0, "Initial usage should be 0"
         print("✓ Initial state correct")
         
-        # Test 2: Increment usage
+        # Test 2: Increment usage (warning ~70% at 11/15)
         print("\n--- Test 2: Increment Usage ---")
-        for i in range(35):
+        for i in range(11):
             CreditManager.increment_usage(user.id)
         
         stats = CreditManager.get_usage_stats(user.id)
-        print(f"After 35 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
+        print(f"After 11 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
         print(f"Usage percentage: {stats['usage_percentage']}%")
         print(f"Upgrade status: {stats['upgrade_status']}")
-        assert stats['appeals_generated_monthly'] == 35, "Should have 35 appeals"
+        assert stats['appeals_generated_monthly'] == 11, "Should have 11 appeals"
         assert stats['upgrade_status'] == 'warning', "Should show warning at 70%"
         print("✓ Warning threshold triggered correctly")
         
-        # Test 3: Approach limit
+        # Test 3: Approach limit (~90% at 14/15)
         print("\n--- Test 3: Approaching Limit ---")
-        for i in range(10):
+        for i in range(3):
             CreditManager.increment_usage(user.id)
         
         stats = CreditManager.get_usage_stats(user.id)
-        print(f"After 45 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
+        print(f"After 14 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
         print(f"Usage percentage: {stats['usage_percentage']}%")
         print(f"Upgrade status: {stats['upgrade_status']}")
         assert stats['upgrade_status'] == 'approaching_limit', "Should show approaching limit at 90%"
@@ -60,11 +61,10 @@ def test_usage_tracking():
         
         # Test 4: Reach limit
         print("\n--- Test 4: Reach Limit ---")
-        for i in range(5):
-            CreditManager.increment_usage(user.id)
+        CreditManager.increment_usage(user.id)
         
         stats = CreditManager.get_usage_stats(user.id)
-        print(f"After 50 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
+        print(f"After 15 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
         print(f"Usage percentage: {stats['usage_percentage']}%")
         print(f"Upgrade status: {stats['upgrade_status']}")
         assert stats['upgrade_status'] == 'limit_reached', "Should show limit reached at 100%"
@@ -76,18 +76,20 @@ def test_usage_tracking():
             CreditManager.increment_usage(user.id)
         
         stats = CreditManager.get_usage_stats(user.id)
-        print(f"After 65 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
+        print(f"After 30 appeals: {stats['appeals_generated_monthly']}/{stats['plan_limit']}")
         print(f"Overage count: {stats['overage_count']}")
-        print(f"Overage cost: ${stats['overage_count'] * 0.50:.2f}")
+        starter_overage = float(PricingManager.get_subscription_tier('starter')['overage_price'])
+        print(f"Overage cost: ${stats['overage_count'] * starter_overage:.2f}")
         assert stats['overage_count'] == 15, "Should have 15 overages"
         print("✓ Overage tracking working correctly")
         
         # Test 6: Next tier suggestion
         print("\n--- Test 6: Upgrade Suggestions ---")
         next_tier = PricingManager.get_next_tier('starter')
-        print(f"Current tier: Starter ($29, 50 appeals)")
+        st = PricingManager.get_subscription_tier('starter')
+        print(f"Current tier: Starter (${st['monthly_price']}, {st['included_appeals']} appeals)")
         print(f"Suggested upgrade: {next_tier['name']} (${next_tier['monthly_price']}, {next_tier['included_appeals']} appeals)")
-        assert next_tier['tier_id'] == 'core', "Next tier should be Core"
+        assert next_tier['tier_id'] == 'core', "Next tier should be core (Growth)"
         print("✓ Upgrade suggestion correct")
         
         # Test 7: Counter resets
@@ -109,9 +111,10 @@ def test_usage_tracking():
         CreditManager.update_plan_limit(user.id)
         db.session.commit()
         
+        core_limit = PricingManager.get_subscription_tier('core')['included_appeals']
         stats = CreditManager.get_usage_stats(user.id)
-        print(f"After upgrade to Core: limit = {stats['plan_limit']}")
-        assert stats['plan_limit'] == 300, "Core plan should have 300 appeals"
+        print(f"After upgrade to Growth: limit = {stats['plan_limit']}")
+        assert stats['plan_limit'] == core_limit, "Growth plan should match configured appeals"
         print("✓ Plan limit updated correctly")
         
         # Cleanup

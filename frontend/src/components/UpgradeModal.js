@@ -27,9 +27,9 @@ function UpgradeModal({ isOpen, onClose, currentTier, usageStats, nextTier: next
 
   const getTierDisplay = (tier) => {
     const tiers = {
-      'starter': { name: 'Starter', price: 29, appeals: 50 },
-      'core': { name: 'Core', price: 99, appeals: 300 },
-      'scale': { name: 'Scale', price: 249, appeals: 1000 }
+      'starter': { name: 'Starter', price: 199, appeals: 15 },
+      'core': { name: 'Growth', price: 399, appeals: 40 },
+      'scale': { name: 'Scale', price: 799, appeals: 120 }
     };
     return tiers[tier] || { name: 'Free', price: 0, appeals: 0 };
   };

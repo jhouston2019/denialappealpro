@@ -63,9 +63,9 @@ def migrate_usage_tracking():
                 users_with_subs = User.query.filter(User.subscription_tier.isnot(None)).all()
                 
                 tier_limits = {
-                    'starter': 50,
-                    'core': 300,
-                    'scale': 1000
+                    'starter': 15,
+                    'core': 40,
+                    'scale': 120
                 }
                 
                 for user in users_with_subs:

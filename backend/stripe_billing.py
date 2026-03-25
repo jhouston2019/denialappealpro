@@ -23,16 +23,16 @@ class StripeBilling:
     }
     
     PLAN_LIMITS = {
-        'starter': 50,
-        'core': 300,
-        'scale': 1000
+        'starter': 15,
+        'core': 40,
+        'scale': 120
     }
     
     OVERAGE_PRICE_ID = Config.STRIPE_OVERAGE_PRICE_ID
     OVERAGE_RATE = 0.50
     
     @staticmethod
-    def create_checkout_session(user_id: int, plan: str, success_url: str, cancel_url: str) -> Dict:
+    def create_checkout_session(user_id: int, plan: str, success_url: str, cancel_url: str, extra_metadata: dict = None) -> Dict:
         """
         Create Stripe checkout session for subscription
         
@@ -77,6 +77,14 @@ class StripeBilling:
                     'price': StripeBilling.OVERAGE_PRICE_ID,
                 })
             
+            meta = {
+                'user_id': str(user.id),
+                'plan': plan,
+                'type': 'subscription',
+            }
+            if extra_metadata:
+                for k, v in extra_metadata.items():
+                    meta[k] = str(v) if v is not None else ''
             session = stripe.checkout.Session.create(
                 customer=user.stripe_customer_id,
                 mode='subscription',
@@ -84,14 +92,10 @@ class StripeBilling:
                 line_items=line_items,
                 success_url=success_url,
                 cancel_url=cancel_url,
-                metadata={
-                    'user_id': user.id,
-                    'plan': plan,
-                    'type': 'subscription'
-                },
+                metadata=meta,
                 subscription_data={
                     'metadata': {
-                        'user_id': user.id,
+                        'user_id': str(user.id),
                         'plan': plan
                     }
                 }
@@ -193,6 +197,7 @@ class StripeBilling:
             True if successful
         """
         try:
+            from models import Appeal
             metadata = session.get('metadata', {})
             user_id = metadata.get('user_id')
             plan = metadata.get('plan')
@@ -201,7 +206,7 @@ class StripeBilling:
                 print("⚠️  Missing metadata in checkout session")
                 return False
             
-            user = User.query.get(user_id)
+            user = User.query.get(int(user_id))
             if not user:
                 print(f"❌ User {user_id} not found")
                 return False
@@ -216,6 +221,14 @@ class StripeBilling:
             user.billing_status = 'active'
             
             db.session.commit()
+
+            appeal_id = metadata.get('appeal_id')
+            if appeal_id:
+                appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
+                if appeal and appeal.user_id is None:
+                    appeal.user_id = user.id
+                    db.session.commit()
+                    print(f"✓ Onboarding appeal {appeal_id} linked to user {user.id}")
             
             print(f"✓ Subscription activated: user {user_id}, plan {plan}")
             return True

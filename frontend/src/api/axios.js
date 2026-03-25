@@ -11,6 +11,13 @@ const api = axios.create({
 // Add request interceptor for error handling
 api.interceptors.request.use(
   (config) => {
+    const t = localStorage.getItem('customerToken');
+    if (t) {
+      config.headers.Authorization = `Bearer ${t}`;
+    }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     return config;
   },
   (error) => {

@@ -121,7 +121,7 @@ export const upgradeSubscription = async (userId, newPlan) => {
 export const formatPlanName = (plan) => {
   const names = {
     'starter': 'Starter',
-    'core': 'Core',
+    'core': 'Growth',
     'scale': 'Scale'
   };
   return names[plan?.toLowerCase()] || plan;
@@ -134,20 +134,20 @@ export const getPlanDetails = (plan) => {
   const plans = {
     'starter': {
       name: 'Starter',
-      price: 29,
-      appeals: 50,
+      price: 199,
+      appeals: 15,
       description: 'Perfect for small practices'
     },
     'core': {
-      name: 'Core',
-      price: 99,
-      appeals: 300,
-      description: 'Most popular for growing practices'
+      name: 'Growth',
+      price: 399,
+      appeals: 40,
+      description: 'Most popular for billing teams'
     },
     'scale': {
       name: 'Scale',
-      price: 249,
-      appeals: 1000,
+      price: 799,
+      appeals: 120,
       description: 'For high-volume operations'
     }
   };

@@ -150,6 +150,40 @@ function LandingPro() {
             </p>
           </div>
 
+          {/* Acquisition: 3 free claims */}
+          <div style={{
+            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+            borderRadius: '6px',
+            padding: '24px 32px',
+            margin: '0 auto 40px',
+            maxWidth: '900px',
+            textAlign: 'center',
+            border: '1px solid rgba(255,255,255,0.25)',
+          }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 8px', color: 'white' }}>
+              Run your first denied claim free
+            </h2>
+            <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.92)', margin: '0 0 16px', lineHeight: 1.55 }}>
+              New accounts include 3 free appeal generations. See citation-backed appeals and estimated recovery before you commit to a plan.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/start')}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: '#047857',
+                background: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Start with 3 free claims
+            </button>
+          </div>
+
           {/* Core Value Prop */}
           <div style={{
             maxWidth: '900px',

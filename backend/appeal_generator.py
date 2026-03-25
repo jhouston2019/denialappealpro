@@ -74,17 +74,17 @@ class AppealGenerator:
             story.append(Paragraph(f"Code: {appeal.denial_code}", styles['Normal']))
         story.append(Spacer(1, 0.3*inch))
         
-        # 4. Generate Advanced AI-powered appeal content
+        # 4. Generate Advanced AI-powered appeal content (or use edited draft from queue)
         story.append(Paragraph("<b>Basis for Appeal:</b>", styles['Normal']))
         story.append(Spacer(1, 0.15*inch))
         
-        # Use Advanced AI system to generate expert-level appeal content
-        # This system is significantly more powerful than generic ChatGPT because:
-        # - Uses specialized medical billing/insurance knowledge base
-        # - Employs denial-specific strategic arguments
-        # - Incorporates regulatory and clinical guideline references
-        # - Tailors arguments to specific payer tactics
-        appeal_content = advanced_ai_generator.generate_appeal_content(appeal)
+        draft = getattr(appeal, 'generated_letter_text', None)
+        if draft and str(draft).strip():
+            appeal_content = str(draft).strip()
+        else:
+            # Use Advanced AI system to generate expert-level appeal content
+            appeal_content = advanced_ai_generator.generate_appeal_content(appeal)
+            appeal.generated_letter_text = appeal_content
         
         # Split into paragraphs and add to story
         paragraphs = appeal_content.split('\n\n')

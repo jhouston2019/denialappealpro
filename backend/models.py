@@ -3,6 +3,22 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+
+class ReferralPartner(db.Model):
+    """Partner referral codes (?ref=) — track signups and downstream appeal usage."""
+
+    __tablename__ = 'referral_partners'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ReferralPartner {self.code}>'
+
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -42,8 +58,19 @@ class User(db.Model):
     
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
+    # App login (optional — email/password for queue & persistence)
+    password_hash = db.Column(db.String(255), nullable=True)
+    last_queue_visit_at = db.Column(db.DateTime, nullable=True)
+    last_active_at = db.Column(db.DateTime, nullable=True)
+    email_retention_opt_in = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Acquisition: 3 free generations for users without an active subscription (tracked per account)
+    free_trial_generations_used = db.Column(db.Integer, default=0, nullable=False)
+    referred_by_id = db.Column(db.Integer, db.ForeignKey('referral_partners.id'), nullable=True, index=True)
+
     # Relationships
     appeals = db.relationship('Appeal', backref='user', lazy=True)
+    referral_partner = db.relationship('ReferralPartner', backref=db.backref('referred_users', lazy='dynamic'))
     
     def __repr__(self):
         return f'<User {self.email}>'
@@ -170,5 +197,41 @@ class Appeal(db.Model):
     outcome_notes = db.Column(db.Text)  # Additional outcome details
     outcome_updated_at = db.Column(db.DateTime)  # Last outcome update timestamp
     
+    # Denial queue workflow (operational status — separate from payment status)
+    queue_status = db.Column(db.String(50), nullable=False, default='pending')
+    queue_notes = db.Column(db.Text)
+    generated_letter_text = db.Column(db.Text)  # Draft / edited appeal body for PDF regen
+    
     def __repr__(self):
         return f'<Appeal {self.appeal_id}>'
+
+
+class RetentionEmailLog(db.Model):
+    """Dedupe retention / reactivation sends per user + campaign + calendar day."""
+    __tablename__ = 'retention_email_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    campaign = db.Column(db.String(64), nullable=False)
+    sent_day = db.Column(db.Date, nullable=False)
+    sent_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'campaign', 'sent_day', name='uq_retention_user_campaign_day'),
+    )
+
+
+class ClaimStatusEvent(db.Model):
+    __tablename__ = 'claim_status_events'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    appeal_db_id = db.Column(db.Integer, db.ForeignKey('appeals.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    message = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    appeal = db.relationship('Appeal', backref=db.backref('status_events', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<ClaimStatusEvent {self.event_type} appeal={self.appeal_db_id}>'

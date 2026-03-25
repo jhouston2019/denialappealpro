@@ -1,6 +1,7 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Link } from 'react-router-dom';
 import { UserProvider } from './context/UserContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
 // Force rebuild: 2026-02-11-v3
 
@@ -19,6 +20,14 @@ const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const SubscriptionSuccess = lazy(() => import('./pages/SubscriptionSuccess'));
 const BillingManagement = lazy(() => import('./pages/BillingManagement'));
+const Login = lazy(() => import('./pages/Login'));
+const DenialQueue = lazy(() => import('./pages/DenialQueue'));
+const ClaimDetail = lazy(() => import('./pages/ClaimDetail'));
+const OnboardingStart = lazy(() => import('./pages/OnboardingStart'));
+const OnboardingPreview = lazy(() => import('./pages/OnboardingPreview'));
+const OnboardingAccount = lazy(() => import('./pages/OnboardingAccount'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Loading component
 const PageLoader = () => (
@@ -56,15 +65,26 @@ const Navbar = ({ transparent }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { isAuthenticated, logout, newDenialsBanner, newDenialsDollarValue } = useAuth();
 
   const navLinks = [
-    { label: 'Start Appeal', path: '/appeal-form' },
+    { label: 'Get started', path: '/start' },
+    ...(isAuthenticated
+      ? [
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Queue', path: '/queue' },
+        ]
+      : []),
+    { label: 'Full wizard', path: '/appeal-form' },
     { label: 'Pricing', path: '/pricing' },
     { label: 'History', path: '/history' },
     { label: 'Billing', path: '/billing' },
   ];
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (path === '/start') return location.pathname.startsWith('/start');
+    return location.pathname === path;
+  };
 
   const baseStyle = transparent
     ? { background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }
@@ -158,8 +178,64 @@ const Navbar = ({ transparent }) => {
               {link.label}
             </Link>
           ))}
+          {(newDenialsBanner ?? 0) > 0 && (
+            <span
+              style={{
+                marginLeft: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#fbbf24',
+                background: 'rgba(0,0,0,0.25)',
+                padding: '4px 8px',
+                borderRadius: 4,
+              }}
+              title="New denials since last queue visit"
+            >
+              +{newDenialsBanner} new
+              {typeof newDenialsDollarValue === 'number' && newDenialsDollarValue > 0 && (
+                <span style={{ fontWeight: 600 }}> · ${Number(newDenialsDollarValue).toLocaleString()}</span>
+              )}
+            </span>
+          )}
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => { logout(); navigate('/'); }}
+              style={{
+                marginLeft: '8px',
+                padding: '7px 14px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: 'rgba(255,255,255,0.9)',
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Log out
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              style={{
+                marginLeft: '8px',
+                padding: '7px 14px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#0f172a',
+                background: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Log in
+            </button>
+          )}
           <button
-            onClick={() => navigate('/appeal-form')}
+            onClick={() => navigate('/start')}
             style={{
               marginLeft: '8px',
               padding: '7px 18px',
@@ -176,7 +252,7 @@ const Navbar = ({ transparent }) => {
             onMouseEnter={e => { e.target.style.background = '#e2e8f0'; }}
             onMouseLeave={e => { e.target.style.background = 'white'; }}
           >
-            New Appeal →
+            Get started →
           </button>
         </div>
 
@@ -228,7 +304,33 @@ const Navbar = ({ transparent }) => {
             </Link>
           ))}
           <button
-            onClick={() => { navigate('/appeal-form'); setMenuOpen(false); }}
+            type="button"
+            onClick={() => {
+              if (isAuthenticated) {
+                logout();
+                navigate('/');
+              } else {
+                navigate('/login');
+              }
+              setMenuOpen(false);
+            }}
+            style={{
+              marginTop: '8px',
+              padding: '10px 18px',
+              fontSize: '15px',
+              fontWeight: '600',
+              color: 'white',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.35)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            {isAuthenticated ? 'Log out' : 'Log in'}
+          </button>
+          <button
+            onClick={() => { navigate('/start'); setMenuOpen(false); }}
             style={{
               marginTop: '8px',
               padding: '10px 18px',
@@ -242,13 +344,25 @@ const Navbar = ({ transparent }) => {
               textAlign: 'left',
             }}
           >
-            New Appeal →
+            Get started →
           </button>
         </div>
       )}
     </nav>
   );
 };
+
+function ReferralCapture() {
+  const location = useLocation();
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const ref = p.get('ref');
+    if (ref && ref.trim()) {
+      localStorage.setItem('dap_ref', ref.trim().slice(0, 64));
+    }
+  }, [location.search]);
+  return null;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -257,13 +371,20 @@ function AppContent() {
   const isAdminPage = adminPages.some(page => location.pathname.startsWith('/admin'));
   const isSuccessPage = successPages.some(page => location.pathname.startsWith(page));
   const isLandingPage = ['/', '/pro', '/appeal', '/denied'].includes(location.pathname);
+  const isPricingPage = location.pathname === '/pricing';
+  const isQueuePage =
+    location.pathname.startsWith('/queue') ||
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/start');
+  const isStartFlow = location.pathname.startsWith('/start') || location.pathname.startsWith('/onboarding');
 
   return (
     <div className="App">
+      <ReferralCapture />
       {!isAdminPage && !isSuccessPage && (
-        <Navbar transparent={isLandingPage} />
+        <Navbar transparent={isLandingPage || isPricingPage || isQueuePage} />
       )}
-      <main className="App-main" style={(isLandingPage || isAdminPage || isSuccessPage) ? { padding: 0, maxWidth: 'none' } : {}}>
+      <main className="App-main" style={(isLandingPage || isAdminPage || isSuccessPage || isPricingPage || isQueuePage) ? { padding: 0, maxWidth: 'none' } : {}}>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Landing pages - dual routing strategy */}
@@ -281,6 +402,34 @@ function AppContent() {
             <Route path="/appeal-form" element={<AppealFormWizard />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/history" element={<AppealHistory />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/start" element={<OnboardingStart />} />
+            <Route path="/start/preview/:appealId" element={<OnboardingPreview />} />
+            <Route path="/onboarding/account" element={<OnboardingAccount />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/queue"
+              element={
+                <ProtectedRoute>
+                  <DenialQueue />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/queue/:appealId"
+              element={
+                <ProtectedRoute>
+                  <ClaimDetail />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
             <Route path="/download/:appealId" element={<AppealDownload />} />
             <Route path="/subscription/success" element={<SubscriptionSuccess />} />
@@ -290,7 +439,7 @@ function AppContent() {
           </Routes>
         </Suspense>
       </main>
-      {!isLandingPage && !isAdminPage && !isSuccessPage && (
+      {!isLandingPage && !isAdminPage && !isSuccessPage && !isStartFlow && (
         <footer className="App-footer">
           <p style={{ margin: '0 0 8px 0' }}>© {new Date().getFullYear()} Denial Appeal Pro. All rights reserved.</p>
           <p style={{ fontSize: '13px', margin: 0 }}>
@@ -307,7 +456,9 @@ function App() {
   return (
     <Router>
       <UserProvider>
-        <AppContent />
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </UserProvider>
     </Router>
   );

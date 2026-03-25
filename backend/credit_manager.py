@@ -10,7 +10,9 @@ from typing import Optional, Dict
 
 class CreditManager:
     """Manage user credits and subscriptions"""
-    
+
+    FREE_TRIAL_LIMIT = 3  # Onboarding offer: free generations without subscription/credits
+
     @staticmethod
     def get_or_create_user(email: str, stripe_customer_id: Optional[str] = None) -> User:
         """Get existing user or create new one"""
@@ -20,7 +22,6 @@ class CreditManager:
             user = User(
                 email=email,
                 stripe_customer_id=stripe_customer_id,
-                credit_balance=0
             )
             db.session.add(user)
             db.session.commit()
@@ -78,6 +79,30 @@ class CreditManager:
         """Check if user has available credits"""
         user = User.query.get(user_id)
         return user and (user.subscription_credits + user.bulk_credits) > 0
+
+    @staticmethod
+    def try_begin_generation(user_id: int) -> tuple:
+        """
+        Decide if user may generate one appeal (credit deduction or active subscription usage).
+        Returns (allowed: bool, used_subscription_credit: bool).
+        used_subscription_credit True when a pooled credit was deducted; False when using tier usage only.
+        """
+        user = User.query.get(user_id)
+        if not user:
+            return False, False
+        CreditManager.reset_usage_counters_if_needed(user_id)
+        db.session.refresh(user)
+        if user.subscription_credits + user.bulk_credits > 0:
+            if CreditManager.deduct_credit(user_id):
+                return True, True
+            return False, False
+        if user.subscription_tier and (user.billing_status or 'active') == 'active':
+            # Soft grace: allow plan_limit + 2 appeals/month before hard block (overage billing still applies after plan_limit)
+            soft_grace = 2
+            if user.plan_limit > 0 and user.appeals_generated_monthly >= user.plan_limit + soft_grace:
+                return False, False
+            return True, False
+        return False, False
     
     @staticmethod
     def get_credit_balance(user_id: int) -> int:
@@ -194,25 +219,25 @@ class CreditManager:
         db.session.commit()
     
     @staticmethod
-    def increment_usage(user_id: int) -> bool:
-        """Increment usage counters after appeal generation"""
+    def increment_usage(user_id: int, used_free_trial: bool = False) -> bool:
+        """Increment usage counters after appeal generation."""
         try:
             user = User.query.with_for_update().filter_by(id=user_id).first()
             if not user:
                 return False
-            
-            # Reset counters if needed
+
             CreditManager.reset_usage_counters_if_needed(user_id)
-            
-            # Increment all counters
+
             user.appeals_generated_today += 1
             user.appeals_generated_weekly += 1
             user.appeals_generated_monthly += 1
-            
-            # Track overage if over plan limit
+
+            if used_free_trial:
+                user.free_trial_generations_used = (getattr(user, 'free_trial_generations_used', 0) or 0) + 1
+
             if user.plan_limit > 0 and user.appeals_generated_monthly > user.plan_limit:
                 user.overage_count = user.appeals_generated_monthly - user.plan_limit
-            
+
             db.session.commit()
             return True
         except Exception as e:
@@ -246,6 +271,36 @@ class CreditManager:
         elif usage_percentage >= 70:
             upgrade_status = "warning"
         
+        soft_grace = 2
+        effective_cap = user.plan_limit + soft_grace if user.plan_limit > 0 else None
+        grace_remaining = None
+        if effective_cap is not None:
+            grace_remaining = max(0, effective_cap - user.appeals_generated_monthly)
+        
+        at_hard_cap = (
+            user.plan_limit > 0
+            and user.subscription_tier
+            and user.appeals_generated_monthly >= user.plan_limit + soft_grace
+        )
+        has_active_sub = bool(user.subscription_tier and (user.billing_status or 'active') == 'active')
+        ft_used = getattr(user, 'free_trial_generations_used', 0) or 0
+        ft_rem = max(0, CreditManager.FREE_TRIAL_LIMIT - ft_used)
+        has_credits = (user.subscription_credits + user.bulk_credits) > 0
+        can_generate = (user.billing_status or 'active') == 'active' and (
+            has_credits
+            or (has_active_sub and not at_hard_cap)
+            or ((not has_active_sub) and ft_rem > 0)
+        )
+
+        upgrade_message = None
+        if user.subscription_tier and user.plan_limit > 0:
+            if at_hard_cap:
+                upgrade_message = "Upgrade to continue processing — you've used your plan plus grace appeals."
+            elif upgrade_status == "limit_reached" or upgrade_status == "approaching_limit":
+                upgrade_message = "Upgrade to continue processing without interruption."
+        elif not has_active_sub and ft_used >= CreditManager.FREE_TRIAL_LIMIT and not has_credits:
+            upgrade_message = "You've used your 3 free claims. Upgrade to keep generating appeals."
+
         return {
             "user_id": user.id,
             "email": user.email,
@@ -258,7 +313,20 @@ class CreditManager:
             "overage_count": user.overage_count,
             "billing_status": user.billing_status,
             "upgrade_status": upgrade_status,
-            "can_generate": user.billing_status == 'active'
+            "can_generate": can_generate,
+            "soft_grace_remaining": grace_remaining,
+            "effective_monthly_cap": effective_cap,
+            "at_hard_cap": at_hard_cap,
+            "upgrade_message": upgrade_message,
+            "plan_usage_label": (
+                f"{user.appeals_generated_monthly}/{user.plan_limit}"
+                if user.plan_limit > 0
+                else None
+            ),
+            "free_trial_limit": CreditManager.FREE_TRIAL_LIMIT,
+            "free_trial_used": ft_used,
+            "free_trial_remaining": ft_rem,
+            "free_trial_label": f"{ft_used}/{CreditManager.FREE_TRIAL_LIMIT} free claims used",
         }
     
     @staticmethod
@@ -290,21 +358,21 @@ class PricingManager:
     SUBSCRIPTION_TIERS = {
         "starter": {
             "name": "Starter",
-            "monthly_price": 29.00,
-            "included_appeals": 50,
-            "overage_price": 0.50
+            "monthly_price": 199.00,
+            "included_appeals": 15,
+            "overage_price": 15.00
         },
         "core": {
-            "name": "Core",
-            "monthly_price": 99.00,
-            "included_appeals": 300,
-            "overage_price": 0.50
+            "name": "Growth",
+            "monthly_price": 399.00,
+            "included_appeals": 40,
+            "overage_price": 12.00
         },
         "scale": {
             "name": "Scale",
-            "monthly_price": 249.00,
-            "included_appeals": 1000,
-            "overage_price": 0.50
+            "monthly_price": 799.00,
+            "included_appeals": 120,
+            "overage_price": 10.00
         }
     }
     
@@ -343,7 +411,7 @@ class PricingManager:
     }
     
     # Retail pricing
-    RETAIL_PRICE = 10.00
+    RETAIL_PRICE = 79.00
     
     @staticmethod
     def get_subscription_tier(tier_name: str) -> Optional[Dict]:

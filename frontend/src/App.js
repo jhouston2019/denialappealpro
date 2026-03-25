@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Link } from 'react-router-dom';
 import { UserProvider } from './context/UserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 // Force rebuild: 2026-02-11-v3
 
@@ -27,7 +28,6 @@ const OnboardingStart = lazy(() => import('./pages/OnboardingStart'));
 const OnboardingPreview = lazy(() => import('./pages/OnboardingPreview'));
 const OnboardingAccount = lazy(() => import('./pages/OnboardingAccount'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-import ProtectedRoute from './components/ProtectedRoute';
 
 // Loading component
 const PageLoader = () => (

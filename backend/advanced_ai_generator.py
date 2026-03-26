@@ -25,18 +25,7 @@ from medical_knowledge_base import (
     CPT_DOCUMENTATION_REQUIREMENTS
 )
 
-# Import new optimization modules
-try:
-    from citation_validator import citation_validator
-    from prompt_optimizer import prompt_optimizer
-    from ab_testing import ab_testing
-    OPTIMIZATION_ENABLED = True
-    logger.info("Advanced optimization modules loaded: citation validation, prompt optimization, A/B testing")
-except ImportError as e:
-    OPTIMIZATION_ENABLED = False
-    logger.warning(f"Optimization modules not available - using default logic: {e}")
-
-# Configure structured logging
+# Configure structured logging before optional imports (they may log)
 os.makedirs('logs', exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +36,17 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Import new optimization modules
+try:
+    from citation_validator import citation_validator
+    from prompt_optimizer import prompt_optimizer
+    from ab_testing import ab_testing
+    OPTIMIZATION_ENABLED = True
+    logger.info("Advanced optimization modules loaded: citation validation, prompt optimization, A/B testing")
+except ImportError as e:
+    OPTIMIZATION_ENABLED = False
+    logger.warning(f"Optimization modules not available - using default logic: {e}")
 
 class AdvancedAIAppealGenerator:
     def __init__(self):

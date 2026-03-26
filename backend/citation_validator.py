@@ -32,32 +32,74 @@ class CitationValidator:
             'case_law': []
         }
         
-        # Extract regulatory citations
+        # Extract regulatory citations (supports flat entries or nested topic dicts)
         for key, data in REGULATORY_REFERENCES.items():
-            citations['regulatory'].append({
-                'citation': data['citation'],
-                'short_name': key,
-                'description': data['description'],
-                'use_for': data.get('appeal_relevance', 'General appeals')
-            })
+            if isinstance(data, dict) and 'citation' in data and 'description' in data:
+                citations['regulatory'].append({
+                    'citation': data['citation'],
+                    'short_name': key,
+                    'description': data['description'],
+                    'use_for': data.get('appeal_relevance', 'General appeals')
+                })
+            elif isinstance(data, dict):
+                for subkey, text in data.items():
+                    if not isinstance(text, str):
+                        continue
+                    short = f"{key.upper()}_{subkey.upper()}"
+                    citations['regulatory'].append({
+                        'citation': f"{key} — {subkey.replace('_', ' ').title()}",
+                        'short_name': short,
+                        'description': text,
+                        'use_for': 'General appeals'
+                    })
         
-        # Extract clinical guidelines
+        # Extract clinical guidelines (legacy shape or organizations/key_guidelines/specific_citations)
         for key, data in CLINICAL_GUIDELINES.items():
-            citations['clinical'].append({
-                'citation': f"{data['organization']} {data['guideline_name']}",
-                'short_name': key,
-                'organization': data['organization'],
-                'use_for': ', '.join(data.get('applicable_conditions', ['General']))
-            })
+            if not isinstance(data, dict):
+                continue
+            if 'organization' in data and 'guideline_name' in data:
+                citations['clinical'].append({
+                    'citation': f"{data['organization']} {data['guideline_name']}",
+                    'short_name': key,
+                    'organization': data['organization'],
+                    'use_for': ', '.join(data.get('applicable_conditions', ['General']))
+                })
+                continue
+            orgs = ', '.join(data.get('organizations', []))
+            specs = data.get('specific_citations') or {}
+            if isinstance(specs, dict):
+                for sk, sv in specs.items():
+                    if not isinstance(sv, str):
+                        continue
+                    citations['clinical'].append({
+                        'citation': f"{orgs} — {sv}" if orgs else sv,
+                        'short_name': f"{key.upper()}_{sk.upper()}",
+                        'organization': orgs,
+                        'use_for': data.get('key_guidelines', 'General')
+                    })
         
-        # Extract case law
-        for key, data in CASE_LAW_PRECEDENTS.items():
-            citations['case_law'].append({
-                'citation': data['case_name'],
-                'short_name': key,
-                'principle': data['legal_principle'],
-                'use_for': data.get('appeal_application', 'General')
-            })
+        # Extract case law (flat case records or category -> case/principle map)
+        for category, data in CASE_LAW_PRECEDENTS.items():
+            if not isinstance(data, dict):
+                continue
+            if 'case_name' in data and 'legal_principle' in data:
+                citations['case_law'].append({
+                    'citation': data['case_name'],
+                    'short_name': category,
+                    'principle': data['legal_principle'],
+                    'use_for': data.get('appeal_application', 'General')
+                })
+                continue
+            for case_key, principle_text in data.items():
+                if not isinstance(principle_text, str):
+                    continue
+                label = case_key if ' ' in str(case_key) else case_key.replace('_', ' ').title()
+                citations['case_law'].append({
+                    'citation': label,
+                    'short_name': f"{category.upper()}_{case_key.upper()}",
+                    'principle': principle_text,
+                    'use_for': 'General'
+                })
         
         return citations
     
@@ -155,7 +197,8 @@ class CitationValidator:
         if relevant_citations['regulatory']:
             guidance += "REGULATORY CITATIONS:\n"
             for cite in relevant_citations['regulatory']:
-                guidance += f"- {cite['citation']}: {cite['description']}\n"
+                desc = cite.get('description', cite.get('use_for', ''))
+                guidance += f"- {cite['citation']}: {desc}\n"
             guidance += "\n"
         
         # Clinical guidelines

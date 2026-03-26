@@ -34,9 +34,23 @@ validate_environment(strict=False)
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Configure CORS with specific allowed origins
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-CORS(app, origins=[origin.strip() for origin in allowed_origins])
+# CORS: allow local dev + production marketing site (override with ALLOWED_ORIGINS)
+_default_origins = (
+    'http://localhost:3000,'
+    'https://denialappealpro.com,'
+    'https://www.denialappealpro.com'
+)
+allowed_origins = [
+    o.strip()
+    for o in os.getenv('ALLOWED_ORIGINS', _default_origins).split(',')
+    if o.strip()
+]
+CORS(
+    app,
+    origins=allowed_origins,
+    allow_headers=['Content-Type', 'Authorization'],
+    methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+)
 
 # Configure rate limiting
 limiter = Limiter(

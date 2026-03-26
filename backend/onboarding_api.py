@@ -8,7 +8,11 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 import stripe
-from flask import Blueprint, request, jsonify, current_app
+import io
+
+from flask import Blueprint, request, jsonify, current_app, send_file
+
+from appeal_pdf_builder import build_professional_pdf_bytes, build_appeal_pdf_filename
 from werkzeug.utils import secure_filename
 
 from models import db, Appeal, User
@@ -96,12 +100,45 @@ def register_onboarding_routes(app, limiter, generator):
             if paste_extra:
                 denial_reason = (denial_reason + '\n\n' + paste_extra).strip() if denial_reason else paste_extra
 
+        # Structured intake: claim #, DOS, CPT/ICD columns, primary denial code
+        claim_number_in = ''
+        date_of_service_raw = None
+        cpt_direct = ''
+        icd_direct = ''
+        denial_code_in = ''
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            claim_number_in = (request.form.get('claim_number') or '').strip()[:100]
+            date_of_service_raw = request.form.get('date_of_service')
+            cpt_direct = (request.form.get('cpt_codes') or '').strip()[:200]
+            icd_direct = (request.form.get('diagnosis_code') or request.form.get('icd_codes') or '').strip()[:200]
+            denial_code_in = (request.form.get('denial_code') or '').strip()[:50]
+        else:
+            data = request.json or {}
+            claim_number_in = (str(data.get('claim_number') or '') or '').strip()[:100]
+            date_of_service_raw = data.get('date_of_service')
+            cpt_direct = (str(data.get('cpt_codes') or '') or '').strip()[:200]
+            icd_direct = (str(data.get('diagnosis_code') or data.get('icd_codes') or '') or '').strip()[:200]
+            denial_code_in = (str(data.get('denial_code') or '') or '').strip()[:50]
+
+        if cpt_direct:
+            cpt_part = cpt_direct
+        if icd_direct:
+            icd_part = icd_direct
+
         if not payer or not denial_reason:
             return jsonify({'error': 'Payer and denial reason are required'}), 400
 
         d = _defaults_for_onboarding()
         appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-        claim_number = f"ONB-{datetime.utcnow().strftime('%H%M%S')}-{str(uuid.uuid4())[:6].upper()}"
+        claim_number = claim_number_in or f"ONB-{datetime.utcnow().strftime('%H%M%S')}-{str(uuid.uuid4())[:6].upper()}"
+
+        dos = d['date_of_service']
+        if date_of_service_raw:
+            try:
+                ds = str(date_of_service_raw)[:10]
+                dos = datetime.strptime(ds, '%Y-%m-%d').date()
+            except ValueError:
+                pass
 
         appeal = Appeal(
             appeal_id=appeal_id,
@@ -111,8 +148,9 @@ def register_onboarding_routes(app, limiter, generator):
             patient_id=d['patient_id'],
             provider_name=d['provider_name'],
             provider_npi=d['provider_npi'],
-            date_of_service=d['date_of_service'],
+            date_of_service=dos,
             denial_reason=denial_reason,
+            denial_code=denial_code_in or None,
             billed_amount=billed_amount,
             cpt_codes=cpt_part or None,
             diagnosis_code=icd_part or None,
@@ -175,8 +213,42 @@ def register_onboarding_routes(app, limiter, generator):
                 'preview_truncated': len(text) > PREVIEW_CHARS,
                 'payment_status': a.payment_status,
                 'status': a.status,
+                'account_linked': a.user_id is not None,
             }
         ), 200
+
+    @onboarding_bp.route('/onboarding/appeal/<appeal_id>/full-text', methods=['GET'])
+    def onboarding_appeal_full_text(appeal_id):
+        """Full appeal body for Copy — only after account is linked (paid flow)."""
+        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
+        if not a:
+            return jsonify({'error': 'Not found'}), 404
+        if not str(a.appeal_id or '').startswith('APP-ONB-'):
+            return jsonify({'error': 'Not found'}), 404
+        if a.user_id is None:
+            return jsonify({'error': 'Unlock full appeal after checkout'}), 402
+        return jsonify({'full_text': a.generated_letter_text or ''}), 200
+
+    @onboarding_bp.route('/onboarding/appeal/<appeal_id>/pdf', methods=['GET'])
+    def onboarding_appeal_pdf(appeal_id):
+        """Download carrier-ready PDF after account is linked."""
+        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
+        if not a:
+            return jsonify({'error': 'Not found'}), 404
+        if not str(a.appeal_id or '').startswith('APP-ONB-'):
+            return jsonify({'error': 'Not found'}), 404
+        if a.user_id is None:
+            return jsonify({'error': 'Unlock full appeal after checkout'}), 402
+        if not (a.generated_letter_text or '').strip():
+            return jsonify({'error': 'No appeal text yet'}), 400
+        pdf_bytes = build_professional_pdf_bytes(a)
+        fn = build_appeal_pdf_filename(a)
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=fn,
+        )
 
     @onboarding_bp.route('/onboarding/checkout-retail', methods=['POST'])
     @limiter.limit('20 per hour')

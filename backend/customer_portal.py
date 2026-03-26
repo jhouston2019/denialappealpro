@@ -5,12 +5,15 @@ Customer auth + denial queue API (login persistence, batch intake, status workfl
 import csv
 import io
 import json
+import os
+import re
+import tempfile
 import uuid
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
-from flask import Blueprint, request, jsonify, g, current_app
+from flask import Blueprint, request, jsonify, g, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import func
@@ -20,6 +23,20 @@ from user_auth import register_user, login_user, verify_user_token
 from credit_manager import CreditManager
 from stripe_billing import StripeBilling
 from retention_service import dashboard_metrics as retention_dashboard_metrics
+from batch_appeals_worker import start_batch_job, get_job, MAX_BATCH_ROWS
+from denial_analytics import compute_recovery_dashboard
+from follow_up_appeal import generate_follow_up_letter_text, should_generate_follow_up
+from appeal_automation import AppealAutomationHooks
+from appeal_bundle import (
+    build_export_zip_bytes,
+    get_appeal_pdf_bytes_from_model,
+    merge_fax_then_appeal,
+)
+from appeal_pdf_builder import build_appeal_pdf_filename
+from fax_cover_sheet import build_fax_cover_filename, generate_fax_cover_pdf_bytes
+from claim_recovery import apply_pipeline_to_appeal, autoFixClaim, prepareResubmission, predictDenialScore
+
+TRACKING_STATUSES = frozenset({'generated', 'submitted', 'pending', 'approved', 'denied'})
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -43,6 +60,7 @@ def _appeal_to_queue_row(a: Appeal):
     reason = (a.denial_reason or '')[:120]
     if len(a.denial_reason or '') > 120:
         reason += '…'
+    fu_ok, _fu_reason = should_generate_follow_up(a)
     return {
         'id': a.id,
         'appeal_id': a.appeal_id,
@@ -56,6 +74,19 @@ def _appeal_to_queue_row(a: Appeal):
         'status': a.status,
         'created_at': a.created_at.isoformat() if a.created_at else None,
         'has_letter': bool(a.appeal_letter_path),
+        'appeal_date': a.last_generated_at.isoformat() if a.last_generated_at else None,
+        'date_of_service': a.date_of_service.isoformat() if a.date_of_service else None,
+        'appeal_tracking_status': getattr(a, 'appeal_tracking_status', None) or 'pending',
+        'tracking_updated_at': a.tracking_updated_at.isoformat() if getattr(a, 'tracking_updated_at', None) else None,
+        'payer_fax': getattr(a, 'payer_fax', None),
+        'appeal_generation_kind': getattr(a, 'appeal_generation_kind', None) or 'initial',
+        'submitted_to_payer_at': a.submitted_to_payer_at.isoformat()
+        if getattr(a, 'submitted_to_payer_at', None)
+        else None,
+        'denial_prediction_score': getattr(a, 'denial_prediction_score', None),
+        'fix_status': getattr(a, 'fix_status', None) or 'none',
+        'resubmission_ready': bool(getattr(a, 'resubmission_ready', False)),
+        'follow_up_eligible': fu_ok,
     }
 
 
@@ -65,6 +96,7 @@ def _appeal_detail(a: Appeal):
         .order_by(ClaimStatusEvent.created_at.asc())
         .all()
     )
+    fu_ok, fu_reason = should_generate_follow_up(a)
     return {
         **_appeal_to_queue_row(a),
         'patient_id': a.patient_id,
@@ -81,6 +113,14 @@ def _appeal_detail(a: Appeal):
         'outcome_status': a.outcome_status,
         'outcome_amount_recovered': float(a.outcome_amount_recovered) if a.outcome_amount_recovered else None,
         'outcome_notes': a.outcome_notes,
+        'prior_submission_date': a.prior_submission_date.isoformat()
+        if getattr(a, 'prior_submission_date', None)
+        else None,
+        'follow_up_eligible': fu_ok,
+        'follow_up_reason': fu_reason,
+        'denial_prediction_score': getattr(a, 'denial_prediction_score', None),
+        'fix_status': getattr(a, 'fix_status', None) or 'none',
+        'resubmission_ready': bool(getattr(a, 'resubmission_ready', False)),
         'history': [
             {
                 'id': e.id,
@@ -144,6 +184,76 @@ def _post_generation_payload(appeal: Appeal, usage_stats: dict) -> dict:
         'recovery_potential_estimate': recovery,
         'free_trial_used': usage_stats.get('free_trial_used'),
         'free_trial_remaining': usage_stats.get('free_trial_remaining'),
+    }
+
+
+def _parse_ingest_date(dos_raw, defaults):
+    if dos_raw:
+        try:
+            return datetime.strptime(str(dos_raw)[:10], '%Y-%m-%d').date()
+        except ValueError:
+            try:
+                return datetime.strptime(str(dos_raw)[:10], '%m/%d/%Y').date()
+            except ValueError:
+                pass
+    d = defaults.get('date_of_service') if isinstance(defaults, dict) else None
+    if d:
+        try:
+            return datetime.strptime(str(d)[:10], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    return date.today()
+
+
+def _parse_denial_codes_list(raw):
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    s = str(raw).strip()
+    if not s:
+        return []
+    return [p.strip() for p in re.split(r'[,;\s]+', s) if p.strip()]
+
+
+def _build_pipeline_payload_from_ingest(data, defaults):
+    cpt = str(data.get('cpt_codes') or data.get('cptCodes') or '').strip()
+    icd = str(data.get('icd_codes') or data.get('icdCodes') or '').strip()
+    mods = str(data.get('modifiers') or '').strip()
+    denial_codes = data.get('denial_codes') or data.get('denial_code') or ''
+    carc = _parse_denial_codes_list(denial_codes)
+    payer = str(data.get('payer') or '').strip()
+    dr = str(data.get('denial_reason') or (defaults or {}).get('denial_reason') or '').strip()
+    if not dr:
+        dr = f"Imported denial: {denial_codes}" if denial_codes else 'API ingest — review denial codes'
+    return {
+        'cpt_codes': cpt,
+        'cptCodes': cpt,
+        'icd_codes': icd,
+        'icdCodes': icd,
+        'diagnosis_code': icd,
+        'modifiers': mods,
+        'denial_codes': str(denial_codes),
+        'denial_code': str(data.get('denial_code') or (carc[0] if carc else '') or '')[:50],
+        'denial_reason': dr,
+        'carcCodes': carc,
+        'payer': payer,
+        'planType': str(data.get('plan_type') or data.get('planType') or (defaults or {}).get('plan_type') or ''),
+    }
+
+
+def _appeal_to_pipeline_dict(a: Appeal):
+    carc = _parse_denial_codes_list(f"{a.denial_code or ''} {a.denial_reason or ''}")
+    return {
+        'cpt_codes': a.cpt_codes or '',
+        'icd_codes': a.diagnosis_code or '',
+        'diagnosis_code': a.diagnosis_code or '',
+        'modifiers': '',
+        'denial_codes': a.denial_code or '',
+        'denial_code': a.denial_code or '',
+        'denial_reason': a.denial_reason or '',
+        'carcCodes': carc,
+        'payer': a.payer or '',
     }
 
 
@@ -257,12 +367,17 @@ def init_customer_portal(app, limiter, generator):
     @customer_bp.route('/queue', methods=['GET'])
     @require_customer_auth
     def queue_list():
-        rows = (
-            Appeal.query.filter_by(user_id=g.current_user_id)
-            .order_by(Appeal.created_at.desc())
-            .limit(500)
-            .all()
-        )
+        q = Appeal.query.filter_by(user_id=g.current_user_id)
+        search_q = (request.args.get('q') or '').strip()
+        if search_q:
+            q = q.filter(Appeal.claim_number.ilike(f'%{search_q}%'))
+        payer_f = (request.args.get('payer') or '').strip()
+        if payer_f:
+            q = q.filter(Appeal.payer.ilike(f'%{payer_f}%'))
+        status_f = (request.args.get('status') or '').strip().lower()
+        if status_f:
+            q = q.filter(Appeal.appeal_tracking_status == status_f)
+        rows = q.order_by(Appeal.created_at.desc()).limit(500).all()
         return jsonify({'claims': [_appeal_to_queue_row(a) for a in rows]}), 200
 
     @customer_bp.route('/queue/metrics', methods=['GET'])
@@ -337,6 +452,8 @@ def init_customer_portal(app, limiter, generator):
             if new_s in allowed:
                 old = a.queue_status
                 a.queue_status = new_s
+                if new_s == 'submitted' and not getattr(a, 'submitted_to_payer_at', None):
+                    a.submitted_to_payer_at = datetime.utcnow()
                 _append_event(a.id, g.current_user_id, 'status_change', f'{old} → {new_s}')
         if 'payment_status' in data:
             ps = (data.get('payment_status') or '').lower()
@@ -344,6 +461,25 @@ def init_customer_portal(app, limiter, generator):
             if ps in allowed_ps:
                 a.payment_status = ps
                 _append_event(a.id, g.current_user_id, 'payment_status', ps)
+        if 'payer_fax' in data:
+            raw_f = (data.get('payer_fax') or '').strip()
+            a.payer_fax = raw_f[:50] if raw_f else None
+            _append_event(a.id, g.current_user_id, 'payer_fax_updated', 'Fax number saved')
+        if 'appeal_tracking_status' in data:
+            new_t = (data.get('appeal_tracking_status') or '').lower().strip()
+            if new_t in TRACKING_STATUSES:
+                old_t = getattr(a, 'appeal_tracking_status', None)
+                a.appeal_tracking_status = new_t
+                a.tracking_updated_at = datetime.utcnow()
+                if new_t == 'submitted' and not getattr(a, 'submitted_to_payer_at', None):
+                    a.submitted_to_payer_at = datetime.utcnow()
+                _append_event(
+                    a.id,
+                    g.current_user_id,
+                    'tracking_status',
+                    f'{old_t} → {new_t}',
+                )
+                AppealAutomationHooks.on_tracking_status_change(a, old_t, new_t)
         db.session.commit()
         return jsonify({'claim': _appeal_detail(a)}), 200
 
@@ -387,7 +523,12 @@ def init_customer_portal(app, limiter, generator):
             a.completed_at = datetime.utcnow()
             a.last_generated_at = datetime.utcnow()
             a.queue_status = 'generated'
+            if not getattr(a, 'appeal_generation_kind', None):
+                a.appeal_generation_kind = 'initial'
+            a.appeal_tracking_status = 'generated'
+            a.tracking_updated_at = datetime.utcnow()
             db.session.commit()
+            AppealAutomationHooks.on_appeal_generated(a)
             CreditManager.increment_usage(user.id, used_free_trial=used_free_trial)
             usage_stats = CreditManager.get_usage_stats(user.id)
             sub_id = getattr(user, 'stripe_subscription_id', None)
@@ -439,6 +580,86 @@ def init_customer_portal(app, limiter, generator):
             db.session.commit()
             return jsonify({'success': True, 'claim': _appeal_detail(a)}), 200
         except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @customer_bp.route('/analytics/recovery', methods=['GET'])
+    @limit('120 per hour')
+    @require_customer_auth
+    def analytics_recovery():
+        """Denial Insights + Payer Intelligence in one payload (fast single round-trip)."""
+        uid = g.current_user_id
+        q = Appeal.query.filter_by(user_id=uid)
+        payload = compute_recovery_dashboard(uid, q)
+        return jsonify(payload), 200
+
+    @customer_bp.route('/queue/<appeal_id>/follow-up', methods=['POST'])
+    @limit('20 per hour')
+    @require_customer_auth
+    def queue_follow_up(appeal_id):
+        """Generate second-level (Level 2) appeal — uses one generation credit."""
+        generator = _generator()
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
+        if not a:
+            return jsonify({'error': 'Not found'}), 404
+        if not (a.generated_letter_text or '').strip():
+            return jsonify({'error': 'Generate an initial appeal before creating a follow-up'}), 400
+        data = request.get_json(silent=True) or {}
+        days = int(data.get('days_no_response', 30) or 30)
+        ok, msg = should_generate_follow_up(a, days_no_response=days)
+        if not ok:
+            return jsonify({'error': msg, 'follow_up_reason': msg}), 400
+
+        user = User.query.get(g.current_user_id)
+        allowed, _used_credit, used_free_trial = CreditManager.try_begin_generation(user.id)
+        if not allowed:
+            usage = CreditManager.get_usage_stats(user.id)
+            return jsonify(
+                {
+                    'error': 'No credits, subscription, or free claims remaining',
+                    'requires_payment': True,
+                    'usage': usage,
+                }
+            ), 402
+
+        if a.last_generated_at:
+            a.prior_submission_date = a.last_generated_at.date()
+        elif getattr(a, 'submitted_to_payer_at', None):
+            a.prior_submission_date = a.submitted_to_payer_at.date()
+        else:
+            a.prior_submission_date = date.today()
+
+        a.generated_letter_text = generate_follow_up_letter_text(a, a.appeal_tracking_status)
+        a.appeal_level = 'level_2'
+        a.appeal_generation_kind = 'follow_up'
+        a.generation_count = (a.generation_count or 0) + 1
+        a.queue_status = 'in_progress'
+        _append_event(a.id, g.current_user_id, 'follow_up_started', 'Level 2 appeal draft created')
+        db.session.commit()
+
+        try:
+            pdf_path = generator.generate_appeal(a)
+            a.appeal_letter_path = pdf_path
+            a.status = 'completed'
+            a.completed_at = datetime.utcnow()
+            a.last_generated_at = datetime.utcnow()
+            a.queue_status = 'generated'
+            a.tracking_updated_at = datetime.utcnow()
+            db.session.commit()
+            CreditManager.increment_usage(user.id, used_free_trial=used_free_trial)
+            _append_event(a.id, g.current_user_id, 'follow_up_generated', 'Second-Level Appeal PDF generated')
+            db.session.commit()
+            AppealAutomationHooks.on_follow_up_generated(a)
+            usage_stats = CreditManager.get_usage_stats(user.id)
+            return jsonify(
+                {
+                    'success': True,
+                    'claim': _appeal_detail(a),
+                    'usage_stats': usage_stats,
+                }
+            ), 200
+        except Exception as e:
+            a.queue_status = 'generated'
+            db.session.commit()
             return jsonify({'error': str(e)}), 500
 
     @customer_bp.route('/queue/batch', methods=['POST'])
@@ -512,6 +733,11 @@ def init_customer_portal(app, limiter, generator):
             except (InvalidOperation, TypeError):
                 billed = Decimal('0')
 
+            paid_raw = gval(row, 'paid_amount', ('Paid', 'paid', 'Paid Amount'))
+            paid_note = ''
+            if paid_raw not in (None, ''):
+                paid_note = f'Paid amount (import): {paid_raw}'
+
             dup = Appeal.query.filter_by(
                 user_id=uid,
                 claim_number=claim_number,
@@ -542,6 +768,7 @@ def init_customer_portal(app, limiter, generator):
                 price_charged=current_app.config.get('PRICE_PER_APPEAL', 79),
                 credit_used=False,
                 queue_status='pending',
+                queue_notes=paid_note or None,
             )
             db.session.add(appeal)
             db.session.flush()
@@ -550,5 +777,304 @@ def init_customer_portal(app, limiter, generator):
 
         db.session.commit()
         return jsonify({'created': created, 'errors': errors, 'created_count': len(created)}), 201
+
+    @customer_bp.route('/queue/<appeal_id>/export', methods=['GET'])
+    @limit('120 per hour')
+    @require_customer_auth
+    def queue_export(appeal_id):
+        """Download appeal PDF, merged appeal+fax, or ZIP (appeal + fax). mode=appeal|merged|zip"""
+        mode = (request.args.get('mode') or 'appeal').lower()
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
+        if not a:
+            return jsonify({'error': 'Not found'}), 404
+        if not (a.generated_letter_text or '').strip():
+            return jsonify({'error': 'No appeal text to export'}), 400
+        appeal_bytes = get_appeal_pdf_bytes_from_model(a)
+        fax_bytes = generate_fax_cover_pdf_bytes(a)
+        claim = a.claim_number or 'export'
+        if mode == 'appeal':
+            return send_file(
+                io.BytesIO(appeal_bytes),
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=build_appeal_pdf_filename(a),
+            )
+        if mode == 'merged':
+            merged = merge_fax_then_appeal(fax_bytes, appeal_bytes)
+            return send_file(
+                io.BytesIO(merged),
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f'appeal_with_fax_{claim}.pdf',
+            )
+        if mode == 'zip':
+            zbytes = build_export_zip_bytes(a, appeal_bytes, fax_bytes)
+            return send_file(
+                io.BytesIO(zbytes),
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f'appeal_export_{claim}.zip',
+            )
+        return jsonify({'error': 'Invalid mode; use appeal, merged, or zip'}), 400
+
+    @customer_bp.route('/queue/batch-appeals', methods=['POST'])
+    @limit('5 per hour')
+    @require_customer_auth
+    def queue_batch_appeals_start():
+        """CSV batch: generate appeal text + PDF per row; poll job then download ZIP."""
+        uid = g.current_user_id
+        defaults = {}
+        if not (request.content_type and 'multipart/form-data' in request.content_type):
+            return jsonify({'error': 'Send multipart form with file field "file"'}), 400
+        dr = request.form.get('defaults')
+        if dr:
+            try:
+                defaults = json.loads(dr)
+            except json.JSONDecodeError:
+                defaults = {}
+        f = request.files.get('file')
+        if not f or not f.filename:
+            return jsonify({'error': 'CSV file required (field name: file)'}), 400
+        ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        if ext not in ('csv', 'txt'):
+            return jsonify({'error': 'Upload a .csv file'}), 400
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.csv')
+        tmp.close()
+        try:
+            f.save(tmp.name)
+            job_id = start_batch_job(current_app._get_current_object(), uid, tmp.name, defaults)
+        except Exception as e:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+            return jsonify({'error': str(e)}), 500
+        return jsonify({'job_id': job_id, 'max_rows': MAX_BATCH_ROWS}), 202
+
+    @customer_bp.route('/queue/batch-appeals/<job_id>', methods=['GET'])
+    @require_customer_auth
+    def queue_batch_appeals_status(job_id):
+        j = get_job(job_id)
+        if not j or j.get('user_id') != g.current_user_id:
+            return jsonify({'error': 'Not found'}), 404
+        return jsonify(
+            {
+                'status': j.get('status'),
+                'total': j.get('total', 0),
+                'current': j.get('current', 0),
+                'ok_count': j.get('ok_count'),
+                'error': j.get('error'),
+            }
+        ), 200
+
+    @customer_bp.route('/queue/batch-appeals/<job_id>/zip', methods=['GET'])
+    @require_customer_auth
+    def queue_batch_appeals_zip(job_id):
+        j = get_job(job_id)
+        if not j or j.get('user_id') != g.current_user_id:
+            return jsonify({'error': 'Not found'}), 404
+        if j.get('status') != 'done' or not j.get('zip_path'):
+            return jsonify({'error': 'Batch not ready yet', 'status': j.get('status')}), 400
+        path = j['zip_path']
+        if not os.path.isfile(path):
+            return jsonify({'error': 'ZIP no longer available — start a new batch'}), 410
+        return send_file(path, as_attachment=True, download_name=j.get('zip_name') or 'appeals_batch.zip')
+
+    @customer_bp.route('/claims/ingest', methods=['POST'])
+    @limit('120 per hour')
+    @require_customer_auth
+    def claims_ingest():
+        """Billing/EHR-style single claim ingest: validate, score, persist."""
+        uid = g.current_user_id
+        data = request.json or {}
+        defaults = data.get('defaults') or {}
+        claim_number = str(data.get('claim_number') or '').strip()
+        payer = str(data.get('payer') or '').strip()
+        if not claim_number or not payer:
+            return jsonify({'error': 'claim_number and payer are required'}), 400
+
+        dos = _parse_ingest_date(data.get('date_of_service'), defaults)
+        patient_id = str(data.get('patient_id') or defaults.get('patient_id') or 'INGEST').strip()
+        provider_name = str(data.get('provider_name') or defaults.get('provider_name') or 'Practice').strip()
+        provider_npi = str(data.get('provider_npi') or defaults.get('provider_npi') or '0000000000').strip()
+
+        paid_raw = data.get('paid_amount')
+        paid_note = ''
+        if paid_raw not in (None, ''):
+            paid_note = f'Paid amount (ingest): {paid_raw}'
+
+        try:
+            billed = Decimal(str(data.get('billed_amount'))) if data.get('billed_amount') not in (None, '') else Decimal('0')
+        except (InvalidOperation, TypeError):
+            billed = Decimal('0')
+
+        dup = Appeal.query.filter_by(user_id=uid, claim_number=claim_number, payer=payer).filter(
+            Appeal.status.in_(['pending', 'paid', 'completed'])
+        ).first()
+        if dup:
+            return jsonify({'error': 'Duplicate claim for this payer'}), 409
+
+        pipeline_payload = _build_pipeline_payload_from_ingest(data, defaults)
+        denial_reason = pipeline_payload['denial_reason']
+
+        appeal_id = f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        appeal = Appeal(
+            appeal_id=appeal_id,
+            user_id=uid,
+            payer=payer,
+            claim_number=claim_number,
+            patient_id=patient_id,
+            provider_name=provider_name,
+            provider_npi=provider_npi,
+            date_of_service=dos,
+            denial_reason=denial_reason,
+            denial_code=pipeline_payload.get('denial_code'),
+            diagnosis_code=(pipeline_payload.get('icd_codes') or '')[:100] or None,
+            cpt_codes=(pipeline_payload.get('cpt_codes') or '')[:200] or None,
+            billed_amount=billed,
+            appeal_level='level_1',
+            status='pending',
+            payment_status='unpaid',
+            price_charged=current_app.config.get('PRICE_PER_APPEAL', 79),
+            credit_used=False,
+            queue_status='pending',
+            queue_notes=paid_note or None,
+        )
+        db.session.add(appeal)
+        db.session.flush()
+        pipe = apply_pipeline_to_appeal(appeal, pipeline_payload)
+        _append_event(appeal.id, uid, 'ingested', 'API claims ingest')
+        db.session.commit()
+        pred = pipe['prediction']
+        return jsonify(
+            {
+                'status': 'processed',
+                'claimId': appeal_id,
+                'riskLevel': pred['riskLevel'],
+                'score': pred['score'],
+            }
+        ), 201
+
+    @customer_bp.route('/claims/ingest/batch', methods=['POST'])
+    @limit('60 per hour')
+    @require_customer_auth
+    def claims_ingest_batch():
+        """Batch ingest (max 100 rows) for clearinghouse / PM exports."""
+        uid = g.current_user_id
+        body = request.json or {}
+        claims = body.get('claims') or []
+        defaults = body.get('defaults') or {}
+        if not isinstance(claims, list) or not claims:
+            return jsonify({'error': 'claims must be a non-empty array'}), 400
+        if len(claims) > 100:
+            return jsonify({'error': 'Maximum 100 claims per batch'}), 400
+
+        results = []
+        errors = []
+        for i, row in enumerate(claims):
+            if not isinstance(row, dict):
+                errors.append({'index': i, 'error': 'Row must be an object'})
+                continue
+            data = {**defaults, **row}
+            claim_number = str(data.get('claim_number') or '').strip()
+            payer = str(data.get('payer') or '').strip()
+            if not claim_number or not payer:
+                errors.append({'index': i, 'error': 'claim_number and payer required'})
+                continue
+            dup = Appeal.query.filter_by(user_id=uid, claim_number=claim_number, payer=payer).filter(
+                Appeal.status.in_(['pending', 'paid', 'completed'])
+            ).first()
+            if dup:
+                errors.append({'index': i, 'error': f'Duplicate {claim_number}'})
+                continue
+            try:
+                dos = _parse_ingest_date(data.get('date_of_service'), defaults)
+                patient_id = str(data.get('patient_id') or defaults.get('patient_id') or 'INGEST').strip()
+                provider_name = str(data.get('provider_name') or defaults.get('provider_name') or 'Practice').strip()
+                provider_npi = str(data.get('provider_npi') or defaults.get('provider_npi') or '0000000000').strip()
+                try:
+                    billed = Decimal(str(data.get('billed_amount'))) if data.get('billed_amount') not in (None, '') else Decimal('0')
+                except (InvalidOperation, TypeError):
+                    billed = Decimal('0')
+                paid_raw = data.get('paid_amount')
+                paid_note = f'Paid amount (batch): {paid_raw}' if paid_raw not in (None, '') else ''
+
+                pipeline_payload = _build_pipeline_payload_from_ingest(data, defaults)
+                denial_reason = pipeline_payload['denial_reason']
+                appeal_id = f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+                appeal = Appeal(
+                    appeal_id=appeal_id,
+                    user_id=uid,
+                    payer=payer,
+                    claim_number=claim_number,
+                    patient_id=patient_id,
+                    provider_name=provider_name,
+                    provider_npi=provider_npi,
+                    date_of_service=dos,
+                    denial_reason=denial_reason,
+                    denial_code=pipeline_payload.get('denial_code'),
+                    diagnosis_code=(pipeline_payload.get('icd_codes') or '')[:100] or None,
+                    cpt_codes=(pipeline_payload.get('cpt_codes') or '')[:200] or None,
+                    billed_amount=billed,
+                    appeal_level='level_1',
+                    status='pending',
+                    payment_status='unpaid',
+                    price_charged=current_app.config.get('PRICE_PER_APPEAL', 79),
+                    credit_used=False,
+                    queue_status='pending',
+                    queue_notes=paid_note or None,
+                )
+                db.session.add(appeal)
+                db.session.flush()
+                pipe = apply_pipeline_to_appeal(appeal, pipeline_payload)
+                _append_event(appeal.id, uid, 'ingested', 'Batch API ingest')
+                pred = pipe['prediction']
+                db.session.commit()
+                results.append(
+                    {
+                        'claimId': appeal_id,
+                        'claim_number': claim_number,
+                        'riskLevel': pred['riskLevel'],
+                        'score': pred['score'],
+                    }
+                )
+            except Exception as ex:
+                db.session.rollback()
+                errors.append({'index': i, 'error': str(ex)})
+
+        return jsonify({'status': 'processed', 'processed': len(results), 'results': results, 'errors': errors}), 201
+
+    @customer_bp.route('/queue/<appeal_id>/apply-fix-resubmit', methods=['POST'])
+    @limit('30 per hour')
+    @require_customer_auth
+    def queue_apply_fix_resubmit(appeal_id):
+        """Auto-fix claim + build resubmission package (minimal user input)."""
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
+        if not a:
+            return jsonify({'error': 'Not found'}), 404
+        claim_dict = _appeal_to_pipeline_dict(a)
+        pkg = prepareResubmission(claim_dict, appeal_id)
+        a.corrected_claim_json = json.dumps(pkg['updatedClaim'], default=str)[:12000]
+        a.resubmission_package_json = json.dumps(pkg['resubmissionPackage'], default=str)[:12000]
+        a.fix_status = 'applied'
+        a.resubmission_ready = True
+        note_line = 'Auto-fix + resubmission package prepared.'
+        if pkg.get('changesApplied'):
+            note_line += ' Changes: ' + '; '.join(pkg['changesApplied'][:6])
+        a.queue_notes = (a.queue_notes or '') + ('\n' if a.queue_notes else '') + note_line
+        pred = predictDenialScore(pkg['updatedClaim'])
+        a.denial_prediction_score = pred['score']
+        _append_event(a.id, g.current_user_id, 'auto_fix_resubmit', note_line[:180])
+        db.session.commit()
+        return jsonify(
+            {
+                'correctedClaim': pkg['updatedClaim'],
+                'changesApplied': pkg['changesApplied'],
+                'updatedClaim': pkg['updatedClaim'],
+                'resubmissionPackage': pkg['resubmissionPackage'],
+                'appealDocument': pkg['appealDocument'],
+                'denialPrediction': pred,
+            }
+        ), 200
 
     app.register_blueprint(customer_bp, url_prefix='/api')

@@ -13,6 +13,11 @@ load_dotenv()
 
 from openai import OpenAI
 from denial_templates import get_denial_template
+from appeal_output_structure import (
+    SUBMISSION_STRUCTURE_SYSTEM_APPENDIX,
+    build_argument_engine_block,
+    structured_template_fallback,
+)
 from medical_knowledge_base import (
     get_denial_strategy, 
     get_regulatory_reference,
@@ -79,9 +84,8 @@ class AdvancedAIAppealGenerator:
         5. Tailors arguments to specific payer tactics
         """
         if not self.enabled:
-            logger.info(f"Generating template-based appeal for {appeal.appeal_id}")
-            template = get_denial_template(appeal.denial_code)
-            return self._format_template(template['template'], appeal)
+            logger.info(f"Generating structured template fallback for {appeal.appeal_id}")
+            return structured_template_fallback(appeal)
         
         try:
             # Step 1: Analyze denial and develop strategy
@@ -172,9 +176,8 @@ class AdvancedAIAppealGenerator:
                 extra={'appeal_id': appeal.appeal_id, 'error': str(e)},
                 exc_info=True
             )
-            logger.info(f"Falling back to template-based appeal for {appeal.appeal_id}")
-            template = get_denial_template(appeal.denial_code)
-            return self._format_template(template['template'], appeal)
+            logger.info(f"Falling back to structured template for {appeal.appeal_id}")
+            return structured_template_fallback(appeal)
     
     def _analyze_denial_strategy(self, appeal):
         """Analyze the denial and identify optimal strategic arguments"""
@@ -305,13 +308,14 @@ Provide your strategic analysis in 150 words."""
         
         # Build comprehensive user prompt with case details
         user_prompt = self._build_comprehensive_prompt(
-            appeal, 
-            denial_name, 
+            appeal,
+            denial_name,
             strategy,
             required_sections,
             required_docs,
             timely_filing_result,
-            strategic_analysis
+            strategic_analysis,
+            denial_strategy,
         )
         
         # Add citation guidance to prevent hallucinations
@@ -328,7 +332,7 @@ Provide your strategic analysis in 150 words."""
                 {"role": "user", "content": user_prompt}
             ],
             'temperature': 0.4,      # Lower = more focused, deterministic, professional
-            'max_tokens': 3000,      # Longer for comprehensive appeals with citations
+            'max_tokens': 4000,      # Structured 7-section submission-ready appeals
             'top_p': 0.85,           # Slightly lower for more precise language
             'frequency_penalty': 0.4, # Higher to reduce repetition of arguments
             'presence_penalty': 0.3   # Encourage diverse strategic angles
@@ -428,23 +432,19 @@ TACTICAL SUPERIORITY OVER GENERIC AI:
 WHAT YOU NEVER DO:
 - Never use emotional appeals or patient hardship stories (payers ignore these)
 - Never admit uncertainty or use hedging language ("may," "might," "could")
-- Never make general statements without regulatory or clinical citations
-- Never accept payer's framing - reframe denials as administrative/procedural errors
-- Never write more than 2 pages - reviewers won't read beyond that
+- Never make general statements without regulatory or clinical citations where applicable
+- Never accept payer's framing - reframe denials as administrative/procedural errors when supported by facts
 
-FORMAT REQUIREMENTS:
-Write ONLY the appeal argument body. No headers, no signature block, no provider info.
-Start with: "This appeal contests the denial of [service] on [date] for [patient] under Claim [number]."
-Then build 4-6 paragraphs of escalating arguments with specific citations.
-End with: "We request immediate reversal and payment of $[amount] within [X] days per applicable prompt pay requirements."
+{SUBMISSION_STRUCTURE_SYSTEM_APPENDIX}
 
-Your appeals win because they demonstrate you know more than the reviewer and are prepared to escalate."""
+Your appeals win because they demonstrate command of payer policy, coding, and regulatory review standards."""
     
-    def _build_comprehensive_prompt(self, appeal, denial_name, strategy, required_sections=None, required_docs=None, timely_filing_result=None, strategic_analysis=None):
+    def _build_comprehensive_prompt(self, appeal, denial_name, strategy, required_sections=None, required_docs=None, timely_filing_result=None, strategic_analysis=None, denial_strategy=None):
         """Build detailed prompt with all case information and strategic guidance"""
         
         # Get payer name (handle both 'payer' and 'payer_name' attributes)
         payer_name = getattr(appeal, 'payer', getattr(appeal, 'payer_name', 'Unknown Payer'))
+        denial_strategy = denial_strategy or 'general'
         
         # Get appeal level
         appeal_level = getattr(appeal, 'appeal_level', 'level_1').replace('_', ' ').title()
@@ -507,6 +507,10 @@ Winning Strategies Against This Payer:
 Escalation Leverage:
   - {payer_tactics['escalation_leverage']}
 """
+
+        from payer_formatting import get_payer_formatting_prompt_section
+
+        payer_formatting_text = get_payer_formatting_prompt_section(payer_name)
         
         # Build strategic analysis section
         strategic_analysis_text = ""
@@ -530,7 +534,7 @@ Denial Reason: {appeal.denial_reason}
 ===============================================================
 CLAIM DETAILS
 ===============================================================
-Insurance Payer: {appeal.payer_name}
+Insurance Payer: {payer_name}
 Claim Number: {appeal.claim_number}
 Patient ID: {appeal.patient_id}
 
@@ -541,12 +545,14 @@ Provider Information:
 Service Information:
 - Date of Service: {appeal.date_of_service.strftime('%B %d, %Y')}
 - CPT Code(s): {appeal.cpt_codes or 'See documentation'}
+- ICD-10 / Diagnosis: {getattr(appeal, 'diagnosis_code', None) or 'See documentation'}
 - Billed Amount: ${appeal.billed_amount:,.2f}
 - Appeal Level: {appeal_level}
 
 {self._get_cpt_intelligence(appeal.cpt_codes) if appeal.cpt_codes else ""}
 {timely_filing_section}
 {payer_tactics_text}
+{payer_formatting_text}
 {required_sections_text}
 ===============================================================
 STRATEGIC GUIDANCE (Use this to craft superior arguments)
@@ -656,19 +662,22 @@ Use precise industry language:
 - "timely filing provision" not "deadline"
 
 ===============================================================
-OUTPUT INSTRUCTIONS
+OUTPUT INSTRUCTIONS (SUBMISSION-READY DOCUMENT)
 ===============================================================
-- Write 4-6 substantial paragraphs (400-600 words total for high-value appeals)
-- Begin with: "This appeal contests the adverse benefit determination..."
-- Use formal, professional medical-legal language throughout
-- Include 5-8 specific regulatory or clinical citations
-- Build arguments in order: (1) Procedural violations, (2) Regulatory requirements, (3) Clinical evidence
-- End with: "We request immediate reversal and payment of $[amount] within [X] days per applicable prompt pay requirements."
-- NO greeting, NO signature, NO provider letterhead (those are added separately)
-- Start directly with the appeal argument
+Follow the system prompt MANDATORY OUTPUT STRUCTURE exactly (7 sections, fixed order).
+Use the case data above for the HEADER SECTION (redact patient to initials only in header).
+Denial Summary must follow: "This claim was denied under CARC [codes] and RARC [codes], indicating [reason]."
+Populate Appeal Argument Sections using the argument engine guidance below; omit subsections that do not apply.
+Strategy Layer bullets must be specific (modifiers, NCCI, clinical necessity, timelines)—not generic platitudes.
+Include the Documentation Statement and Reprocessing Request sentences verbatim as specified in the system prompt.
+Close with the SIGNATURE line placeholder as instructed.
+- No conversational filler, no "Dear", no "Thank you for your consideration."
+- Professional, direct, concise—ready to paste into a payer portal or PDF.
+
+{build_argument_engine_block(denial_strategy)}
 
 QUALITY BENCHMARK:
-Your appeal should read like it was written by a healthcare attorney who specializes in ERISA litigation and has deep clinical knowledge. Every sentence should demonstrate expertise that a generic AI cannot match."""
+The document must be usable as-is by a medical billing specialist for formal submission."""
 
         return prompt
     

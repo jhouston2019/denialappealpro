@@ -83,26 +83,31 @@ class CreditManager:
     @staticmethod
     def try_begin_generation(user_id: int) -> tuple:
         """
-        Decide if user may generate one appeal (credit deduction or active subscription usage).
-        Returns (allowed: bool, used_subscription_credit: bool).
+        Decide if user may generate one appeal (credit deduction, subscription usage, or free trial).
+        Returns (allowed: bool, used_subscription_credit: bool, used_free_trial: bool).
         used_subscription_credit True when a pooled credit was deducted; False when using tier usage only.
+        used_free_trial True when no credits/subscription path applied and a free trial slot is consumed.
         """
         user = User.query.get(user_id)
         if not user:
-            return False, False
+            return False, False, False
         CreditManager.reset_usage_counters_if_needed(user_id)
         db.session.refresh(user)
         if user.subscription_credits + user.bulk_credits > 0:
             if CreditManager.deduct_credit(user_id):
-                return True, True
-            return False, False
+                return True, True, False
+            return False, False, False
         if user.subscription_tier and (user.billing_status or 'active') == 'active':
             # Soft grace: allow plan_limit + 2 appeals/month before hard block (overage billing still applies after plan_limit)
             soft_grace = 2
             if user.plan_limit > 0 and user.appeals_generated_monthly >= user.plan_limit + soft_grace:
-                return False, False
-            return True, False
-        return False, False
+                return False, False, False
+            return True, False, False
+        has_active_sub = bool(user.subscription_tier and (user.billing_status or 'active') == 'active')
+        ft_used = getattr(user, 'free_trial_generations_used', 0) or 0
+        if not has_active_sub and ft_used < CreditManager.FREE_TRIAL_LIMIT:
+            return True, False, True
+        return False, False, False
     
     @staticmethod
     def get_credit_balance(user_id: int) -> int:

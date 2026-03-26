@@ -201,9 +201,47 @@ class Appeal(db.Model):
     queue_status = db.Column(db.String(50), nullable=False, default='pending')
     queue_notes = db.Column(db.Text)
     generated_letter_text = db.Column(db.Text)  # Draft / edited appeal body for PDF regen
+
+    # Provider tracking dashboard (submission lifecycle — separate from queue_status)
+    appeal_tracking_status = db.Column(db.String(50), nullable=True, default='pending', index=True)
+    tracking_updated_at = db.Column(db.DateTime, nullable=True)
+    payer_fax = db.Column(db.String(50), nullable=True)
+
+    # Recovery / follow-up intelligence
+    appeal_generation_kind = db.Column(db.String(20), nullable=True, default='initial')  # initial | follow_up
+    submitted_to_payer_at = db.Column(db.DateTime, nullable=True, index=True)
+    prior_submission_date = db.Column(db.Date, nullable=True)
+
+    # Pre-generation coding intelligence snapshot (analytics / future outcome linkage)
+    intelligence_snapshot_json = db.Column(db.Text, nullable=True)
+
+    # Denial prediction + auto-fix / resubmission (API ingest & recovery workflow)
+    denial_prediction_score = db.Column(db.Integer, nullable=True)  # 0-100
+    fix_status = db.Column(db.String(32), nullable=True, default='none')  # none | pending | applied | needs_review
+    resubmission_ready = db.Column(db.Boolean, nullable=False, default=False)
+    corrected_claim_json = db.Column(db.Text, nullable=True)
+    resubmission_package_json = db.Column(db.Text, nullable=True)
     
     def __repr__(self):
         return f'<Appeal {self.appeal_id}>'
+
+
+class CodingIntelligenceLog(db.Model):
+    """Feedback loop: coding checks, modifiers, risk — for future tuning (no UI)."""
+
+    __tablename__ = 'coding_intelligence_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    appeal_id = db.Column(db.String(50), nullable=True, index=True)
+    event_type = db.Column(db.String(40), nullable=False, default='analyze')
+    payload_json = db.Column(db.Text, nullable=False)
+    risk_level = db.Column(db.String(20), nullable=True)
+    coding_issue_count = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f'<CodingIntelligenceLog {self.id}>'
 
 
 class RetentionEmailLog(db.Model):

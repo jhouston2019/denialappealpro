@@ -7,4 +7,5 @@ node_modules/
 uploads/
 generated/
 backend/logs/
+frontend/build/
 .DS_Store

@@ -20,6 +20,8 @@ export default function ClaimDetail() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallUsage, setPaywallUsage] = useState(null);
   const [postGen, setPostGen] = useState(null);
+  const [trackingStatus, setTrackingStatus] = useState('pending');
+  const [payerFax, setPayerFax] = useState('');
 
   const load = useCallback(async () => {
     const { data } = await api.get(`/api/queue/${appealId}`);
@@ -27,6 +29,8 @@ export default function ClaimDetail() {
     setNotes(data.claim.queue_notes || '');
     setLetter(data.claim.generated_letter_text || '');
     setPaymentStatus((data.claim.payment_status || 'unpaid').toLowerCase());
+    setTrackingStatus(data.claim.appeal_tracking_status || 'pending');
+    setPayerFax(data.claim.payer_fax || '');
     setLoading(false);
   }, [appealId]);
 
@@ -38,7 +42,7 @@ export default function ClaimDetail() {
     await api.patch(`/api/queue/${appealId}`, { queue_notes: notes });
   };
 
-  const generate = async () => {
+  const runGenerate = async () => {
     setErr('');
     setBusy(true);
     try {
@@ -58,6 +62,10 @@ export default function ClaimDetail() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const generate = async () => {
+    await runGenerate();
   };
 
   const saveLetter = async () => {
@@ -82,13 +90,90 @@ export default function ClaimDetail() {
     }
   };
 
+  const copyAppealText = async () => {
+    const t = (letter || '').replace(/\r\n/g, '\n').trim();
+    if (!t) {
+      setErr('Nothing to copy yet');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      setErr('Clipboard not available');
+    }
+  };
+
   const markSubmitted = async () => {
     setBusy(true);
     try {
-      const { data } = await api.patch(`/api/queue/${appealId}`, { queue_status: 'submitted' });
+      const { data } = await api.patch(`/api/queue/${appealId}`, {
+        queue_status: 'submitted',
+        appeal_tracking_status: 'submitted',
+      });
       setClaim(data.claim);
+      setTrackingStatus(data.claim.appeal_tracking_status || 'submitted');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runGenerateFollowUp = async () => {
+    setErr('');
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/api/queue/${appealId}/follow-up`, { days_no_response: 30 });
+      setClaim(data.claim);
+      setLetter(data.claim.generated_letter_text || '');
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Could not generate Level 2 follow-up');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generateFollowUp = async () => {
+    await runGenerateFollowUp();
+  };
+
+  const saveTracking = async (appeal_tracking_status) => {
+    try {
+      const { data } = await api.patch(`/api/queue/${appealId}`, { appeal_tracking_status });
+      setClaim(data.claim);
+      setTrackingStatus(data.claim.appeal_tracking_status || appeal_tracking_status);
+    } catch {
+      setErr('Could not save tracking status');
+    }
+  };
+
+  const savePayerFax = async () => {
+    try {
+      const { data } = await api.patch(`/api/queue/${appealId}`, { payer_fax: payerFax });
+      setClaim(data.claim);
+    } catch {
+      setErr('Could not save fax number');
+    }
+  };
+
+  const downloadExport = async (mode) => {
+    setErr('');
+    try {
+      const res = await api.get(`/api/queue/${appealId}/export?mode=${mode}`, { responseType: 'blob' });
+      const blob = new Blob([res.data], {
+        type: mode === 'zip' ? 'application/zip' : 'application/pdf',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download =
+        mode === 'zip'
+          ? `appeal_export_${claim.claim_id}.zip`
+          : mode === 'merged'
+            ? `appeal_with_fax_${claim.claim_id}.pdf`
+            : `appeal_${claim.claim_id}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Download failed');
     }
   };
 
@@ -179,8 +264,9 @@ export default function ClaimDetail() {
         </div>
       )}
 
-      <p style={{ margin: '0 0 12px' }}>
-        <Link to="/queue">← Queue</Link>
+      <p style={{ margin: '0 0 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <Link to="/dashboard">← Tracking dashboard</Link>
+        <Link to="/queue">Queue / batch</Link>
       </p>
       <h1 style={{ margin: '0 0 8px', fontSize: '20px' }}>Claim {claim.claim_id}</h1>
       <p style={{ margin: '0 0 16px', fontSize: 14, color: '#444' }}>
@@ -244,6 +330,42 @@ export default function ClaimDetail() {
       </section>
 
       <section style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Appeal tracking</h2>
+        <p style={{ margin: '0 0 8px', fontSize: 13, color: '#555' }}>
+          Payer submission lifecycle (separate from payment status above).
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+          <select
+            value={trackingStatus}
+            disabled={busy}
+            onChange={(e) => saveTracking(e.target.value)}
+            style={{ padding: 6, fontSize: 13, minWidth: 200 }}
+          >
+            <option value="generated">Generated</option>
+            <option value="submitted">Submitted</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="denied">Denied</option>
+          </select>
+          {claim.tracking_updated_at && (
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              Last updated: {String(claim.tracking_updated_at).replace('T', ' ').slice(0, 19)}
+            </span>
+          )}
+        </div>
+        <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>
+          Payer fax # (printed on fax cover sheet)
+          <input
+            value={payerFax}
+            onChange={(e) => setPayerFax(e.target.value)}
+            onBlur={savePayerFax}
+            placeholder="e.g. 877-842-3210"
+            style={{ display: 'block', width: '100%', maxWidth: 320, marginTop: 4, padding: 8, fontSize: 13 }}
+          />
+        </label>
+      </section>
+
+      <section style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Notes</h2>
         <textarea
           value={notes}
@@ -259,6 +381,22 @@ export default function ClaimDetail() {
 
       <section style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>Appeal</h2>
+        {claim.appeal_generation_kind === 'follow_up' && (
+          <p style={{ fontSize: 13, color: '#0f766e', marginBottom: 10, fontWeight: 600 }}>Second-Level Appeal (on file)</p>
+        )}
+        {claim.follow_up_eligible && claim.appeal_generation_kind !== 'follow_up' && (
+          <div style={{ marginBottom: 12, padding: 12, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#14532d' }}>
+              Follow-up available: {claim.follow_up_reason}
+            </p>
+            <button type="button" disabled={busy} onClick={generateFollowUp} style={{ padding: '8px 14px' }}>
+              {busy ? 'Working…' : 'Generate Follow-Up Appeal'}
+            </button>
+          </div>
+        )}
+        {!claim.follow_up_eligible && claim.appeal_generation_kind !== 'follow_up' && (claim.appeal_tracking_status === 'denied' || claim.submitted_to_payer_at) && (
+          <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Follow-up: {claim.follow_up_reason}</p>
+        )}
         {canGenerate && (
           <button type="button" disabled={busy} onClick={generate} style={{ padding: '8px 14px', marginBottom: 12 }}>
             {busy ? 'Working…' : 'Generate structured appeal'}
@@ -273,6 +411,9 @@ export default function ClaimDetail() {
               style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: 12 }}
             />
             <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button type="button" disabled={busy} onClick={copyAppealText} style={{ padding: '6px 12px' }}>
+                Copy appeal
+              </button>
               <button type="button" disabled={busy} onClick={saveLetter} style={{ padding: '6px 12px' }}>
                 Save edits
               </button>
@@ -280,14 +421,25 @@ export default function ClaimDetail() {
                 Approve &amp; rebuild PDF
               </button>
               {hasPdf && (
-                <a
-                  href={`${baseUrl}/api/appeals/${appealId}/download`}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ padding: '6px 12px', border: '1px solid #333', color: '#111', textDecoration: 'none' }}
-                >
-                  Download PDF
-                </a>
+                <>
+                  <button type="button" disabled={busy} onClick={() => downloadExport('appeal')} style={{ padding: '6px 12px' }}>
+                    Download appeal only
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => downloadExport('merged')} style={{ padding: '6px 12px' }}>
+                    Appeal + fax cover (PDF)
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => downloadExport('zip')} style={{ padding: '6px 12px' }}>
+                    Appeal + fax (ZIP)
+                  </button>
+                  <a
+                    href={`${baseUrl}/api/appeals/${appealId}/download`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ padding: '6px 12px', border: '1px solid #94a3b8', color: '#334155', textDecoration: 'none', fontSize: 13 }}
+                  >
+                    Legacy PDF link
+                  </a>
+                </>
               )}
               <button type="button" disabled={busy || claim.queue_status === 'submitted'} onClick={markSubmitted} style={{ padding: '6px 12px' }}>
                 Mark submitted

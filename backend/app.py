@@ -24,6 +24,7 @@ from auto_setup_admin import auto_setup_admin
 from stripe_billing import StripeBilling
 from customer_portal import init_customer_portal
 from onboarding_api import register_onboarding_routes
+from intelligence_api import register_intelligence_routes
 
 # Validate environment configuration on startup
 print("\n" + "="*60)
@@ -73,6 +74,33 @@ stripe.api_key = stripe_key
 generator = AppealGenerator(app.config['GENERATED_FOLDER'])
 init_customer_portal(app, limiter, generator)
 register_onboarding_routes(app, limiter, generator)
+register_intelligence_routes(app, limiter)
+
+with app.app_context():
+    try:
+        from migrate_tracking_columns import ensure_tracking_columns
+
+        ensure_tracking_columns(db)
+    except Exception:
+        pass
+    try:
+        from migrate_coding_intelligence import ensure_coding_intelligence_table
+
+        ensure_coding_intelligence_table(db)
+    except Exception:
+        pass
+    try:
+        from migrate_intelligence_snapshot import ensure_intelligence_snapshot_column
+
+        ensure_intelligence_snapshot_column(db)
+    except Exception:
+        pass
+    try:
+        from migrate_claim_recovery_columns import ensure_claim_recovery_columns
+
+        ensure_claim_recovery_columns(db)
+    except Exception:
+        pass
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}

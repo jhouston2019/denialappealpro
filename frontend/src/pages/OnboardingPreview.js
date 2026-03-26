@@ -13,6 +13,9 @@ export default function OnboardingPreview() {
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [fullLetter, setFullLetter] = useState(null);
 
   useEffect(() => {
     api
@@ -21,6 +24,14 @@ export default function OnboardingPreview() {
       .catch(() => setErr('Could not load preview'))
       .finally(() => setLoading(false));
   }, [appealId]);
+
+  useEffect(() => {
+    if (!data?.account_linked || !appealId) return;
+    api
+      .get(`/api/onboarding/appeal/${appealId}/full-text`)
+      .then(({ data: d }) => setFullLetter(d.full_text || ''))
+      .catch(() => {});
+  }, [data?.account_linked, appealId]);
 
   const startRetail = async () => {
     if (!stripePromise) {
@@ -73,6 +84,42 @@ export default function OnboardingPreview() {
     }
   };
 
+  const copyAppeal = async () => {
+    setCopyBusy(true);
+    setErr('');
+    try {
+      let t = fullLetter;
+      if (t == null) {
+        const { data: d } = await api.get(`/api/onboarding/appeal/${appealId}/full-text`);
+        t = d.full_text || '';
+      }
+      await navigator.clipboard.writeText((t || '').replace(/\r\n/g, '\n').trim());
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Could not copy appeal');
+    } finally {
+      setCopyBusy(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    setPdfBusy(true);
+    setErr('');
+    try {
+      const res = await api.get(`/api/onboarding/appeal/${appealId}/pdf`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `appeal_${appealId.replace(/[^a-z0-9_-]/gi, '_')}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setErr(e.response?.data?.error || 'Could not download PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   if (loading) return <div style={{ padding: 24 }}>Loading…</div>;
   if (err && !data) return <div style={{ padding: 24 }}>{err}</div>;
   if (!data) return null;
@@ -118,14 +165,55 @@ export default function OnboardingPreview() {
       </div>
     </div>
   );
+  const letterBlock =
+    data.account_linked && fullLetter != null ? (
+      <div
+        style={{
+          marginTop: 12,
+          border: '1px solid #ddd',
+          borderRadius: 6,
+          background: '#fff',
+          padding: 12,
+          fontSize: 14,
+          lineHeight: 1.55,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {fullLetter}
+      </div>
+    ) : (
+      blur
+    );
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
       <Link to="/start">← Edit details</Link>
       <h1 style={{ fontSize: 22, marginTop: 16 }}>Your appeal preview</h1>
       <p style={{ fontSize: 17, fontWeight: 600, color: '#0a0' }}>{data.revenue_message}</p>
-      <h2 style={{ fontSize: 15, marginTop: 24 }}>Structured appeal (excerpt)</h2>
-      {blur}
+      <h2 style={{ fontSize: 15, marginTop: 24 }}>
+        {data.account_linked ? 'Structured appeal (full)' : 'Structured appeal (excerpt)'}
+      </h2>
+      {letterBlock}
+      {data.account_linked && (
+        <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button
+            type="button"
+            disabled={copyBusy}
+            onClick={copyAppeal}
+            style={{ padding: '8px 14px', cursor: copyBusy ? 'wait' : 'pointer' }}
+          >
+            {copyBusy ? 'Copying…' : 'Copy appeal'}
+          </button>
+          <button
+            type="button"
+            disabled={pdfBusy}
+            onClick={downloadPdf}
+            style={{ padding: '8px 14px', cursor: pdfBusy ? 'wait' : 'pointer' }}
+          >
+            {pdfBusy ? 'Preparing…' : 'Download PDF'}
+          </button>
+        </div>
+      )}
       {err && <p style={{ color: '#b00020', marginTop: 12 }}>{err}</p>}
 
       <h2 style={{ fontSize: 15, marginTop: 32 }}>Choose a plan</h2>

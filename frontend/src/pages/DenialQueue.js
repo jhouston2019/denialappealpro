@@ -2,19 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-
-const th = { textAlign: 'left', padding: '8px', borderBottom: '2px solid #333', fontSize: '13px' };
-const td = { padding: '8px', borderBottom: '1px solid #ddd', fontSize: '13px', verticalAlign: 'top' };
-
-function statusLabel(s) {
-  const m = {
-    pending: 'Pending',
-    in_progress: 'In Progress',
-    generated: 'Generated',
-    submitted: 'Submitted',
-  };
-  return m[s] || s;
-}
+import RecoveryClaimsTable from '../components/RecoveryClaimsTable';
 
 export default function DenialQueue({ variant = 'queue' }) {
   const navigate = useNavigate();
@@ -32,6 +20,12 @@ export default function DenialQueue({ variant = 'queue' }) {
   });
   const [csvFile, setCsvFile] = useState(null);
   const [batchMsg, setBatchMsg] = useState('');
+  const [appealZipCsv, setAppealZipCsv] = useState(null);
+  const [appealZipJobId, setAppealZipJobId] = useState(null);
+  const [appealZipProgress, setAppealZipProgress] = useState(null);
+  const [appealZipDoneId, setAppealZipDoneId] = useState(null);
+  const [appealZipBusy, setAppealZipBusy] = useState(false);
+  const [appealZipErr, setAppealZipErr] = useState('');
 
   const load = useCallback(async () => {
     const [c, m] = await Promise.all([api.get('/api/queue'), api.get('/api/queue/metrics')]);
@@ -43,6 +37,40 @@ export default function DenialQueue({ variant = 'queue' }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!appealZipJobId) return undefined;
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await api.get(`/api/queue/batch-appeals/${appealZipJobId}`);
+        setAppealZipProgress(data);
+        if (data.status === 'error') {
+          setAppealZipErr(data.error || 'Batch failed');
+          setAppealZipBusy(false);
+          setAppealZipJobId(null);
+          return;
+        }
+        if (data.status === 'done') {
+          setAppealZipDoneId(appealZipJobId);
+          setAppealZipJobId(null);
+          setAppealZipBusy(false);
+          return;
+        }
+      } catch (e) {
+        setAppealZipErr(e.response?.data?.error || 'Batch failed');
+        setAppealZipBusy(false);
+        setAppealZipJobId(null);
+        return;
+      }
+      setTimeout(poll, 1500);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [appealZipJobId]);
 
   const submitBatchJson = async () => {
     setBatchMsg('');
@@ -76,6 +104,43 @@ export default function DenialQueue({ variant = 'queue' }) {
     setBatchMsg(`Created ${data.created_count}. Errors: ${data.errors?.length || 0}`);
     setCsvFile(null);
     load();
+  };
+
+  const startBatchAppealZip = async () => {
+    if (!appealZipCsv) {
+      setAppealZipErr('Choose a CSV for batch appeal generation');
+      return;
+    }
+    setAppealZipErr('');
+    setAppealZipBusy(true);
+    setAppealZipDoneId(null);
+    setAppealZipProgress(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', appealZipCsv);
+      fd.append('defaults', JSON.stringify(defaults));
+      const { data } = await api.post('/api/queue/batch-appeals', fd);
+      setAppealZipJobId(data.job_id);
+    } catch (e) {
+      setAppealZipErr(e.response?.data?.error || 'Could not start batch');
+      setAppealZipBusy(false);
+    }
+  };
+
+  const downloadAppealZip = async () => {
+    if (!appealZipDoneId) return;
+    try {
+      const res = await api.get(`/api/queue/batch-appeals/${appealZipDoneId}/zip`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `appeals_batch_${Date.now()}.zip`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      setAppealZipErr(e.response?.data?.error || 'Download failed');
+    }
   };
 
   if (loading) {
@@ -295,8 +360,9 @@ export default function DenialQueue({ variant = 'queue' }) {
       {batchOpen && (
         <div style={{ border: '1px solid #999', padding: 12, marginBottom: 16, background: '#fafafa' }}>
           <p style={{ margin: '0 0 8px', fontSize: 13 }}>
-            CSV columns: <code>claim_number</code>, <code>payer</code>, <code>denial_reason</code> (required); optional{' '}
-            <code>billed_amount</code>, <code>date_of_service</code>, <code>denial_code</code>, etc.
+            Supports <code>claim_number</code>, <code>payer</code>, <code>date_of_service</code>, CPT, ICD-10, denial codes,{' '}
+            <code>billed_amount</code> / paid amounts, and <code>denial_reason</code> (required per row). All data rows are imported—
+            not limited to the first row.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
             <input
@@ -336,58 +402,53 @@ export default function DenialQueue({ variant = 'queue' }) {
             Submit JSON rows
           </button>
           {batchMsg && <p style={{ fontSize: 13, marginTop: 8 }}>{batchMsg}</p>}
+
+          <hr style={{ margin: '16px 0', border: 'none', borderTop: '1px solid #ccc' }} />
+          <h3 style={{ fontSize: 14, margin: '0 0 8px' }}>Batch generate appeals (PDFs + ZIP)</h3>
+          <p style={{ margin: '0 0 8px', fontSize: 13 }}>
+            Columns: <code>claim_number</code>, <code>payer</code>, <code>date_of_service</code>, <code>cpt_codes</code>,{' '}
+            <code>icd_codes</code>, <code>modifiers</code>, <code>carc_codes</code>, <code>rarc_codes</code>,{' '}
+            <code>billed_amount</code>, <code>paid_amount</code>. Max 50 rows. Uses credits per successful appeal.
+          </p>
+          <div style={{ marginBottom: 8 }}>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setAppealZipCsv(e.target.files?.[0] || null)}
+            />
+            <button
+              type="button"
+              disabled={appealZipBusy}
+              onClick={startBatchAppealZip}
+              style={{ marginLeft: 8, padding: '6px 12px' }}
+            >
+              {appealZipBusy ? 'Processing…' : 'Generate appeals + ZIP'}
+            </button>
+          </div>
+          {appealZipBusy && !appealZipProgress && (
+            <p style={{ fontSize: 13, marginTop: 4 }}>Starting batch…</p>
+          )}
+          {appealZipBusy && appealZipProgress && appealZipProgress.total > 0 && (
+            <p style={{ fontSize: 13, marginTop: 4 }}>
+              Processing {appealZipProgress.total} claims… ({appealZipProgress.current}/{appealZipProgress.total})
+            </p>
+          )}
+          {appealZipDoneId && (
+            <p style={{ fontSize: 14, marginTop: 8, fontWeight: 600 }}>
+              {appealZipProgress?.ok_count ?? 0} Appeals Generated
+              {appealZipProgress?.error ? ` — ${appealZipProgress.error}` : ''}
+            </p>
+          )}
+          {appealZipDoneId && (
+            <button type="button" onClick={downloadAppealZip} style={{ marginTop: 8, padding: '8px 14px' }}>
+              Download ZIP
+            </button>
+          )}
+          {appealZipErr && <p style={{ fontSize: 13, marginTop: 8, color: '#b00020' }}>{appealZipErr}</p>}
         </div>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={th}>Claim ID</th>
-              <th style={th}>Payer</th>
-              <th style={th}>Amount</th>
-              <th style={th}>Denial reason</th>
-              <th style={th}>Status</th>
-              <th style={th} />
-            </tr>
-          </thead>
-          <tbody>
-            {claims.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ ...td, color: '#666' }}>
-                  No claims. Use batch upload or{' '}
-                  <Link to="/appeal-form">new appeal</Link>.
-                </td>
-              </tr>
-            )}
-            {claims.map((c) => (
-              <tr key={c.appeal_id}>
-                <td style={td}>{c.claim_id}</td>
-                <td style={td}>{c.payer}</td>
-                <td style={td}>${Number(c.amount).toFixed(2)}</td>
-                <td style={td}>{c.denial_reason_preview}</td>
-                <td style={td}>{statusLabel(c.queue_status)}</td>
-                <td style={td}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/queue/${c.appeal_id}`)}
-                    style={{ marginRight: 6, padding: '4px 8px', cursor: 'pointer' }}
-                  >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/queue/${c.appeal_id}?gen=1`)}
-                    style={{ padding: '4px 8px', cursor: 'pointer' }}
-                  >
-                    Generate appeal
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <RecoveryClaimsTable claims={claims} loading={loading} onRefresh={load} />
     </div>
   );
 }

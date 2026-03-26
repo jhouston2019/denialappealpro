@@ -1,6 +1,6 @@
 import React from 'react';
-import DenialQueue from './DenialQueue';
+import RecoveryDashboard from './RecoveryDashboard';
 
 export default function Dashboard() {
-  return <DenialQueue variant="dashboard" />;
+  return <RecoveryDashboard />;
 }

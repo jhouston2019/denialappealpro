@@ -6,4 +6,5 @@ node_modules/
 *.db
 uploads/
 generated/
+backend/logs/
 .DS_Store

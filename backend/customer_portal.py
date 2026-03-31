@@ -18,7 +18,7 @@ from flask import Blueprint, request, jsonify, g, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from models import db, User, Appeal, ClaimStatusEvent, ReferralPartner
 from user_auth import register_user, login_user, verify_user_token
@@ -275,7 +275,7 @@ def init_customer_portal(app, limiter, generator):
     @limit('20 per day')
     def auth_register():
         try:
-            data = request.json or {}
+            data = request.get_json(silent=True) or {}
             ref = (data.get('referral_code') or data.get('ref') or '').strip() or None
             payload, err = register_user(
                 app.config['SECRET_KEY'],
@@ -289,6 +289,10 @@ def init_customer_portal(app, limiter, generator):
         except IntegrityError:
             db.session.rollback()
             return jsonify({'error': 'An account with this email already exists'}), 400
+        except OperationalError:
+            db.session.rollback()
+            current_app.logger.exception('auth_register database unavailable')
+            return jsonify({'error': 'Service temporarily unavailable. Please try again in a few minutes.'}), 503
         except Exception:
             current_app.logger.exception('auth_register failed')
             return jsonify({'error': 'Registration failed. Please try again.'}), 500
@@ -338,7 +342,7 @@ def init_customer_portal(app, limiter, generator):
     @customer_bp.route('/auth/login', methods=['POST'])
     @limit('30 per hour')
     def auth_login():
-        data = request.json or {}
+        data = request.get_json(silent=True) or {}
         payload, err = login_user(app.config['SECRET_KEY'], data.get('email'), data.get('password'))
         if err:
             return jsonify({'error': err}), 401

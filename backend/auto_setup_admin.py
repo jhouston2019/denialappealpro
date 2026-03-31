@@ -5,6 +5,7 @@ Automatically creates admin table and default admin user on startup
 
 import os
 import logging
+from sqlalchemy.exc import IntegrityError
 from models import db, Admin
 from admin_auth import admin_auth
 
@@ -37,12 +38,19 @@ def auto_setup_admin():
             default_password = os.getenv('ADMIN_PASSWORD', 'DenialAppeal2026!')
             default_email = os.getenv('ADMIN_EMAIL', 'admin@denialappealpro.com')
             
-            admin = admin_auth.create_admin(
-                username=default_username,
-                password=default_password,
-                email=default_email
-            )
-            
+            try:
+                admin_auth.create_admin(
+                    username=default_username,
+                    password=default_password,
+                    email=default_email
+                )
+            except IntegrityError:
+                db.session.rollback()
+                logger.info(
+                    "Default admin was created by another process (e.g. gunicorn worker); skipping."
+                )
+                return True
+
             logger.info("="*60)
             logger.info("✅ DEFAULT ADMIN ACCOUNT CREATED")
             logger.info("="*60)
@@ -53,7 +61,7 @@ def auto_setup_admin():
             logger.info("="*60)
             logger.info("⚠️  IMPORTANT: Change password after first login!")
             logger.info("="*60)
-            
+
             return True
         else:
             logger.info(f"✅ Admin system ready ({admin_count} admin user(s) exist)")

@@ -101,6 +101,13 @@ with app.app_context():
         ensure_claim_recovery_columns(db)
     except Exception:
         pass
+    # Gunicorn loads app:app — __main__ block never runs; ensure tables, pricing, and admin exist.
+    try:
+        db.create_all()
+        initialize_pricing_data()
+        auto_setup_admin()
+    except Exception as e:
+        print(f"⚠️  Startup initialization warning: {e}")
 
 # File upload configuration
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
@@ -1323,7 +1330,7 @@ def get_ab_test_details(test_id):
 # ============================================================================
 
 @app.route('/api/admin/login', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("30 per hour")
 def admin_login():
     """Admin login endpoint"""
     try:

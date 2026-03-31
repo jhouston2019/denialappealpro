@@ -43,7 +43,7 @@ export default function Login() {
         (status === 429 ? 'Too many login attempts. Wait up to an hour and try again.') ||
         (status >= 500 ? 'Server error. The API may be down or misconfigured.') ||
         (!e2.response
-          ? 'Cannot reach the server. Check your connection; if this is production, confirm the API (REACT_APP_API_URL) is correct and CORS allows this site.'
+          ? 'Cannot reach the server. Check your connection. If you are on https://denialappealpro.com, the API should be reachable; otherwise confirm REACT_APP_API_URL and that the backend allows this origin (CORS).'
           : null) ||
         'Something went wrong';
       setErr(msg);

@@ -36,7 +36,7 @@ validate_environment(strict=False)
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# CORS: local dev + production domains + Netlify deploy URL (override with ALLOWED_ORIGINS on Fly)
+# CORS: production https://denialappealpro.com (+ www), Netlify hostnames for builds/previews, local dev
 _default_origins = (
     'http://localhost:3000,'
     'http://127.0.0.1:3000,'

@@ -18,6 +18,7 @@ from flask import Blueprint, request, jsonify, g, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from models import db, User, Appeal, ClaimStatusEvent, ReferralPartner
 from user_auth import register_user, login_user, verify_user_token
@@ -273,17 +274,24 @@ def init_customer_portal(app, limiter, generator):
     @customer_bp.route('/auth/register', methods=['POST'])
     @limit('20 per day')
     def auth_register():
-        data = request.json or {}
-        ref = (data.get('referral_code') or data.get('ref') or '').strip() or None
-        payload, err = register_user(
-            app.config['SECRET_KEY'],
-            data.get('email'),
-            data.get('password'),
-            referral_code=ref,
-        )
-        if err:
-            return jsonify({'error': err}), 400
-        return jsonify(payload), 201
+        try:
+            data = request.json or {}
+            ref = (data.get('referral_code') or data.get('ref') or '').strip() or None
+            payload, err = register_user(
+                app.config['SECRET_KEY'],
+                data.get('email'),
+                data.get('password'),
+                referral_code=ref,
+            )
+            if err:
+                return jsonify({'error': err}), 400
+            return jsonify(payload), 201
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({'error': 'An account with this email already exists'}), 400
+        except Exception:
+            current_app.logger.exception('auth_register failed')
+            return jsonify({'error': 'Registration failed. Please try again.'}), 500
 
     @customer_bp.route('/referral/validate', methods=['GET'])
     @limit('60 per hour')

@@ -1,14 +1,14 @@
 """
 Add retention columns, retention_email_logs table (PostgreSQL).
 Run once: python migrate_retention.py
+Also invoked at app startup via ensure_retention_schema(db).
 """
 
 from sqlalchemy import text
 
-from app import app, db
 
-
-def run():
+def ensure_retention_schema(db) -> None:
+    """Idempotent: user columns required by User model (e.g. email_retention_opt_in)."""
     stmts = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_retention_opt_in BOOLEAN NOT NULL DEFAULT TRUE",
@@ -22,10 +22,19 @@ def run():
         )""",
         "CREATE INDEX IF NOT EXISTS ix_retention_email_logs_user ON retention_email_logs (user_id)",
     ]
-    with app.app_context():
+    with db.engine.begin() as conn:
         for s in stmts:
-            db.session.execute(text(s))
-        db.session.commit()
+            try:
+                conn.execute(text(s))
+            except Exception:
+                pass
+
+
+def run():
+    from app import app, db
+
+    with app.app_context():
+        ensure_retention_schema(db)
         print("Retention migration complete.")
 
 

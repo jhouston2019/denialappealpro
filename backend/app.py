@@ -113,6 +113,18 @@ with app.app_context():
         ensure_claim_recovery_columns(db)
     except Exception:
         pass
+    try:
+        from migrate_acquisition import ensure_acquisition_schema
+
+        ensure_acquisition_schema(db)
+    except Exception as e:
+        print(f"⚠️  Acquisition schema migration: {e}")
+    try:
+        from migrate_retention import ensure_retention_schema
+
+        ensure_retention_schema(db)
+    except Exception as e:
+        print(f"⚠️  Retention schema migration: {e}")
     # Gunicorn loads app:app — __main__ block never runs; ensure tables, pricing, and admin exist.
     try:
         db.create_all()

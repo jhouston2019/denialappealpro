@@ -1,14 +1,14 @@
 """
 Referral partners + free trial columns (PostgreSQL).
 Run once: python migrate_acquisition.py
+Also invoked at app startup via ensure_acquisition_schema(db).
 """
 
 from sqlalchemy import text
 
-from app import app, db
 
-
-def run():
+def ensure_acquisition_schema(db) -> None:
+    """Idempotent: referral_partners table + user columns required for registration."""
     stmts = [
         """CREATE TABLE IF NOT EXISTS referral_partners (
             id SERIAL PRIMARY KEY,
@@ -22,21 +22,31 @@ def run():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_id INTEGER REFERENCES referral_partners(id)",
         "CREATE INDEX IF NOT EXISTS ix_users_referred_by ON users (referred_by_id)",
     ]
-    with app.app_context():
+    with db.engine.begin() as conn:
         for s in stmts:
-            db.session.execute(text(s))
-        db.session.commit()
-        # Default partner for manual testing (no-op if exists)
-        db.session.execute(
-            text(
-                """
-                INSERT INTO referral_partners (code, name, is_active)
-                SELECT 'demo', 'Demo Partner', TRUE
-                WHERE NOT EXISTS (SELECT 1 FROM referral_partners WHERE code = 'demo')
-                """
+            try:
+                conn.execute(text(s))
+            except Exception:
+                pass
+        try:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO referral_partners (code, name, is_active)
+                    SELECT 'demo', 'Demo Partner', TRUE
+                    WHERE NOT EXISTS (SELECT 1 FROM referral_partners WHERE code = 'demo')
+                    """
+                )
             )
-        )
-        db.session.commit()
+        except Exception:
+            pass
+
+
+def run():
+    from app import app, db
+
+    with app.app_context():
+        ensure_acquisition_schema(db)
         print("Acquisition migration complete.")
 
 

@@ -11,6 +11,19 @@ const box = {
   fontFamily: 'system-ui, sans-serif',
 };
 
+function loginErrorMessage(e2) {
+  const d = e2.response?.data;
+  const status = e2.response?.status;
+  if (typeof d?.error === 'string' && d.error) return d.error;
+  if (typeof d?.message === 'string' && d.message) return d.message;
+  if (status === 429) return 'Too many login attempts. Wait up to an hour and try again.';
+  if (status >= 500) return 'Server error. The API may be down or misconfigured.';
+  if (!e2.response) {
+    return 'Cannot reach the server. Check your connection. If you are on https://denialappealpro.com, the API should be reachable; otherwise confirm REACT_APP_API_URL and that the backend allows this origin (CORS).';
+  }
+  return 'Something went wrong';
+}
+
 export default function Login() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
@@ -35,18 +48,7 @@ export default function Login() {
       }
       navigate(from, { replace: true });
     } catch (e2) {
-      const d = e2.response?.data;
-      const status = e2.response?.status;
-      const msg =
-        (typeof d?.error === 'string' && d.error) ||
-        (typeof d?.message === 'string' && d.message) ||
-        (status === 429 ? 'Too many login attempts. Wait up to an hour and try again.') ||
-        (status >= 500 ? 'Server error. The API may be down or misconfigured.') ||
-        (!e2.response
-          ? 'Cannot reach the server. Check your connection. If you are on https://denialappealpro.com, the API should be reachable; otherwise confirm REACT_APP_API_URL and that the backend allows this origin (CORS).'
-          : null) ||
-        'Something went wrong';
-      setErr(msg);
+      setErr(loginErrorMessage(e2));
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
+from flask_limiter.errors import RateLimitExceeded
 from flask_limiter.util import get_remote_address
 from datetime import datetime, timedelta
 import stripe
@@ -35,11 +36,14 @@ validate_environment(strict=False)
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# CORS: allow local dev + production marketing site (override with ALLOWED_ORIGINS)
+# CORS: local dev + production domains + Netlify deploy URL (override with ALLOWED_ORIGINS on Fly)
 _default_origins = (
     'http://localhost:3000,'
+    'http://127.0.0.1:3000,'
     'https://denialappealpro.com,'
-    'https://www.denialappealpro.com'
+    'https://www.denialappealpro.com,'
+    'https://denialappealpro.netlify.app,'
+    'https://denial-appeal-pro.netlify.app'
 )
 allowed_origins = [
     o.strip()
@@ -60,6 +64,14 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"
 )
+
+
+@app.errorhandler(RateLimitExceeded)
+def _rate_limit_exceeded(e):
+    """Return JSON with `error` so SPA login/batch UIs show a message (not opaque failures)."""
+    msg = getattr(e, 'description', None) or str(e) or 'Rate limit exceeded'
+    return jsonify({'error': msg}), 429
+
 
 db.init_app(app)
 

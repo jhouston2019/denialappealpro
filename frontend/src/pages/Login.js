@@ -35,7 +35,18 @@ export default function Login() {
       }
       navigate(from, { replace: true });
     } catch (e2) {
-      setErr(e2.response?.data?.error || 'Something went wrong');
+      const d = e2.response?.data;
+      const status = e2.response?.status;
+      const msg =
+        (typeof d?.error === 'string' && d.error) ||
+        (typeof d?.message === 'string' && d.message) ||
+        (status === 429 ? 'Too many login attempts. Wait up to an hour and try again.') ||
+        (status >= 500 ? 'Server error. The API may be down or misconfigured.') ||
+        (!e2.response
+          ? 'Cannot reach the server. Check your connection; if this is production, confirm the API (REACT_APP_API_URL) is correct and CORS allows this site.'
+          : null) ||
+        'Something went wrong';
+      setErr(msg);
     } finally {
       setLoading(false);
     }

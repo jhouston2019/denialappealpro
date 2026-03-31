@@ -35,6 +35,16 @@ class DenialLetterParser:
     
     # Amount patterns
     AMOUNT_PATTERN = re.compile(r'\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)')
+    PAID_LINE_PATTERN = re.compile(
+        r'(?:paid|payment\s+amount|amount\s+paid|payer\s+paid)[:\s]*\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+        re.IGNORECASE,
+    )
+    # RARC / remark (N-codes, M-codes)
+    RARC_PATTERN = re.compile(r'\b(N\d{1,4}|M\d{1,3}|MA\d{2,4})\b', re.IGNORECASE)
+    # CPT / HCPCS (5-digit or letter + 4 digits)
+    CPT_PATTERN = re.compile(r'\b(\d{5}|[A-V]\d{4})\b')
+    # ICD-10-CM (simplified)
+    ICD10_PATTERN = re.compile(r'\b([A-TV-Z][0-9][A-Z0-9](?:\.[A-Z0-9]{1,4})?)\b')
     
     # NPI pattern
     NPI_PATTERN = re.compile(r'\b(\d{10})\b')
@@ -43,7 +53,10 @@ class DenialLetterParser:
         pass
     
     def extract_text_from_pdf(self, pdf_path: str) -> str:
-        """Extract text from PDF file with comprehensive error handling"""
+        """
+        Extract text from PDF (PyPDF2). Preserves line breaks from the content stream.
+        Scanned/image-only PDFs are not OCR'd here — integrate Tesseract/pdf2image if needed.
+        """
         try:
             with open(pdf_path, 'rb') as file:
                 reader = PyPDF2.PdfReader(file)
@@ -186,9 +199,17 @@ class DenialLetterParser:
         amounts = {
             "billed_amount": None,
             "allowed_amount": None,
-            "denied_amount": None
+            "denied_amount": None,
+            "paid_amount": None,
         }
-        
+
+        paid_m = self.PAID_LINE_PATTERN.search(text)
+        if paid_m:
+            try:
+                amounts["paid_amount"] = float(paid_m.group(1).replace(',', ''))
+            except ValueError:
+                pass
+
         all_amounts = []
         for match in self.AMOUNT_PATTERN.finditer(text):
             amount_str = match.group(1).replace(',', '')
@@ -197,16 +218,42 @@ class DenialLetterParser:
                 all_amounts.append(amount)
             except ValueError:
                 continue
-        
-        # Make educated guesses based on context
+
         if all_amounts:
-            # Largest amount is likely billed amount
             amounts["billed_amount"] = max(all_amounts)
-            
             if len(all_amounts) > 1:
                 amounts["denied_amount"] = sorted(all_amounts)[-1]
-        
+            if amounts["paid_amount"] is None and len(all_amounts) > 1:
+                amounts["paid_amount"] = sorted(all_amounts)[0]
+
         return amounts
+
+    def extract_rarc_codes(self, text: str) -> List[str]:
+        seen = []
+        for m in self.RARC_PATTERN.finditer(text):
+            code = m.group(1).upper()
+            if code not in seen:
+                seen.append(code)
+        return seen[:20]
+
+    def extract_cpt_codes(self, text: str) -> List[str]:
+        seen = []
+        for m in self.CPT_PATTERN.finditer(text):
+            code = m.group(1).upper()
+            if code in seen:
+                continue
+            if code.isdigit() and code.startswith(('19', '20')):
+                continue
+            seen.append(code)
+        return seen[:25]
+
+    def extract_icd_codes(self, text: str) -> List[str]:
+        seen = []
+        for m in self.ICD10_PATTERN.finditer(text):
+            code = m.group(1).upper()
+            if code not in seen:
+                seen.append(code)
+        return seen[:25]
     
     def extract_npi(self, text: str) -> Optional[str]:
         """Extract NPI number from text"""
@@ -218,70 +265,154 @@ class DenialLetterParser:
                 return match
         return None
     
-    def parse_denial_letter(self, pdf_path: str) -> Dict:
-        """
-        Parse a denial letter PDF and extract all relevant information
-        
-        Args:
-            pdf_path: Path to the PDF file
-        
-        Returns:
-            dict: Extracted information
-        """
-        text = self.extract_text_from_pdf(pdf_path)
-        
-        if not text:
-            return {
-                "success": False,
-                "error": "Could not extract text from PDF"
-            }
-        
-        # Extract all information
+    def _regex_extract_dict(self, text: str) -> Dict:
+        """Structured fields from regex/heuristics (layer merged with LLM when available)."""
         denial_codes = self.extract_denial_codes(text)
         dates = self.extract_dates(text)
         claim_number = self.extract_claim_number(text)
         payer_name = self.extract_payer_name(text)
         amounts = self.extract_amounts(text)
         npi = self.extract_npi(text)
-        
+        rarc_codes = self.extract_rarc_codes(text)
+        cpt_codes = self.extract_cpt_codes(text)
+        icd_codes = self.extract_icd_codes(text)
+
+        def fnum(x):
+            if x is None:
+                return None
+            try:
+                return float(x)
+            except (TypeError, ValueError):
+                return None
+
         return {
-            "success": True,
-            "denial_codes": denial_codes,
-            "primary_denial_code": denial_codes[0] if denial_codes else None,
-            "claim_number": claim_number,
             "payer_name": payer_name,
-            "denial_date": dates.get("denial_date"),
+            "claim_number": claim_number,
+            "patient_name": None,
             "service_date": dates.get("service_date"),
-            "billed_amount": amounts.get("billed_amount"),
-            "denied_amount": amounts.get("denied_amount"),
+            "denial_date": dates.get("denial_date"),
+            "cpt_codes": list(cpt_codes or []),
+            "icd_codes": list(icd_codes or []),
+            "rarc_codes": list(rarc_codes or []),
+            "denial_codes": list(denial_codes or []),
+            "billed_amount": fnum(amounts.get("billed_amount")),
+            "paid_amount": fnum(amounts.get("paid_amount")),
+            "denied_amount": fnum(amounts.get("denied_amount")),
             "provider_npi": npi,
-            "raw_text": text[:500],  # First 500 chars for reference
-            "confidence": self._calculate_confidence(
-                denial_codes, claim_number, payer_name, dates
-            )
+            "modifiers": [],
+            "denial_reason_text": None,
         }
+
+    def parse_denial_from_text(self, text: str) -> Dict:
+        """
+        Extract structured fields from raw denial / EOB text (PDF or paste).
+        Uses OpenAI JSON extraction when configured, merged with regex; never returns total failure.
+        """
+        from denial_llm_extraction import (
+            build_api_response_dict,
+            extract_with_openai,
+            llm_result_to_merged_fields,
+            merge_extraction_layers,
+        )
+
+        raw = text or ""
+        stripped = raw.strip()
+        if len(stripped) < 20:
+            empty = {
+                "payer_name": None,
+                "claim_number": None,
+                "patient_name": None,
+                "service_date": None,
+                "denial_date": None,
+                "cpt_codes": [],
+                "icd_codes": [],
+                "rarc_codes": [],
+                "denial_codes": [],
+                "billed_amount": None,
+                "paid_amount": None,
+                "denied_amount": None,
+                "provider_npi": None,
+                "modifiers": [],
+                "denial_reason_text": None,
+            }
+            return build_api_response_dict(empty, raw, llm_used=False, llm_error="insufficient_text")
+
+        rx = self._regex_extract_dict(raw)
+        llm_proc, llm_err = extract_with_openai(raw)
+        llm_fields = None
+        llm_used = False
+        if llm_proc:
+            llm_used = True
+            llm_fields = llm_result_to_merged_fields(llm_proc)
+        merged = merge_extraction_layers(llm_fields, rx)
+        return build_api_response_dict(merged, raw, llm_used=llm_used, llm_error=llm_err)
+
+    def parse_denial_letter(self, pdf_path: str) -> Dict:
+        """
+        Parse a denial letter PDF and extract all relevant information
+
+        Args:
+            pdf_path: Path to the PDF file
+
+        Returns:
+            dict: Extracted information
+        """
+        text = self.extract_text_from_pdf(pdf_path)
+
+        if not text:
+            return {
+                "success": False,
+                "error": "Could not extract text from PDF"
+            }
+
+        result = self.parse_denial_from_text(text)
+        if not result.get("success"):
+            return result
+        result["raw_text"] = text[:500]
+        return result
     
-    def _calculate_confidence(self, denial_codes, claim_number, payer_name, dates) -> str:
+    def _calculate_confidence(
+        self,
+        denial_codes,
+        claim_number,
+        payer_name,
+        dates,
+        rarc_codes=None,
+        cpt_codes=None,
+        icd_codes=None,
+    ) -> str:
         """Calculate confidence level of extraction"""
         score = 0
         if denial_codes:
-            score += 25
+            score += 20
+        if rarc_codes:
+            score += 10
         if claim_number:
-            score += 25
+            score += 20
         if payer_name:
-            score += 25
+            score += 20
         if dates.get("denial_date") or dates.get("service_date"):
-            score += 25
-        
-        if score >= 75:
+            score += 15
+        if cpt_codes:
+            score += 8
+        if icd_codes:
+            score += 7
+
+        if score >= 70:
             return "high"
-        elif score >= 50:
+        elif score >= 45:
             return "medium"
         else:
             return "low"
 
-# Convenience function
+# Convenience functions
 def parse_denial_pdf(pdf_path: str) -> Dict:
     """Parse a denial letter PDF"""
     parser = DenialLetterParser()
     return parser.parse_denial_letter(pdf_path)
+
+
+def parse_denial_text(raw_text: str) -> Dict:
+    """Parse pasted or plain-text denial / EOB content."""
+    parser = DenialLetterParser()
+    return parser.parse_denial_from_text(raw_text)

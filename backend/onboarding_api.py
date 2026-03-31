@@ -125,8 +125,14 @@ def register_onboarding_routes(app, limiter, generator):
         if icd_direct:
             icd_part = icd_direct
 
-        if not payer or not denial_reason:
-            return jsonify({'error': 'Payer and denial reason are required'}), 400
+        # Frictionless intake: defaults when payer or narrative omitted (upload / paste / CSV paths).
+        if not denial_reason or not str(denial_reason).strip():
+            denial_reason = (
+                'Denial details from uploaded or pasted documentation. '
+                'Review the generated appeal and attach supporting records as needed.'
+            )
+        if not payer or not str(payer).strip():
+            payer = 'Unknown payer'
 
         d = _defaults_for_onboarding()
         appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"

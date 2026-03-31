@@ -22,7 +22,9 @@ class EnvironmentValidator:
     
     # Optional but recommended
     RECOMMENDED_VARS = {
-        'OPENAI_API_KEY': 'OpenAI API key for AI-powered appeal generation (will use templates without this)',
+        'OPENAI_API_KEY': 'OpenAI API key for appeal generation and denial/EOB JSON extraction (regex-only without it)',
+        'OPENAI_EXTRACTION_MODEL': 'Optional model for extraction (default gpt-4o-mini); set gpt-4o for higher accuracy',
+        'OPENAI_APPEAL_MODEL': 'Optional model for submission appeal letters (default gpt-4o)',
         'ALLOWED_ORIGINS': 'CORS allowed origins',
     }
     

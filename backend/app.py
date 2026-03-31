@@ -16,7 +16,7 @@ from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
 from env_validator import validate_environment
 from credit_manager import CreditManager, PricingManager, initialize_pricing_data
-from pdf_parser import parse_denial_pdf
+from pdf_parser import parse_denial_pdf, parse_denial_text
 from timely_filing import calculate_timely_filing
 from denial_rules import get_denial_rule
 from admin_auth import admin_auth, require_admin
@@ -330,6 +330,33 @@ def parse_denial_letter():
             'error': 'Internal server error',
             'message': 'An error occurred while processing your file. Please enter information manually.',
             'allow_manual': True
+        }), 500
+
+
+@app.route('/api/parse/denial-text', methods=['POST'])
+@limiter.limit("30 per hour")
+def parse_denial_text_route():
+    """Extract claim fields from pasted denial / EOB plain text (fast path, no file)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        if not text:
+            return jsonify({'success': False, 'error': 'Empty text'}), 400
+        if len(text) > 100_000:
+            return jsonify({'success': False, 'error': 'Text exceeds maximum length'}), 400
+
+        result = parse_denial_text(text)
+        if result.get('confidence') == 'low' and not result.get('warning'):
+            result['warning'] = 'Low confidence extraction - please review all fields carefully'
+
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"❌ Error parsing denial text: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Could not parse pasted text. Try again or adjust the excerpt.',
+            'allow_manual': True,
         }), 500
 
 # ============================================================================

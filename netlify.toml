@@ -1,6 +1,7 @@
 [build]
   base = "frontend"
-  command = "rm -rf node_modules build && npm install --legacy-peer-deps && npm run build"
+  # Let Netlify cache node_modules; full rm -rf each build is slow and invites timeouts/cancels.
+  command = "npm install --legacy-peer-deps && npm run build"
   publish = "build"
 
 [build.environment]

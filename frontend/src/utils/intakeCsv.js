@@ -162,3 +162,24 @@ export function rowsToBatchPayload(rows) {
     };
   });
 }
+
+/** Rows shaped for backend batch appeal worker (all CSV / Excel rows). */
+export function rowsToWorkerBatchPayload(rows) {
+  return rows.map((r) => {
+    const x = normalizeRowKeys(r);
+    return {
+      claim_number: x.claim_number || '',
+      payer: x.payer || '',
+      denial_reason: x.denial_reason || '',
+      date_of_service: x.date_of_service || '',
+      cpt_codes: x.cpt_codes || '',
+      diagnosis_code: x.diagnosis_code || '',
+      icd_codes: x.diagnosis_code || '',
+      denial_code: x.denial_code || '',
+      carc_codes: x.denial_code || '',
+      rarc_codes: x.rarc || '',
+      billed_amount: x.billed_amount || '',
+      paid_amount: x.paid_amount || '',
+    };
+  });
+}

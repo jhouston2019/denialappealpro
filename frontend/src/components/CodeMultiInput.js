@@ -36,6 +36,8 @@ export default function CodeMultiInput({
   const border = '1px solid #e2e8f0';
   const warnSet = new Set((highlightCodes || []).map(normalizeCodeKey));
 
+  const verifyTitle = lowConfidence ? 'Please verify this field' : undefined;
+
   return (
     <div style={{ marginBottom: 14 }}>
       <label htmlFor={id} style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', display: 'block', marginBottom: 6 }}>
@@ -43,6 +45,7 @@ export default function CodeMultiInput({
         {required ? ' *' : ''}
       </label>
       <div
+        title={verifyTitle}
         style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -54,7 +57,7 @@ export default function CodeMultiInput({
               ? '2px solid #f59e0b'
               : border,
           borderRadius: 8,
-          background: '#fff',
+          background: lowConfidence ? '#fffbeb' : '#fff',
           minHeight: 44,
         }}
       >

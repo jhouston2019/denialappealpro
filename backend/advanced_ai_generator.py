@@ -16,7 +16,6 @@ from denial_templates import get_denial_template
 from appeal_output_structure import (
     SUBMISSION_STRUCTURE_SYSTEM_APPENDIX,
     build_argument_engine_block,
-    structured_template_fallback,
 )
 from medical_knowledge_base import (
     get_denial_strategy, 
@@ -74,110 +73,40 @@ class AdvancedAIAppealGenerator:
     
     def generate_appeal_content(self, appeal):
         """
-        Generate sophisticated appeal content using multi-step AI reasoning
-        
-        This method produces appeals that are superior to generic ChatGPT because:
-        1. Uses specialized medical billing/insurance knowledge base
-        2. Employs denial-specific strategic arguments
-        3. Incorporates regulatory and clinical guideline references
-        4. Uses multi-step reasoning for complex cases
-        5. Tailors arguments to specific payer tactics
+        Generate a submission-ready appeal: mandatory payer letter structure,
+        CARC/RARC interpretation, multi-denial handling. OpenAI when configured;
+        deterministic engine on failure or when API disabled.
         """
-        if not self.enabled:
-            logger.info(f"Generating structured template fallback for {appeal.appeal_id}")
-            return structured_template_fallback(appeal)
-        
+        from appeal_submission_engine import (
+            build_structured_intake_from_appeal,
+            generate_submission_appeal,
+            render_deterministic_submission_appeal,
+        )
+
+        structured = build_structured_intake_from_appeal(appeal)
+        client = self.client if self.enabled else None
+        model_tag = os.getenv("OPENAI_APPEAL_MODEL", "gpt-4o")
+
         try:
-            # Step 1: Analyze denial and develop strategy
-            strategy = self._analyze_denial_strategy(appeal)
-            
-            # Step 2: Get relevant citations for real-time validation (prevents hallucinations)
-            relevant_citations = None
-            if OPTIMIZATION_ENABLED:
-                relevant_citations = citation_validator.get_relevant_citations(
-                    denial_code=appeal.denial_code,
-                    cpt_codes=appeal.cpt_codes,
-                    payer=getattr(appeal, 'payer', None)
+            text, source = generate_submission_appeal(structured, client)
+            if hasattr(appeal, "ai_model_used"):
+                appeal.ai_model_used = model_tag if source == "llm" else "deterministic_submission"
+            if hasattr(appeal, "ai_generation_method"):
+                appeal.ai_generation_method = (
+                    "submission_engine_llm"
+                    if source == "llm"
+                    else "submission_engine_deterministic"
                 )
-            
-            # Step 3: Determine generation method (data-driven if optimization enabled)
-            if OPTIMIZATION_ENABLED:
-                cot_decision = prompt_optimizer.should_use_chain_of_thought(appeal)
-                use_chain_of_thought = cot_decision['use_chain_of_thought']
-                logger.info(f"Generation method decision: {cot_decision['reason']} (confidence: {cot_decision['confidence']})")
-            else:
-                # Default logic
-                use_chain_of_thought = (
-                    appeal.billed_amount > 5000 or  # High dollar amount
-                    appeal.appeal_level in ['level_2', 'level_3'] or  # Higher appeal levels
-                    appeal.denial_code in ['CO-50', 'CO-96']  # Complex denial types
-                )
-            
-            if use_chain_of_thought:
-                logger.info(f"Using advanced chain-of-thought reasoning for {appeal.appeal_id} (${appeal.billed_amount:,.2f})")
-                primary_content = self._generate_with_reasoning(appeal, strategy, relevant_citations)
-            else:
-                # Step 4: Generate primary appeal content with expert knowledge
-                primary_content = self._generate_primary_appeal(appeal, strategy, relevant_citations)
-            
-            # Step 4: Validate quality
-            quality_check = self._validate_appeal_quality(primary_content)
-            
-            # Step 5: Extract and verify citations
-            citations = self._extract_citations(primary_content)
-            verification = self._verify_citations(citations)
-            
-            # Step 6: Store quality metrics in appeal object (if it's a SQLAlchemy model)
-            if hasattr(appeal, 'ai_quality_score'):
-                appeal.ai_quality_score = quality_check['score']
-                appeal.ai_citation_count = sum(len(cites) for cites in citations.values())
-                appeal.ai_word_count = len(primary_content.split())
-                appeal.ai_model_used = "gpt-4-turbo-preview"
-                appeal.ai_generation_method = "chain_of_thought" if use_chain_of_thought else "direct"
-            
-            # Enhanced logging with citation verification
-            if quality_check['passed']:
-                logger.info(
-                    f"Advanced AI-generated appeal for {appeal.appeal_id}",
-                    extra={
-                        'appeal_id': appeal.appeal_id,
-                        'quality_score': quality_check['score'],
-                        'citation_count': appeal.ai_citation_count if hasattr(appeal, 'ai_citation_count') else 0,
-                        'verified_citations': len(verification['verified']),
-                        'verification_rate': verification['verification_rate'],
-                        'generation_method': 'chain_of_thought' if use_chain_of_thought else 'direct'
-                    }
-                )
-            else:
-                logger.warning(
-                    f"Appeal quality below threshold for {appeal.appeal_id}",
-                    extra={
-                        'appeal_id': appeal.appeal_id,
-                        'quality_score': quality_check['score'],
-                        'issues': quality_check['issues']
-                    }
-                )
-            
-            # Warn about potential hallucinations
-            if verification['potential_hallucinations']:
-                logger.warning(
-                    f"Potential hallucinated citations detected in {appeal.appeal_id}",
-                    extra={
-                        'appeal_id': appeal.appeal_id,
-                        'hallucinations': [h['citation'] for h in verification['potential_hallucinations'][:3]]
-                    }
-                )
-            
-            return primary_content
-            
+            if hasattr(appeal, "ai_word_count"):
+                appeal.ai_word_count = len(text.split())
+            return text
         except Exception as e:
             logger.error(
-                f"Error in advanced AI generation for {appeal.appeal_id}: {e}",
-                extra={'appeal_id': appeal.appeal_id, 'error': str(e)},
-                exc_info=True
+                f"Submission appeal generation failed for {appeal.appeal_id}: {e}",
+                extra={"appeal_id": appeal.appeal_id, "error": str(e)},
+                exc_info=True,
             )
-            logger.info(f"Falling back to structured template for {appeal.appeal_id}")
-            return structured_template_fallback(appeal)
+            return render_deterministic_submission_appeal(structured)
     
     def _analyze_denial_strategy(self, appeal):
         """Analyze the denial and identify optimal strategic arguments"""

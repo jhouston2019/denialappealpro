@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import shutil
 import tempfile
 import uuid
 from datetime import datetime, date
@@ -23,7 +24,14 @@ from user_auth import register_user, login_user, verify_user_token
 from credit_manager import CreditManager
 from stripe_billing import StripeBilling
 from retention_service import dashboard_metrics as retention_dashboard_metrics
-from batch_appeals_worker import start_batch_job, get_job, MAX_BATCH_ROWS
+from batch_appeals_worker import (
+    start_batch_job,
+    start_batch_job_from_rows,
+    start_pdf_batch_job,
+    get_job,
+    MAX_BATCH_ROWS,
+    MAX_PDF_BATCH_FILES,
+)
 from denial_analytics import compute_recovery_dashboard
 from follow_up_appeal import generate_follow_up_letter_text, should_generate_follow_up
 from appeal_automation import AppealAutomationHooks
@@ -818,14 +826,31 @@ def init_customer_portal(app, limiter, generator):
         return jsonify({'error': 'Invalid mode; use appeal, merged, or zip'}), 400
 
     @customer_bp.route('/queue/batch-appeals', methods=['POST'])
-    @limit('5 per hour')
+    @limit('8 per hour')
     @require_customer_auth
     def queue_batch_appeals_start():
-        """CSV batch: generate appeal text + PDF per row; poll job then download ZIP."""
+        """CSV batch: generate appeal text + PDF per row; poll job then download ZIP.
+        Accepts JSON { rows, defaults? } or multipart file field \"file\" (.csv)."""
         uid = g.current_user_id
-        defaults = {}
+        app_obj = current_app._get_current_object()
+
+        if request.is_json:
+            data = request.get_json(silent=True) or {}
+            defaults = data.get('defaults') or {}
+            rows = data.get('rows')
+            if not isinstance(rows, list) or not rows:
+                return jsonify({'error': 'JSON body must include non-empty "rows" array'}), 400
+            if len(rows) > MAX_BATCH_ROWS:
+                return jsonify({'error': f'Maximum {MAX_BATCH_ROWS} rows per batch'}), 400
+            try:
+                job_id = start_batch_job_from_rows(app_obj, uid, rows, defaults)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+            return jsonify({'job_id': job_id, 'max_rows': MAX_BATCH_ROWS, 'job_kind': 'csv'}), 202
+
         if not (request.content_type and 'multipart/form-data' in request.content_type):
-            return jsonify({'error': 'Send multipart form with file field "file"'}), 400
+            return jsonify({'error': 'Send JSON { rows } or multipart with CSV file field "file"'}), 400
+        defaults = {}
         dr = request.form.get('defaults')
         if dr:
             try:
@@ -842,14 +867,60 @@ def init_customer_portal(app, limiter, generator):
         tmp.close()
         try:
             f.save(tmp.name)
-            job_id = start_batch_job(current_app._get_current_object(), uid, tmp.name, defaults)
+            job_id = start_batch_job(app_obj, uid, tmp.name, defaults)
         except Exception as e:
             try:
                 os.unlink(tmp.name)
             except OSError:
                 pass
             return jsonify({'error': str(e)}), 500
-        return jsonify({'job_id': job_id, 'max_rows': MAX_BATCH_ROWS}), 202
+        return jsonify({'job_id': job_id, 'max_rows': MAX_BATCH_ROWS, 'job_kind': 'csv'}), 202
+
+    @customer_bp.route('/queue/batch-appeals-pdfs', methods=['POST'])
+    @limit('8 per hour')
+    @require_customer_auth
+    def queue_batch_appeals_pdfs_start():
+        """Multi-PDF batch: extract each letter, generate appeal + PDF; poll then download ZIP."""
+        if not (request.content_type and 'multipart/form-data' in request.content_type):
+            return jsonify({'error': 'multipart/form-data with field "files" required'}), 400
+        uid = g.current_user_id
+        defaults = {}
+        dr = request.form.get('defaults')
+        if dr:
+            try:
+                defaults = json.loads(dr)
+            except json.JSONDecodeError:
+                defaults = {}
+        files = request.files.getlist('files')
+        if not files:
+            return jsonify({'error': 'No files uploaded (use input name=\"files\" multiple)'}), 400
+        pdfs = [f for f in files if f.filename and f.filename.lower().endswith('.pdf')]
+        if not pdfs:
+            return jsonify({'error': 'Upload one or more .pdf files'}), 400
+        if len(pdfs) > MAX_PDF_BATCH_FILES:
+            return jsonify({'error': f'Maximum {MAX_PDF_BATCH_FILES} PDFs per batch'}), 400
+
+        tmp_dir = tempfile.mkdtemp(prefix='dap_pdf_batch_')
+        pdf_items = []
+        try:
+            for f in pdfs:
+                safe = secure_filename(f.filename) or 'denial.pdf'
+                path = os.path.join(tmp_dir, f'{uuid.uuid4().hex}_{safe}')
+                f.save(path)
+                pdf_items.append({'path': path, 'name': f.filename})
+            job_id = start_pdf_batch_job(
+                current_app._get_current_object(),
+                uid,
+                pdf_items,
+                defaults,
+                pdf_temp_dir=tmp_dir,
+            )
+        except Exception as e:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return jsonify({'error': str(e)}), 500
+        return jsonify(
+            {'job_id': job_id, 'max_files': MAX_PDF_BATCH_FILES, 'job_kind': 'pdf', 'file_count': len(pdf_items)}
+        ), 202
 
     @customer_bp.route('/queue/batch-appeals/<job_id>', methods=['GET'])
     @require_customer_auth
@@ -860,6 +931,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify(
             {
                 'status': j.get('status'),
+                'job_kind': j.get('job_kind', 'csv'),
                 'total': j.get('total', 0),
                 'current': j.get('current', 0),
                 'ok_count': j.get('ok_count'),

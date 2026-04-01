@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import CodeMultiInput from '../components/CodeMultiInput';
 import CodingIntelligencePanel from '../components/CodingIntelligencePanel';
+import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 import {
   parseCsvText,
   parseExcelFile,
@@ -910,18 +911,23 @@ export default function OnboardingStart() {
 
       {mode === 'upload' && (
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: navy, marginBottom: 8 }}>
+          <p style={{ fontWeight: 700, fontSize: 13, color: navy, margin: '0 0 8px' }}>
             Denial letter or EOB (PDF, PNG, JPG)
-          </label>
-          <input
-            type="file"
+          </p>
+          <DenialDocumentDropZone
             accept=".pdf,.png,.jpg,.jpeg"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) runPdfExtract(f);
-            }}
-            style={{ fontSize: 14 }}
-          />
+            onFile={(f) => runPdfExtract(f)}
+            disabled={extracting}
+            inputId="onboarding-denial-letter-file"
+          >
+            <div style={{ textAlign: 'center', padding: '8px 4px' }}>
+              <strong style={{ color: navy, fontSize: 15 }}>Drag and drop your file here</strong>
+              <p style={{ margin: '10px 0 6px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
+                Release to upload — or click to choose from your device
+              </p>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>PDF, PNG, or JPG · max 10MB on server</span>
+            </div>
+          </DenialDocumentDropZone>
         </div>
       )}
 

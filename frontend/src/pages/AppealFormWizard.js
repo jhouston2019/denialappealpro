@@ -5,6 +5,7 @@ import { useUser } from '../context/UserContext';
 import UsageTracker from '../components/UsageTracker';
 import UpgradeModal from '../components/UpgradeModal';
 import UpgradeCTA from '../components/UpgradeCTA';
+import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 
 function AppealFormWizard() {
   const navigate = useNavigate();
@@ -63,11 +64,10 @@ function AppealFormWizard() {
     { value: 'CO-197', label: 'CO-197 - Precertification Absent' }
   ];
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
+  const processDenialFile = async (file) => {
     if (!file) return;
 
-    setFormData(prev => ({ ...prev, denial_letter: file }));
+    setFormData((prev) => ({ ...prev, denial_letter: file }));
     setLoading(true);
 
     try {
@@ -75,24 +75,25 @@ function AppealFormWizard() {
       uploadData.append('file', file);
 
       const response = await api.post('/api/parse/denial-letter', uploadData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (response.data.success) {
         setParsedData(response.data);
-        
-        // Auto-fill form with parsed data
-        setFormData(prev => ({
+
+        setFormData((prev) => ({
           ...prev,
           payer: response.data.payer_name || prev.payer,
           claim_number: response.data.claim_number || prev.claim_number,
           denial_code: response.data.primary_denial_code || prev.denial_code,
           date_of_service: response.data.service_date || prev.date_of_service,
           billed_amount: response.data.billed_amount || prev.billed_amount,
-          provider_npi: response.data.provider_npi || prev.provider_npi
+          provider_npi: response.data.provider_npi || prev.provider_npi,
         }));
 
-        alert(`✓ Document parsed successfully!\n\nConfidence: ${response.data.confidence}\n\nPlease review and confirm the extracted information.`);
+        alert(
+          `✓ Document parsed successfully!\n\nConfidence: ${response.data.confidence}\n\nPlease review and confirm the extracted information.`
+        );
       }
     } catch (error) {
       console.error('Error parsing document:', error);
@@ -194,43 +195,44 @@ function AppealFormWizard() {
         Upload your denial letter or EOB. We'll automatically extract key information.
       </p>
 
-      <div style={{
-        border: '2px dashed #ddd',
-        borderRadius: '12px',
-        padding: '60px 40px',
-        textAlign: 'center',
-        background: '#f8f9fa',
-        marginBottom: '30px'
-      }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>📄</div>
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-          id="file-upload"
-        />
-        <label htmlFor="file-upload" style={{
-          display: 'inline-block',
-          padding: '15px 40px',
-          background: '#007bff',
-          color: 'white',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontSize: '18px',
-          fontWeight: '600'
-        }}>
-          {formData.denial_letter ? 'Change File' : 'Upload Denial Letter'}
-        </label>
-        {formData.denial_letter && (
-          <div style={{ marginTop: '20px', color: '#28a745', fontWeight: '600' }}>
-            ✓ {formData.denial_letter.name}
-          </div>
-        )}
-        <p style={{ marginTop: '20px', color: '#666', fontSize: '14px' }}>
-          Supported format: PDF (max 10MB)
-        </p>
-      </div>
+      <DenialDocumentDropZone
+        accept=".pdf,application/pdf"
+        onFile={processDenialFile}
+        disabled={loading}
+        inputId="wizard-denial-letter-file"
+        style={{ padding: '48px 32px', marginBottom: 30 }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
+          <p style={{ margin: '0 0 12px', color: '#334155', fontSize: '18px', fontWeight: 700 }}>
+            Drag and drop your denial letter here
+          </p>
+          <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '15px', lineHeight: 1.5 }}>
+            Drop a PDF on this area, or click to upload from your computer
+          </p>
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '12px 28px',
+              background: '#007bff',
+              color: 'white',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 600,
+            }}
+          >
+            {formData.denial_letter ? 'Change file' : 'Choose PDF'}
+          </span>
+          {formData.denial_letter && (
+            <div style={{ marginTop: '18px', color: '#28a745', fontWeight: '600' }}>
+              ✓ {formData.denial_letter.name}
+            </div>
+          )}
+          <p style={{ marginTop: '18px', color: '#666', fontSize: '14px' }}>
+            Supported format: PDF (max 10MB)
+          </p>
+        </div>
+      </DenialDocumentDropZone>
 
       {loading && (
         <div style={{ textAlign: 'center', padding: '20px', color: '#007bff' }}>

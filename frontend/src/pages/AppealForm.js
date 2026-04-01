@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 
 function AppealForm() {
   const navigate = useNavigate();
@@ -62,8 +63,8 @@ function AppealForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e) => {
-    setFormData(prev => ({ ...prev, denial_letter: e.target.files[0] }));
+  const handleDenialFile = (file) => {
+    setFormData((prev) => ({ ...prev, denial_letter: file }));
   };
 
   const handleSubmit = async (e) => {
@@ -313,8 +314,24 @@ function AppealForm() {
           <h3>Documentation</h3>
             <div className="form-group">
               <label>Denial Letter / EOB *</label>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} required />
-              <small>PDF or image format (max 10MB)</small>
+              <DenialDocumentDropZone
+                accept=".pdf,.jpg,.jpeg,.png"
+                onFile={handleDenialFile}
+                disabled={loading}
+                inputId="appeal-form-denial-letter"
+              >
+                <div style={{ textAlign: 'center', padding: '6px 4px' }}>
+                  <strong style={{ fontSize: 15 }}>Drag and drop your denial letter or EOB here</strong>
+                  <p style={{ margin: '10px 0 4px', color: '#64748b', fontSize: 14 }}>
+                    Or click to browse — PDF, JPG, JPEG, or PNG (max 10MB)
+                  </p>
+                  {formData.denial_letter && (
+                    <p style={{ margin: '8px 0 0', color: '#15803d', fontWeight: 600, fontSize: 14 }}>
+                      ✓ {formData.denial_letter.name}
+                    </p>
+                  )}
+                </div>
+              </DenialDocumentDropZone>
             </div>
         </div>
 

@@ -6,7 +6,7 @@ import { useAppeal } from '../context/AppealContext';
 
 function AppealForm() {
   const navigate = useNavigate();
-  const { appealData } = useAppeal();
+  const { appealData, uploadedFile } = useAppeal();
   const [loading, setLoading] = useState(false);
   const [docExtracting, setDocExtracting] = useState(false);
   const [formData, setFormData] = useState({
@@ -27,7 +27,15 @@ function AppealForm() {
 
   useEffect(() => {
     if (!appealData || Object.keys(appealData).length === 0) return;
-    setFormData((prev) => ({ ...prev, ...appealData }));
+    setFormData((prev) => {
+      const updated = { ...prev };
+      Object.keys(appealData).forEach((key) => {
+        if (!prev[key] || prev[key] === '') {
+          updated[key] = appealData[key];
+        }
+      });
+      return updated;
+    });
   }, [appealData]);
 
   const validateNPI = (npi) => {
@@ -85,7 +93,7 @@ function AppealForm() {
     }
 
     // Validate file is attached
-    if (!formData.denial_letter) {
+    if (!(uploadedFile ?? formData.denial_letter)) {
       alert('❌ Missing Document\n\nPlease attach your denial letter or EOB (Explanation of Benefits).\n\nAccepted formats: PDF, JPG, JPEG, PNG');
       return;
     }
@@ -95,11 +103,13 @@ function AppealForm() {
     try {
       const data = new FormData();
       Object.keys(formData).forEach((key) => {
-        if (key === 'payer') return;
+        if (key === 'payer' || key === 'denial_letter') return;
         if (formData[key]) data.append(key, formData[key]);
       });
       const payerVal = (formData.payer_name || formData.payer || '').trim();
       if (payerVal) data.append('payer', payerVal);
+      const letter = uploadedFile ?? formData.denial_letter;
+      if (letter) data.append('denial_letter', letter);
 
       const response = await api.post('/api/appeals/submit', data, {
         headers: { 'Content-Type': 'multipart/form-data' },

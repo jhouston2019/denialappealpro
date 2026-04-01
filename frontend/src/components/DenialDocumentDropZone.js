@@ -47,7 +47,7 @@ export default function DenialDocumentDropZone({
   const [uploading, setUploading] = useState(false);
   const depth = useRef(0);
   const navigate = useNavigate();
-  const { applyExtraction } = useAppeal();
+  const { setAppealData, setUploadedFile } = useAppeal();
 
   useEffect(() => {
     onUploadingChange?.(uploading);
@@ -73,7 +73,11 @@ export default function DenialDocumentDropZone({
 
       if (payload?.success) {
         const mapped = mapExtractedToForm(payload);
-        applyExtraction(mapped);
+        if (!mapped.payer_name || !mapped.claim_number) {
+          console.warn('Extraction incomplete:', mapped);
+        }
+        setAppealData(mapped);
+        setUploadedFile(file);
         onFile?.(file);
         onExtractSuccess?.(payload);
         if (navigateAfterExtract) {
@@ -85,6 +89,7 @@ export default function DenialDocumentDropZone({
     } catch (err) {
       console.error('Denial extract error:', err);
       onExtractError?.(err);
+      setUploadedFile(file);
       onFile?.(file);
     } finally {
       setUploading(false);
@@ -99,6 +104,7 @@ export default function DenialDocumentDropZone({
       return;
     }
 
+    setUploadedFile(file);
     onFile?.(file);
   };
 

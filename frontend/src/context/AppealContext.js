@@ -1,23 +1,38 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-
-const STORAGE_KEY = 'dap_appeal_data';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 const AppealContext = createContext(null);
 
 export function AppealProvider({ children }) {
-  const [appealData, setAppealData] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {
-      /* ignore */
-    }
-    return {};
-  });
+  const [appealData, setAppealData] = useState({});
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const skipFirstPersist = useRef(false);
 
   useEffect(() => {
+    const saved = sessionStorage.getItem('dap_appeal_data');
+    if (saved) {
+      try {
+        setAppealData(JSON.parse(saved));
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!skipFirstPersist.current) {
+      skipFirstPersist.current = true;
+      return;
+    }
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(appealData));
+      sessionStorage.setItem('dap_appeal_data', JSON.stringify(appealData));
     } catch (_) {
       /* ignore quota / private mode */
     }
@@ -30,19 +45,13 @@ export function AppealProvider({ children }) {
 
   const clearAppealData = useCallback(() => {
     setAppealData({});
+    setUploadedFile(null);
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem('dap_appeal_data');
     } catch (_) {
       /* ignore */
     }
   }, []);
-
-  const applyExtraction = useCallback(
-    (mapped) => {
-      mergeAppealData(mapped);
-    },
-    [mergeAppealData]
-  );
 
   const value = useMemo(
     () => ({
@@ -50,9 +59,10 @@ export function AppealProvider({ children }) {
       setAppealData,
       mergeAppealData,
       clearAppealData,
-      applyExtraction,
+      uploadedFile,
+      setUploadedFile,
     }),
-    [appealData, mergeAppealData, clearAppealData, applyExtraction]
+    [appealData, mergeAppealData, clearAppealData, uploadedFile]
   );
 
   return <AppealContext.Provider value={value}>{children}</AppealContext.Provider>;

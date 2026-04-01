@@ -10,7 +10,7 @@ import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 function AppealFormWizard() {
   const navigate = useNavigate();
   const { userEmail, setUser } = useUser();
-  const { appealData } = useAppeal();
+  const { appealData, uploadedFile } = useAppeal();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [parsedData, setParsedData] = useState(null);
@@ -43,7 +43,15 @@ function AppealFormWizard() {
 
   useEffect(() => {
     if (!appealData || Object.keys(appealData).length === 0) return;
-    setFormData((prev) => ({ ...prev, ...appealData }));
+    setFormData((prev) => {
+      const updated = { ...prev };
+      Object.keys(appealData).forEach((key) => {
+        if (!prev[key] || prev[key] === '') {
+          updated[key] = appealData[key];
+        }
+      });
+      return updated;
+    });
   }, [appealData]);
 
   useEffect(() => {
@@ -82,7 +90,7 @@ function AppealFormWizard() {
   };
 
   const nextStep = () => {
-    if (step === 1 && !formData.denial_letter) {
+    if (step === 1 && !(uploadedFile ?? formData.denial_letter)) {
       alert('Please upload your denial letter');
       return;
     }
@@ -112,9 +120,12 @@ function AppealFormWizard() {
 
     try {
       const data = new FormData();
-      Object.keys(formData).forEach(key => {
+      Object.keys(formData).forEach((key) => {
+        if (key === 'denial_letter') return;
         if (formData[key]) data.append(key, formData[key]);
       });
+      const letter = uploadedFile ?? formData.denial_letter;
+      if (letter) data.append('denial_letter', letter);
 
       const response = await api.post('/api/appeals/submit', data, {
         headers: { 'Content-Type': 'multipart/form-data' }

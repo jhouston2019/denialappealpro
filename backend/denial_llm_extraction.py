@@ -597,3 +597,86 @@ def build_api_response_dict(
         result["warning"] = "Low confidence extraction - please review all fields carefully"
 
     return result
+
+
+def build_normalized_api_response(
+    merged: Dict[str, Any],
+    raw_text: str,
+    *,
+    llm_used: bool,
+    llm_error: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Final /api/parse/denial-letter (and denial-text) payload: strict normalized fields
+    (no null/undefined) plus confidence and backward-compatible extras for onboarding UI.
+    """
+    from utils.normalize_denial_parse import (
+        normalize_date,
+        normalize_denial_parse,
+        safe_array,
+        safe_string,
+    )
+
+    conf = calculate_confidence(
+        {
+            "payer_name": merged.get("payer_name"),
+            "claim_number": merged.get("claim_number"),
+            "patient_name": merged.get("patient_name"),
+            "date_of_service": merged.get("service_date"),
+            "cpt_codes": merged.get("cpt_codes"),
+            "icd10_codes": merged.get("icd_codes"),
+            "modifiers": merged.get("modifiers"),
+            "carc_codes": [
+                re.sub(r"\D", "", str(x)) for x in (merged.get("denial_codes") or []) if x
+            ],
+            "rarc_codes": merged.get("rarc_codes"),
+            "billed_amount": merged.get("billed_amount"),
+            "paid_amount": merged.get("paid_amount"),
+            "denial_reason_text": merged.get("denial_reason_text"),
+        },
+        raw_text,
+    )
+
+    normalized = normalize_denial_parse(merged)
+
+    paid = merged.get("paid_amount")
+    denied = merged.get("denied_amount")
+
+    fc = conf["fieldConfidence"]
+    field_confidence_camel = {
+        "claimNumber": fc.get("claim_number", "low"),
+        "dateOfService": fc.get("date_of_service", "low"),
+        "payer": fc.get("payer_name", "low"),
+        "patientName": fc.get("patient_name", "low"),
+        "cptCodes": fc.get("cpt_codes", "low"),
+        "icdCodes": fc.get("icd10_codes", "low"),
+        "carcCodes": fc.get("carc_codes", "low"),
+        "rarcCodes": fc.get("rarc_codes", "low"),
+        "modifiers": fc.get("modifiers", "low"),
+        "billedAmount": fc.get("billed_amount", "low"),
+        "paidAmount": fc.get("paid_amount", "low"),
+        "denialReasonText": fc.get("denial_reason_text", "low"),
+    }
+
+    err = "" if llm_error is None else str(llm_error)
+
+    result: Dict[str, Any] = {
+        "success": True,
+        **normalized,
+        "patient_name": safe_string(merged.get("patient_name")),
+        "denial_date": normalize_date(merged.get("denial_date")),
+        "paid_amount": safe_string(paid) if paid is not None else "",
+        "denied_amount": safe_string(denied) if denied is not None else "",
+        "modifiers": safe_array(merged.get("modifiers")),
+        "confidence": conf["overall"],
+        "field_confidence": field_confidence_camel,
+        "fieldConfidence": field_confidence_camel,
+        "raw_text": (raw_text or "")[:500],
+        "extraction_engine": "llm+regex" if llm_used else "regex",
+        "llm_error": err,
+    }
+
+    if conf["overall"] == "low":
+        result["warning"] = "Low confidence extraction - please review all fields carefully"
+
+    return result

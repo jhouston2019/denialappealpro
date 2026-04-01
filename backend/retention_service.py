@@ -5,7 +5,9 @@ Aggregates for retention emails and dashboard metrics.
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from models import User, Appeal
+from sqlalchemy import and_, case, func, or_
+
+from models import User, Appeal, db
 
 
 def _money(n) -> float:
@@ -112,30 +114,103 @@ def success_rate_for_claims(claims: List[Appeal]) -> float:
     return 0.0
 
 
-def dashboard_metrics(user_id: int) -> Dict[str, Any]:
-    claims = claims_for_user(user_id)
-    revenue_at_risk = sum(_money(c.billed_amount) for c in claims)
-    recovered = sum(_money(c.outcome_amount_recovered) for c in claims if c.outcome_amount_recovered)
-    estimated = sum(
-        _money(c.billed_amount) * 0.35
-        for c in claims
-        if (c.queue_status or "") in ("generated", "submitted")
-        and (not c.outcome_amount_recovered or _money(c.outcome_amount_recovered) == 0)
+def dashboard_metrics_fast(user_id: int) -> Dict[str, Any]:
+    """
+    Same semantics as legacy dashboard_metrics without loading every Appeal row (queue page performance).
+    """
+    uid = user_id
+    base = Appeal.user_id == uid
+
+    revenue_at_risk = float(
+        db.session.query(func.coalesce(func.sum(Appeal.billed_amount), 0)).filter(base).scalar() or 0
     )
+
+    recovered = float(
+        db.session.query(func.coalesce(func.sum(Appeal.outcome_amount_recovered), 0))
+        .filter(base, Appeal.outcome_amount_recovered.isnot(None), Appeal.outcome_amount_recovered > 0)
+        .scalar()
+        or 0
+    )
+
+    est_cond = and_(
+        Appeal.queue_status.in_(("generated", "submitted")),
+        or_(
+            Appeal.outcome_amount_recovered.is_(None),
+            Appeal.outcome_amount_recovered == 0,
+        ),
+    )
+    estimated = float(
+        db.session.query(
+            func.coalesce(
+                func.sum(case((est_cond, Appeal.billed_amount * 0.35), else_=0)),
+                0,
+            )
+        )
+        .filter(base)
+        .scalar()
+        or 0
+    )
+
     revenue_recovered = round(recovered if recovered > 0 else estimated, 2)
-    appeals_processed = sum(
-        1
-        for c in claims
-        if (c.queue_status or "") in ("generated", "submitted")
-        or (c.status or "") == "completed"
+
+    appeals_processed = (
+        db.session.query(func.count(Appeal.id))
+        .filter(
+            base,
+            or_(
+                Appeal.queue_status.in_(("generated", "submitted")),
+                Appeal.status == "completed",
+            ),
+        )
+        .scalar()
+        or 0
     )
-    success_rate = success_rate_for_claims(claims)
+
+    resolved_n = (
+        db.session.query(func.count(Appeal.id))
+        .filter(
+            base,
+            Appeal.outcome_status.in_(("approved", "partially_approved", "denied")),
+        )
+        .scalar()
+        or 0
+    )
+    if resolved_n:
+        wins = (
+            db.session.query(func.count(Appeal.id))
+            .filter(
+                base,
+                Appeal.outcome_status.in_(("approved", "partially_approved")),
+            )
+            .scalar()
+            or 0
+        )
+        success_rate = round(100.0 * wins / resolved_n, 1)
+    else:
+        submitted = (
+            db.session.query(func.count(Appeal.id))
+            .filter(base, Appeal.queue_status == "submitted")
+            .scalar()
+            or 0
+        )
+        pipeline = (
+            db.session.query(func.count(Appeal.id))
+            .filter(base, Appeal.queue_status.in_(("generated", "submitted")))
+            .scalar()
+            or 0
+        )
+        success_rate = round(100.0 * submitted / pipeline, 1) if pipeline else 0.0
+
     return {
         "revenue_at_risk": round(revenue_at_risk, 2),
         "revenue_recovered": revenue_recovered,
-        "appeals_processed": appeals_processed,
+        "appeals_processed": int(appeals_processed),
         "success_rate": success_rate,
     }
+
+
+def dashboard_metrics(user_id: int) -> Dict[str, Any]:
+    return dashboard_metrics_fast(user_id)
 
 
 def inactive_users_after(days: int) -> List[User]:

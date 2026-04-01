@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +10,11 @@ export default function DenialQueue({ variant = 'queue' }) {
   const isDashboard = variant === 'dashboard';
   const [claims, setClaims] = useState([]);
   const [metrics, setMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const queueLimit = 25;
   const [batchOpen, setBatchOpen] = useState(() => isDashboard);
   const [batchRows, setBatchRows] = useState('');
   const [defaults, setDefaults] = useState({
@@ -27,16 +31,51 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [appealZipBusy, setAppealZipBusy] = useState(false);
   const [appealZipErr, setAppealZipErr] = useState('');
 
-  const load = useCallback(async () => {
-    const [c, m] = await Promise.all([api.get('/api/queue'), api.get('/api/queue/metrics')]);
-    setClaims(c.data.claims || []);
-    setMetrics(m.data);
-    setLoading(false);
+  const fetchQueuePage = useCallback(async (page) => {
+    setListLoading(true);
+    try {
+      const res = await api.get(`/api/queue?limit=${queueLimit}&page=${page}`);
+      setClaims(res.data.claims || []);
+      setQueueTotal(typeof res.data.total === 'number' ? res.data.total : 0);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setListLoading(false);
+    }
+  }, [queueLimit]);
+
+  const fetchMetrics = useCallback(async () => {
+    setMetricsLoading(true);
+    try {
+      const res = await api.get('/api/queue/metrics');
+      setMetrics(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMetricsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    fetchMetrics();
+  }, [fetchMetrics]);
+
+  useEffect(() => {
+    fetchQueuePage(queuePage);
+  }, [queuePage, fetchQueuePage]);
+
+  const processedClaims = useMemo(
+    () =>
+      (claims || []).map((a) => ({
+        ...a,
+        shortId: String(a.appeal_id ?? a.id ?? '').slice(0, 8),
+      })),
+    [claims]
+  );
+
+  const refreshQueueAndMetrics = useCallback(async () => {
+    await Promise.all([fetchMetrics(), fetchQueuePage(queuePage)]);
+  }, [fetchMetrics, fetchQueuePage, queuePage]);
 
   useEffect(() => {
     if (!appealZipJobId) return undefined;
@@ -88,7 +127,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     const { data } = await api.post('/api/queue/batch', { rows, defaults });
     setBatchMsg(`Created ${data.created_count}. Errors: ${data.errors?.length || 0}`);
     setBatchRows('');
-    load();
+    refreshQueueAndMetrics();
   };
 
   const submitBatchCsv = async () => {
@@ -103,7 +142,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     const { data } = await api.post('/api/queue/batch', fd);
     setBatchMsg(`Created ${data.created_count}. Errors: ${data.errors?.length || 0}`);
     setCsvFile(null);
-    load();
+    refreshQueueAndMetrics();
   };
 
   const startBatchAppealZip = async () => {
@@ -143,10 +182,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     }
   };
 
-  if (loading) {
-    return <div style={{ padding: 24 }}>Loading queue…</div>;
-  }
-
+  const totalPages = Math.max(1, Math.ceil(queueTotal / queueLimit));
   const pct =
     metrics && metrics.added_today > 0
       ? Math.min(100, Math.round((metrics.processed_today / metrics.added_today) * 100))
@@ -216,6 +252,25 @@ export default function DenialQueue({ variant = 'queue' }) {
               Dismiss
             </button>
           </div>
+        </div>
+      )}
+
+      {metricsLoading && !metrics && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 12,
+            marginTop: 16,
+            marginBottom: 16,
+          }}
+        >
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} style={{ border: '1px solid #e2e8f0', padding: 10, borderRadius: 6, background: '#f8fafc' }}>
+              <div style={{ height: 12, width: '70%', background: '#e2e8f0', borderRadius: 4, marginBottom: 8 }} />
+              <div style={{ height: 22, width: '45%', background: '#e2e8f0', borderRadius: 4 }} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -448,7 +503,44 @@ export default function DenialQueue({ variant = 'queue' }) {
         </div>
       )}
 
-      <RecoveryClaimsTable claims={claims} loading={loading} onRefresh={load} />
+      <RecoveryClaimsTable
+        claims={processedClaims}
+        loading={listLoading}
+        onRefresh={refreshQueueAndMetrics}
+      />
+
+      {queueTotal > queueLimit && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+            marginTop: 20,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type="button"
+            disabled={queuePage <= 1 || listLoading}
+            onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+            style={{ padding: '8px 16px', cursor: queuePage <= 1 ? 'not-allowed' : 'pointer' }}
+          >
+            Previous
+          </button>
+          <span style={{ fontSize: 14, color: '#334155' }}>
+            Page {queuePage} of {totalPages} ({queueTotal} claims)
+          </span>
+          <button
+            type="button"
+            disabled={queuePage >= totalPages || listLoading}
+            onClick={() => setQueuePage((p) => p + 1)}
+            style={{ padding: '8px 16px', cursor: queuePage >= totalPages ? 'not-allowed' : 'pointer' }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

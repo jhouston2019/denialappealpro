@@ -309,11 +309,12 @@ class DenialLetterParser:
         Uses OpenAI JSON extraction when configured, merged with regex; never returns total failure.
         """
         from denial_llm_extraction import (
-            build_api_response_dict,
+            build_normalized_api_response,
             extract_with_openai,
             llm_result_to_merged_fields,
             merge_extraction_layers,
         )
+        from utils.normalize_denial_parse import extract_structured, overlay_structured_over_merge
 
         raw = text or ""
         stripped = raw.strip()
@@ -332,11 +333,16 @@ class DenialLetterParser:
                 "paid_amount": None,
                 "denied_amount": None,
                 "provider_npi": None,
+                "provider_name": None,
+                "patient_id": None,
                 "modifiers": [],
                 "denial_reason_text": None,
             }
-            return build_api_response_dict(empty, raw, llm_used=False, llm_error="insufficient_text")
+            return build_normalized_api_response(
+                empty, raw, llm_used=False, llm_error="insufficient_text"
+            )
 
+        structured = extract_structured(raw)
         rx = self._regex_extract_dict(raw)
         llm_proc, llm_err = extract_with_openai(raw)
         llm_fields = None
@@ -345,7 +351,8 @@ class DenialLetterParser:
             llm_used = True
             llm_fields = llm_result_to_merged_fields(llm_proc)
         merged = merge_extraction_layers(llm_fields, rx)
-        return build_api_response_dict(merged, raw, llm_used=llm_used, llm_error=llm_err)
+        merged = overlay_structured_over_merge(merged, structured)
+        return build_normalized_api_response(merged, raw, llm_used=llm_used, llm_error=llm_err)
 
     def parse_denial_letter(self, pdf_path: str) -> Dict:
         """

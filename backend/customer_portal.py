@@ -10,14 +10,16 @@ import re
 import shutil
 import tempfile
 import uuid
-from datetime import datetime, date
+import time
+from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from flask import Blueprint, request, jsonify, g, current_app, send_file
 from werkzeug.utils import secure_filename
 
-from sqlalchemy import func
+from sqlalchemy import and_, case, func, or_
+from sqlalchemy.orm import defer, load_only
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from models import db, User, Appeal, ClaimStatusEvent, ReferralPartner
@@ -387,6 +389,11 @@ def init_customer_portal(app, limiter, generator):
     @customer_bp.route('/queue', methods=['GET'])
     @require_customer_auth
     def queue_list():
+        t0 = time.time()
+        page = max(1, int(request.args.get('page', 1)))
+        limit = min(100, max(1, int(request.args.get('limit', 25))))
+        offset = (page - 1) * limit
+
         q = Appeal.query.filter_by(user_id=g.current_user_id)
         search_q = (request.args.get('q') or '').strip()
         if search_q:
@@ -397,37 +404,127 @@ def init_customer_portal(app, limiter, generator):
         status_f = (request.args.get('status') or '').strip().lower()
         if status_f:
             q = q.filter(Appeal.appeal_tracking_status == status_f)
-        rows = q.order_by(Appeal.created_at.desc()).limit(500).all()
-        return jsonify({'claims': [_appeal_to_queue_row(a) for a in rows]}), 200
+
+        total = q.with_entities(func.count(Appeal.id)).scalar() or 0
+
+        rows = (
+            q.options(
+                load_only(
+                    Appeal.id,
+                    Appeal.appeal_id,
+                    Appeal.claim_number,
+                    Appeal.payer,
+                    Appeal.billed_amount,
+                    Appeal.denial_reason,
+                    Appeal.queue_status,
+                    Appeal.payment_status,
+                    Appeal.status,
+                    Appeal.created_at,
+                    Appeal.appeal_letter_path,
+                    Appeal.last_generated_at,
+                    Appeal.date_of_service,
+                    Appeal.appeal_tracking_status,
+                    Appeal.tracking_updated_at,
+                    Appeal.payer_fax,
+                    Appeal.appeal_generation_kind,
+                    Appeal.submitted_to_payer_at,
+                    Appeal.denial_prediction_score,
+                    Appeal.fix_status,
+                    Appeal.resubmission_ready,
+                ),
+                defer(Appeal.generated_letter_text),
+            )
+            .order_by(Appeal.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+
+        elapsed = time.time() - t0
+        print(f'QUEUE LOAD TIME: {elapsed:.4f}s (rows={len(rows)}, total={total})')
+
+        return (
+            jsonify(
+                {
+                    'claims': [_appeal_to_queue_row(a) for a in rows],
+                    'page': page,
+                    'limit': limit,
+                    'total': total,
+                }
+            ),
+            200,
+        )
 
     @customer_bp.route('/queue/metrics', methods=['GET'])
     @require_customer_auth
     def queue_metrics():
+        t0 = time.time()
         uid = g.current_user_id
         today = date.today()
-        claims = Appeal.query.filter_by(user_id=uid).all()
-        total = len(claims)
-        at_risk = sum(float(c.billed_amount or 0) for c in claims)
-        processed_today = sum(
-            1
-            for c in claims
-            if c.last_generated_at and c.last_generated_at.date() == today
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = today_start + timedelta(days=1)
+        base = Appeal.user_id == uid
+
+        total = db.session.query(func.count(Appeal.id)).filter(base).scalar() or 0
+
+        at_risk = float(
+            db.session.query(func.coalesce(func.sum(Appeal.billed_amount), 0)).filter(base).scalar() or 0
         )
-        added_today = sum(1 for c in claims if c.created_at and c.created_at.date() == today)
-        recovered = sum(
-            float(c.outcome_amount_recovered)
-            for c in claims
-            if c.outcome_amount_recovered is not None
+
+        processed_today = (
+            db.session.query(func.count(Appeal.id))
+            .filter(
+                base,
+                Appeal.last_generated_at >= today_start,
+                Appeal.last_generated_at < today_end,
+            )
+            .scalar()
+            or 0
         )
-        estimated_recovered = sum(
-            float(c.billed_amount or 0) * 0.35
-            for c in claims
-            if (c.queue_status in ('generated', 'submitted'))
-            and (not c.outcome_amount_recovered or float(c.outcome_amount_recovered or 0) == 0)
+
+        added_today = (
+            db.session.query(func.count(Appeal.id))
+            .filter(
+                base,
+                Appeal.created_at >= today_start,
+                Appeal.created_at < today_end,
+            )
+            .scalar()
+            or 0
         )
+
+        recovered = float(
+            db.session.query(func.coalesce(func.sum(Appeal.outcome_amount_recovered), 0))
+            .filter(base, Appeal.outcome_amount_recovered.isnot(None))
+            .scalar()
+            or 0
+        )
+
+        est_cond = and_(
+            Appeal.queue_status.in_(('generated', 'submitted')),
+            or_(
+                Appeal.outcome_amount_recovered.is_(None),
+                Appeal.outcome_amount_recovered == 0,
+            ),
+        )
+        estimated_recovered = float(
+            db.session.query(
+                func.coalesce(
+                    func.sum(case((est_cond, Appeal.billed_amount * 0.35), else_=0)),
+                    0,
+                )
+            )
+            .filter(base)
+            .scalar()
+            or 0
+        )
+
         display_recovered = round(recovered, 2) if recovered > 0 else round(estimated_recovered, 2)
         dash = retention_dashboard_metrics(uid)
         usage = CreditManager.get_usage_stats(uid)
+
+        print(f'QUEUE METRICS LOAD TIME: {time.time() - t0:.4f}s')
+
         return jsonify(
             {
                 'total_in_queue': total,

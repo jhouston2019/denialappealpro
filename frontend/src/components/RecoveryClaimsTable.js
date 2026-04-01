@@ -75,8 +75,56 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
 
   const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
+  const skeletonRow = (key) => (
+    <tr key={key}>
+      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <td key={i} style={{ ...td, padding: '12px 10px' }}>
+          <div
+            style={{
+              height: 14,
+              borderRadius: 4,
+              background: 'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'rqshimmer 1.2s ease-in-out infinite',
+              maxWidth: i === 1 ? 120 : i === 4 ? 80 : '100%',
+            }}
+          />
+        </td>
+      ))}
+    </tr>
+  );
+
   if (loading) {
-    return <p style={{ color: '#64748b', fontSize: 14 }}>Loading claims…</p>;
+    return (
+      <div>
+        <style>{`
+          @keyframes rqshimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+        `}</style>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+          <div style={{ height: 32, width: 160, borderRadius: 6, background: '#e2e8f0' }} />
+          <div style={{ height: 32, width: 200, borderRadius: 6, background: '#e2e8f0' }} />
+        </div>
+        <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+            <thead>
+              <tr>
+                <th style={th}>Claim #</th>
+                <th style={th}>Payer</th>
+                <th style={th}>Date of service</th>
+                <th style={th}>Amount</th>
+                <th style={th}>Priority</th>
+                <th style={th}>Status</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>{[0, 1, 2, 3, 4].map((k) => skeletonRow(`sk-${k}`))}</tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   return (

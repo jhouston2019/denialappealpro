@@ -420,9 +420,10 @@ def init_customer_portal(app, limiter, generator):
 
         q = _queue_filtered_query(g.current_user_id)
 
-        total = None  # count moved to GET /api/queue/count for faster first paint
+        total = None  # COUNT(*) moved to GET /queue/count so this path stays a single limited SELECT
 
         tq = time.time()
+        # load_only: fetch columns needed for _appeal_to_queue_row + follow-up eligibility only (no generated_letter_text)
         rows = (
             q.options(
                 load_only(

@@ -84,7 +84,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     return () => {
       cancelled = true;
     };
-  }, [queuePage, queueLimit]);
+  }, [queuePage]);
 
   const processedClaims = useMemo(
     () =>
@@ -115,7 +115,7 @@ export default function DenialQueue({ variant = 'queue' }) {
       setListLoading(false);
       setMetricsLoading(false);
     }
-  }, [queuePage, queueLimit]);
+  }, [queuePage]);
 
   useEffect(() => {
     if (!appealZipJobId) return undefined;
@@ -543,6 +543,25 @@ export default function DenialQueue({ variant = 'queue' }) {
             </button>
           )}
           {appealZipErr && <p style={{ fontSize: 13, marginTop: 8, color: '#b00020' }}>{appealZipErr}</p>}
+        </div>
+      )}
+
+      {listLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            marginTop: 12,
+            marginBottom: 8,
+            padding: '6px 12px',
+            fontSize: 12,
+            color: '#0f172a',
+            background: '#e0f2fe',
+            borderRadius: 6,
+            borderLeft: '4px solid #0284c7',
+          }}
+        >
+          Loading queue…
         </div>
       )}
 

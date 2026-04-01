@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
+import { useAppeal } from '../context/AppealContext';
 
 function AppealForm() {
   const navigate = useNavigate();
+  const { appealData } = useAppeal();
   const [loading, setLoading] = useState(false);
+  const [docExtracting, setDocExtracting] = useState(false);
   const [formData, setFormData] = useState({
     payer_name: '',
     claim_number: '',
@@ -22,31 +25,10 @@ function AppealForm() {
     denial_letter: null
   });
 
-  // Common denial codes
-  const commonDenialCodes = [
-    { value: '', label: 'Select a denial code (or type custom)' },
-    { value: 'CO-50', label: 'CO-50 - Lack of Medical Necessity' },
-    { value: 'CO-16', label: 'CO-16 - Prior Authorization Required' },
-    { value: 'CO-18', label: 'CO-18 - Duplicate Claim/Service' },
-    { value: 'CO-22', label: 'CO-22 - Coordination of Benefits' },
-    { value: 'CO-29', label: 'CO-29 - Time Limit for Filing' },
-    { value: 'CO-96', label: 'CO-96 - Non-Covered Charge' },
-    { value: 'CO-97', label: 'CO-97 - Benefit Maximum/Limitation' },
-    { value: 'CO-4', label: 'CO-4 - Procedure Code Inconsistency' },
-    { value: 'CO-109', label: 'CO-109 - Not Covered for This Patient' },
-    { value: 'CO-197', label: 'CO-197 - Precertification Absent' },
-    { value: 'PR-1', label: 'PR-1 - Patient Deductible' },
-    { value: 'PR-2', label: 'PR-2 - Patient Coinsurance' },
-    { value: 'CO-180', label: 'CO-180 - Experimental/Investigational' },
-    { value: 'CO-24', label: 'CO-24 - Insurance Coverage Inactive' },
-    { value: 'CO-27', label: 'CO-27 - Out of Network Provider' },
-    { value: 'CO-15', label: 'CO-15 - Incorrect Date of Service' },
-    { value: 'CO-5', label: 'CO-5 - Incorrect Diagnosis Code' },
-    { value: 'CO-11', label: 'CO-11 - Incorrect Patient Information' },
-    { value: 'CO-12', label: 'CO-12 - Incorrect Provider Information' },
-    { value: 'CO-14', label: 'CO-14 - Incorrect Place of Service' },
-    { value: 'CO-252', label: 'CO-252 - Additional Documentation Required' }
-  ];
+  useEffect(() => {
+    if (!appealData || Object.keys(appealData).length === 0) return;
+    setFormData((prev) => ({ ...prev, ...appealData }));
+  }, [appealData]);
 
   const validateNPI = (npi) => {
     // NPI must be exactly 10 digits
@@ -112,9 +94,12 @@ function AppealForm() {
 
     try {
       const data = new FormData();
-      Object.keys(formData).forEach(key => {
+      Object.keys(formData).forEach((key) => {
+        if (key === 'payer') return;
         if (formData[key]) data.append(key, formData[key]);
       });
+      const payerVal = (formData.payer_name || formData.payer || '').trim();
+      if (payerVal) data.append('payer', payerVal);
 
       const response = await api.post('/api/appeals/submit', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -224,18 +209,16 @@ function AppealForm() {
           <div className="form-row">
             <div className="form-group">
               <label>Denial Code *</label>
-              <select 
-                name="denial_code" 
-                value={formData.denial_code} 
+              <input
+                type="text"
+                name="denial_code"
+                value={formData.denial_code}
                 onChange={handleChange}
                 required
-                style={{ padding: '10px', fontSize: '16px' }}
-              >
-                {commonDenialCodes.map(code => (
-                  <option key={code.value} value={code.value}>{code.label}</option>
-                ))}
-              </select>
-              <small>Select the primary denial reason code</small>
+                placeholder="e.g., CO-50, CARC 97 / N122"
+                style={{ padding: '10px', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
+              />
+              <small>Enter the payer&apos;s denial / remark codes as shown on the EOB</small>
             </div>
             <div className="form-group">
               <label>Diagnosis Code (ICD-10)</label>
@@ -316,8 +299,10 @@ function AppealForm() {
               <label>Denial Letter / EOB *</label>
               <DenialDocumentDropZone
                 accept=".pdf,.jpg,.jpeg,.png"
+                extractAfterDrop
                 onFile={handleDenialFile}
-                disabled={loading}
+                onUploadingChange={setDocExtracting}
+                disabled={loading || docExtracting}
                 inputId="appeal-form-denial-letter"
               >
                 <div style={{ textAlign: 'center', padding: '6px 4px' }}>
@@ -328,6 +313,11 @@ function AppealForm() {
                   {formData.denial_letter && (
                     <p style={{ margin: '8px 0 0', color: '#15803d', fontWeight: 600, fontSize: 14 }}>
                       ✓ {formData.denial_letter.name}
+                    </p>
+                  )}
+                  {docExtracting && (
+                    <p style={{ margin: '10px 0 0', color: '#2563eb', fontWeight: 600, fontSize: 14 }}>
+                      Extracting fields from PDF…
                     </p>
                   )}
                 </div>

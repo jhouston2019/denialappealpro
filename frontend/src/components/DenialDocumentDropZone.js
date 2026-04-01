@@ -1,4 +1,8 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../api/axios';
+import { mapExtractedToForm } from '../utils/mapExtractedToForm';
+import { useAppeal } from '../context/AppealContext';
 
 function fileMatchesAccept(file, acceptAttr) {
   if (!acceptAttr?.trim() || !file?.name) return true;
@@ -12,9 +16,18 @@ function fileMatchesAccept(file, acceptAttr) {
   });
 }
 
+function isPdfFile(file) {
+  if (!file) return false;
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
 /**
  * Drop zone + file input for denial letter / EOB uploads.
  * Highlights while a file is dragged over the zone.
+ *
+ * When `extractAfterDrop` is true and the file is a PDF, uploads to
+ * `/api/parse/denial-letter`, maps fields into global appeal context, and
+ * optionally navigates or calls `onExtractSuccess`. Non-PDF files fall back to `onFile` only.
  */
 export default function DenialDocumentDropZone({
   accept,
@@ -23,19 +36,76 @@ export default function DenialDocumentDropZone({
   inputId = 'denial-document-file',
   children,
   style: outerStyle,
+  extractAfterDrop = false,
+  onExtractSuccess,
+  onExtractError,
+  onParseResult,
+  navigateAfterExtract,
+  onUploadingChange,
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const depth = useRef(0);
+  const navigate = useNavigate();
+  const { applyExtraction } = useAppeal();
+
+  useEffect(() => {
+    onUploadingChange?.(uploading);
+  }, [uploading, onUploadingChange]);
 
   const resetDepth = useCallback(() => {
     depth.current = 0;
     setDragOver(false);
   }, []);
 
+  const runExtractPipeline = async (file) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await api.post('/api/parse/denial-letter', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const payload = response.data;
+      onParseResult?.(payload);
+
+      if (payload?.success) {
+        const mapped = mapExtractedToForm(payload);
+        applyExtraction(mapped);
+        onFile?.(file);
+        onExtractSuccess?.(payload);
+        if (navigateAfterExtract) {
+          navigate(navigateAfterExtract);
+        }
+      } else {
+        throw new Error(payload?.message || payload?.error || 'Extraction failed');
+      }
+    } catch (err) {
+      console.error('Denial extract error:', err);
+      onExtractError?.(err);
+      onFile?.(file);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleChosenFile = (file) => {
+    if (!file) return;
+
+    if (extractAfterDrop && isPdfFile(file)) {
+      void runExtractPipeline(file);
+      return;
+    }
+
+    onFile?.(file);
+  };
+
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (disabled) return;
+    if (disabled || uploading) return;
     depth.current += 1;
     setDragOver(true);
   };
@@ -59,17 +129,19 @@ export default function DenialDocumentDropZone({
     e.preventDefault();
     e.stopPropagation();
     resetDepth();
-    if (disabled) return;
+    if (disabled || uploading) return;
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     if (!fileMatchesAccept(file, accept)) return;
-    onFile(file);
+    handleChosenFile(file);
   };
 
   const handleInputChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) onFile(file);
+    if (file) handleChosenFile(file);
   };
+
+  const busy = disabled || uploading;
 
   return (
     <div
@@ -91,7 +163,7 @@ export default function DenialDocumentDropZone({
         id={inputId}
         type="file"
         accept={accept}
-        disabled={disabled}
+        disabled={busy}
         onChange={handleInputChange}
         style={{ display: 'none' }}
       />
@@ -99,8 +171,8 @@ export default function DenialDocumentDropZone({
         htmlFor={inputId}
         style={{
           display: 'block',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.65 : 1,
+          cursor: busy ? 'not-allowed' : 'pointer',
+          opacity: busy ? 0.65 : 1,
           margin: 0,
         }}
       >

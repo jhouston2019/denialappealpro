@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useUser } from '../context/UserContext';
+import { useAppeal } from '../context/AppealContext';
 import UsageTracker from '../components/UsageTracker';
 import UpgradeModal from '../components/UpgradeModal';
-import UpgradeCTA from '../components/UpgradeCTA';
 import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 
 function AppealFormWizard() {
   const navigate = useNavigate();
   const { userEmail, setUser } = useUser();
+  const { appealData } = useAppeal();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [parsedData, setParsedData] = useState(null);
+  const [docExtracting, setDocExtracting] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeData, setUpgradeData] = useState(null);
   const [formData, setFormData] = useState({
@@ -39,6 +41,23 @@ function AppealFormWizard() {
     }
   }, [userEmail]);
 
+  useEffect(() => {
+    if (!appealData || Object.keys(appealData).length === 0) return;
+    setFormData((prev) => ({ ...prev, ...appealData }));
+  }, [appealData]);
+
+  useEffect(() => {
+    try {
+      const s = sessionStorage.getItem('dap_wizard_step');
+      if (s === '2') {
+        setStep(2);
+        sessionStorage.removeItem('dap_wizard_step');
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }, []);
+
   const handleUpgradeNeeded = (usageStats) => {
     if (usageStats.upgrade_status === 'limit_reached' || usageStats.upgrade_status === 'approaching_limit') {
       setUpgradeData(usageStats);
@@ -51,57 +70,6 @@ function AppealFormWizard() {
     { value: 'level_2', label: 'Level 2 - Second Appeal' },
     { value: 'external_review', label: 'External Review' }
   ];
-
-  const commonDenialCodes = [
-    { value: '', label: 'Select a denial code' },
-    { value: 'CO-50', label: 'CO-50 - Medical Necessity' },
-    { value: 'CO-29', label: 'CO-29 - Timely Filing' },
-    { value: 'CO-16', label: 'CO-16 - Prior Authorization' },
-    { value: 'CO-18', label: 'CO-18 - Duplicate Claim' },
-    { value: 'CO-22', label: 'CO-22 - Coordination of Benefits' },
-    { value: 'CO-96', label: 'CO-96 - Non-Covered Charge' },
-    { value: 'CO-97', label: 'CO-97 - Benefit Maximum' },
-    { value: 'CO-197', label: 'CO-197 - Precertification Absent' }
-  ];
-
-  const processDenialFile = async (file) => {
-    if (!file) return;
-
-    setFormData((prev) => ({ ...prev, denial_letter: file }));
-    setLoading(true);
-
-    try {
-      const uploadData = new FormData();
-      uploadData.append('file', file);
-
-      const response = await api.post('/api/parse/denial-letter', uploadData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      if (response.data.success) {
-        setParsedData(response.data);
-
-        setFormData((prev) => ({
-          ...prev,
-          payer: response.data.payer_name || prev.payer,
-          claim_number: response.data.claim_number || prev.claim_number,
-          denial_code: response.data.primary_denial_code || prev.denial_code,
-          date_of_service: response.data.service_date || prev.date_of_service,
-          billed_amount: response.data.billed_amount || prev.billed_amount,
-          provider_npi: response.data.provider_npi || prev.provider_npi,
-        }));
-
-        alert(
-          `✓ Document parsed successfully!\n\nConfidence: ${response.data.confidence}\n\nPlease review and confirm the extracted information.`
-        );
-      }
-    } catch (error) {
-      console.error('Error parsing document:', error);
-      alert('Could not automatically extract information. Please enter manually.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -197,8 +165,17 @@ function AppealFormWizard() {
 
       <DenialDocumentDropZone
         accept=".pdf,application/pdf"
-        onFile={processDenialFile}
-        disabled={loading}
+        extractAfterDrop
+        onFile={(file) => setFormData((prev) => ({ ...prev, denial_letter: file }))}
+        onParseResult={(data) => {
+          if (data?.success) setParsedData(data);
+        }}
+        onExtractSuccess={() => setStep(2)}
+        onExtractError={() =>
+          alert('Could not automatically extract information. Please enter details manually.')
+        }
+        onUploadingChange={setDocExtracting}
+        disabled={loading || docExtracting}
         inputId="wizard-denial-letter-file"
         style={{ padding: '48px 32px', marginBottom: 30 }}
       >
@@ -234,10 +211,10 @@ function AppealFormWizard() {
         </div>
       </DenialDocumentDropZone>
 
-      {loading && (
+      {docExtracting && (
         <div style={{ textAlign: 'center', padding: '20px', color: '#007bff' }}>
           <div style={{ fontSize: '24px', marginBottom: '10px' }}>⏳</div>
-          Analyzing document...
+          Analyzing document…
         </div>
       )}
 
@@ -251,7 +228,8 @@ function AppealFormWizard() {
         }}>
           <h4 style={{ marginTop: 0, color: '#155724' }}>✓ Information Extracted</h4>
           <p style={{ margin: '10px 0', color: '#155724' }}>
-            Confidence: <strong>{parsedData.confidence.toUpperCase()}</strong>
+            Confidence:{' '}
+            <strong>{String(parsedData.confidence ?? '').toUpperCase() || '—'}</strong>
           </p>
           <p style={{ margin: 0, color: '#155724', fontSize: '14px' }}>
             Please review the extracted information in the next step.
@@ -334,23 +312,22 @@ function AppealFormWizard() {
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
             Denial Code *
           </label>
-          <select
+          <input
+            type="text"
             name="denial_code"
             value={formData.denial_code}
             onChange={handleChange}
             required
+            placeholder="e.g., CO-50, CARC 97 / N122"
             style={{
               width: '100%',
               padding: '12px',
               fontSize: '16px',
               border: '2px solid #ddd',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              boxSizing: 'border-box',
             }}
-          >
-            {commonDenialCodes.map(code => (
-              <option key={code.value} value={code.value}>{code.label}</option>
-            ))}
-          </select>
+          />
         </div>
         <div>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>

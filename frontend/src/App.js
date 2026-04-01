@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Link } from 'react-router-dom';
 import { UserProvider } from './context/UserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AppealProvider } from './context/AppealContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 // Force rebuild: 2026-02-11-v3
@@ -59,6 +60,20 @@ const PageLoader = () => (
     </div>
   </div>
 );
+
+/** Sets wizard step 2 hint and sends user to the full appeal wizard (used after document extract). */
+function AppealConfirmRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('dap_wizard_step', '2');
+    } catch (_) {
+      /* ignore */
+    }
+    navigate('/appeal-form', { replace: true });
+  }, [navigate]);
+  return <PageLoader />;
+}
 
 // Navigation bar component
 const Navbar = ({ transparent }) => {
@@ -399,6 +414,7 @@ function AppContent() {
 
             {/* App pages */}
             <Route path="/submit" element={<AppealForm />} />
+            <Route path="/appeal/confirm" element={<AppealConfirmRedirect />} />
             <Route path="/appeal-form" element={<AppealFormWizard />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/history" element={<AppealHistory />} />
@@ -455,11 +471,13 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <UserProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </UserProvider>
+      <AppealProvider>
+        <UserProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </UserProvider>
+      </AppealProvider>
     </Router>
   );
 }

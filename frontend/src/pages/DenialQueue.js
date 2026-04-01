@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,8 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [listLoading, setListLoading] = useState(true);
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [queuePage, setQueuePage] = useState(1);
-  const [queueTotal, setQueueTotal] = useState(0);
+  /** null = count not loaded yet (list omits COUNT(*) for speed) */
+  const [queueTotal, setQueueTotal] = useState(null);
   const queueLimit = 25;
   const [batchOpen, setBatchOpen] = useState(() => isDashboard);
   const [batchRows, setBatchRows] = useState('');
@@ -30,39 +31,60 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [appealZipDoneId, setAppealZipDoneId] = useState(null);
   const [appealZipBusy, setAppealZipBusy] = useState(false);
   const [appealZipErr, setAppealZipErr] = useState('');
+  const metricsHydratedRef = useRef(false);
 
-  const fetchQueuePage = useCallback(async (page) => {
-    setListLoading(true);
-    try {
-      const res = await api.get(`/api/queue?limit=${queueLimit}&page=${page}`);
-      setClaims(res.data.claims || []);
-      setQueueTotal(typeof res.data.total === 'number' ? res.data.total : 0);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setListLoading(false);
-    }
-  }, [queueLimit]);
-
-  const fetchMetrics = useCallback(async () => {
-    setMetricsLoading(true);
-    try {
-      const res = await api.get('/api/queue/metrics');
-      setMetrics(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setMetricsLoading(false);
-    }
+  useEffect(() => {
+    api
+      .get('/api/queue/count')
+      .then((res) => {
+        if (typeof res.data?.total === 'number') setQueueTotal(res.data.total);
+      })
+      .catch((err) => console.error(err));
   }, []);
 
   useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
-
-  useEffect(() => {
-    fetchQueuePage(queuePage);
-  }, [queuePage, fetchQueuePage]);
+    let cancelled = false;
+    const run = async () => {
+      setListLoading(true);
+      if (queuePage === 1 && !metricsHydratedRef.current) setMetricsLoading(true);
+      try {
+        if (queuePage === 1 && !metricsHydratedRef.current) {
+          console.time('QUEUE_LOAD');
+          const [queueRes, metricsRes] = await Promise.all([
+            api.get(`/api/queue?limit=${queueLimit}&page=1`),
+            api.get('/api/queue/metrics'),
+          ]);
+          console.timeEnd('QUEUE_LOAD');
+          if (!cancelled) {
+            setClaims(queueRes.data.claims || []);
+            setMetrics(metricsRes.data);
+            metricsHydratedRef.current = true;
+          }
+        } else if (queuePage === 1) {
+          console.time('QUEUE_LOAD');
+          const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=1`);
+          console.timeEnd('QUEUE_LOAD');
+          if (!cancelled) setClaims(queueRes.data.claims || []);
+        } else {
+          console.time('QUEUE_PAGE');
+          const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
+          console.timeEnd('QUEUE_PAGE');
+          if (!cancelled) setClaims(queueRes.data.claims || []);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) {
+          setListLoading(false);
+          if (queuePage === 1) setMetricsLoading(false);
+        }
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [queuePage, queueLimit]);
 
   const processedClaims = useMemo(
     () =>
@@ -74,8 +96,26 @@ export default function DenialQueue({ variant = 'queue' }) {
   );
 
   const refreshQueueAndMetrics = useCallback(async () => {
-    await Promise.all([fetchMetrics(), fetchQueuePage(queuePage)]);
-  }, [fetchMetrics, fetchQueuePage, queuePage]);
+    setListLoading(true);
+    setMetricsLoading(true);
+    try {
+      console.time('QUEUE_REFRESH');
+      const [qr, mr, cr] = await Promise.all([
+        api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`),
+        api.get('/api/queue/metrics'),
+        api.get('/api/queue/count'),
+      ]);
+      console.timeEnd('QUEUE_REFRESH');
+      setClaims(qr.data.claims || []);
+      setMetrics(mr.data);
+      if (typeof cr.data?.total === 'number') setQueueTotal(cr.data.total);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setListLoading(false);
+      setMetricsLoading(false);
+    }
+  }, [queuePage, queueLimit]);
 
   useEffect(() => {
     if (!appealZipJobId) return undefined;
@@ -182,7 +222,10 @@ export default function DenialQueue({ variant = 'queue' }) {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(queueTotal / queueLimit));
+  const countKnown = typeof queueTotal === 'number';
+  const totalPages = countKnown ? Math.max(1, Math.ceil(queueTotal / queueLimit)) : null;
+  const canNext = countKnown ? queuePage * queueLimit < queueTotal : claims.length === queueLimit;
+  const canPrev = queuePage > 1;
   const pct =
     metrics && metrics.added_today > 0
       ? Math.min(100, Math.round((metrics.processed_today / metrics.added_today) * 100))
@@ -509,7 +552,7 @@ export default function DenialQueue({ variant = 'queue' }) {
         onRefresh={refreshQueueAndMetrics}
       />
 
-      {queueTotal > queueLimit && (
+      {(canPrev || canNext) && (
         <div
           style={{
             display: 'flex',
@@ -522,20 +565,22 @@ export default function DenialQueue({ variant = 'queue' }) {
         >
           <button
             type="button"
-            disabled={queuePage <= 1 || listLoading}
+            disabled={!canPrev || listLoading}
             onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
-            style={{ padding: '8px 16px', cursor: queuePage <= 1 ? 'not-allowed' : 'pointer' }}
+            style={{ padding: '8px 16px', cursor: !canPrev ? 'not-allowed' : 'pointer' }}
           >
             Previous
           </button>
           <span style={{ fontSize: 14, color: '#334155' }}>
-            Page {queuePage} of {totalPages} ({queueTotal} claims)
+            Page {queuePage}
+            {countKnown && totalPages != null ? ` of ${totalPages} (${queueTotal} claims)` : ''}
+            {!countKnown && canNext ? ' — loading total…' : ''}
           </span>
           <button
             type="button"
-            disabled={queuePage >= totalPages || listLoading}
+            disabled={!canNext || listLoading}
             onClick={() => setQueuePage((p) => p + 1)}
-            style={{ padding: '8px 16px', cursor: queuePage >= totalPages ? 'not-allowed' : 'pointer' }}
+            style={{ padding: '8px 16px', cursor: !canNext ? 'not-allowed' : 'pointer' }}
           >
             Next
           </button>

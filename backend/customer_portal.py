@@ -66,6 +66,21 @@ def _append_event(appeal_db_id: int, user_id: int, event_type: str, message: str
     db.session.add(ev)
 
 
+def _queue_filtered_query(user_id: int):
+    """Base Appeal query for list + count with shared URL filters (q, payer, status)."""
+    q = Appeal.query.filter_by(user_id=user_id)
+    search_q = (request.args.get('q') or '').strip()
+    if search_q:
+        q = q.filter(Appeal.claim_number.ilike(f'%{search_q}%'))
+    payer_f = (request.args.get('payer') or '').strip()
+    if payer_f:
+        q = q.filter(Appeal.payer.ilike(f'%{payer_f}%'))
+    status_f = (request.args.get('status') or '').strip().lower()
+    if status_f:
+        q = q.filter(Appeal.appeal_tracking_status == status_f)
+    return q
+
+
 def _appeal_to_queue_row(a: Appeal):
     amt = float(a.billed_amount) if a.billed_amount is not None else 0.0
     reason = (a.denial_reason or '')[:120]
@@ -386,27 +401,28 @@ def init_customer_portal(app, limiter, generator):
         db.session.commit()
         return jsonify({'success': True}), 200
 
+    @customer_bp.route('/queue/count', methods=['GET'])
+    @require_customer_auth
+    def queue_count():
+        """Total rows for current filters — load async from UI so list endpoint skips COUNT(*)."""
+        t0 = time.time()
+        q = _queue_filtered_query(g.current_user_id)
+        total = q.with_entities(func.count(Appeal.id)).scalar() or 0
+        print(f'QUEUE COUNT: {time.time() - t0:.4f}s total={total}')
+        return jsonify({'total': total}), 200
+
     @customer_bp.route('/queue', methods=['GET'])
     @require_customer_auth
     def queue_list():
-        t0 = time.time()
         page = max(1, int(request.args.get('page', 1)))
         limit = min(100, max(1, int(request.args.get('limit', 25))))
         offset = (page - 1) * limit
 
-        q = Appeal.query.filter_by(user_id=g.current_user_id)
-        search_q = (request.args.get('q') or '').strip()
-        if search_q:
-            q = q.filter(Appeal.claim_number.ilike(f'%{search_q}%'))
-        payer_f = (request.args.get('payer') or '').strip()
-        if payer_f:
-            q = q.filter(Appeal.payer.ilike(f'%{payer_f}%'))
-        status_f = (request.args.get('status') or '').strip().lower()
-        if status_f:
-            q = q.filter(Appeal.appeal_tracking_status == status_f)
+        q = _queue_filtered_query(g.current_user_id)
 
-        total = q.with_entities(func.count(Appeal.id)).scalar() or 0
+        total = None  # count moved to GET /api/queue/count for faster first paint
 
+        tq = time.time()
         rows = (
             q.options(
                 load_only(
@@ -439,9 +455,7 @@ def init_customer_portal(app, limiter, generator):
             .offset(offset)
             .all()
         )
-
-        elapsed = time.time() - t0
-        print(f'QUEUE LOAD TIME: {elapsed:.4f}s (rows={len(rows)}, total={total})')
+        print(f'QUEUE QUERY: {time.time() - tq:.4f}s (rows={len(rows)})')
 
         return (
             jsonify(

@@ -6,7 +6,24 @@ PLUS usage-based tracking for SaaS model
 
 from datetime import datetime, date, timedelta
 from models import db, User, SubscriptionPlan, CreditPack, Appeal
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
+
+
+def _utc_midnight(d: date) -> datetime:
+    """Naive UTC midnight for the given calendar date (consistent comparison anchor)."""
+    return datetime(d.year, d.month, d.day)
+
+
+def _as_utc_midnight_datetime(value: Union[date, datetime, None]) -> Optional[datetime]:
+    """Normalize DB date/datetime fields to datetime at UTC midnight for comparisons."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _utc_midnight(value.date())
+    if isinstance(value, date):
+        return _utc_midnight(value)
+    raise TypeError(f"Expected date or datetime, got {type(value)!r}")
+
 
 class CreditManager:
     """Manage user credits and subscriptions"""
@@ -196,31 +213,35 @@ class CreditManager:
     
     @staticmethod
     def reset_usage_counters_if_needed(user_id: int) -> None:
-        """Reset usage counters based on time periods"""
+        """Reset usage counters based on time periods; compares using naive midnight datetime only."""
         user = User.query.with_for_update().filter_by(id=user_id).first()
         if not user:
             return
-        
-        today = date.today()
-        
-        # Reset daily counter
-        if user.last_daily_reset != today:
+
+        # Calendar day for resets (host local date, same as prior date.today() behavior)
+        today_d = date.today()
+        today_start = _utc_midnight(today_d)
+
+        last_daily = _as_utc_midnight_datetime(user.last_daily_reset)
+        if last_daily != today_start:
             user.appeals_generated_today = 0
-            user.last_daily_reset = today
-        
-        # Reset weekly counter (Monday = 0)
-        week_start = today - timedelta(days=today.weekday())
-        if not user.last_weekly_reset or user.last_weekly_reset < week_start:
+            user.last_daily_reset = today_d
+
+        week_start_d = today_d - timedelta(days=today_d.weekday())
+        week_start = _utc_midnight(week_start_d)
+        last_weekly = _as_utc_midnight_datetime(user.last_weekly_reset)
+        if last_weekly is None or last_weekly < week_start:
             user.appeals_generated_weekly = 0
-            user.last_weekly_reset = today
-        
-        # Reset monthly counter
-        month_start = today.replace(day=1)
-        if not user.last_monthly_reset or user.last_monthly_reset < month_start:
+            user.last_weekly_reset = today_d
+
+        month_start_d = today_d.replace(day=1)
+        month_start = _utc_midnight(month_start_d)
+        last_monthly = _as_utc_midnight_datetime(user.last_monthly_reset)
+        if last_monthly is None or last_monthly < month_start:
             user.appeals_generated_monthly = 0
             user.overage_count = 0
-            user.last_monthly_reset = today
-        
+            user.last_monthly_reset = today_d
+
         db.session.commit()
     
     @staticmethod

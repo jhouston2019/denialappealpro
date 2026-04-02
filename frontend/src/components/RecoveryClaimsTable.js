@@ -76,24 +76,90 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
 
   const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  const skeletonRow = (key) => (
-    <tr key={key}>
-      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-        <td key={i} style={{ ...td, padding: '12px 10px' }}>
-          <div
-            style={{
-              height: 14,
-              borderRadius: 4,
-              background: 'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'rqshimmer 1.2s ease-in-out infinite',
-              maxWidth: i === 1 ? 120 : i === 4 ? 80 : '100%',
-            }}
-          />
-        </td>
-      ))}
+  const renderSkeletonRows = () =>
+    [0, 1, 2, 3, 4].map((k) => (
+      <tr key={`sk-${k}`}>
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <td key={i} style={{ ...td, padding: '12px 10px' }}>
+            <div
+              style={{
+                height: 14,
+                borderRadius: 4,
+                background: 'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'rqshimmer 1.2s ease-in-out infinite',
+                maxWidth: i === 1 ? 120 : i === 4 ? 80 : '100%',
+              }}
+            />
+          </td>
+        ))}
+      </tr>
+    ));
+
+  const renderEmptyState = (message, showAddLink) => (
+    <tr>
+      <td colSpan={7} style={{ ...td, color: '#64748b', padding: 20 }}>
+        {message}{' '}
+        {showAddLink && (
+          <Link to="/start" style={{ color: '#1d4ed8', fontWeight: 600 }}>
+            Add a claim
+          </Link>
+        )}
+      </td>
     </tr>
   );
+
+  const renderRows = () =>
+    rows.map((c) => {
+      const pr = calculatePriority(c);
+      const fuOk = c.follow_up_eligible && c.appeal_generation_kind !== 'follow_up';
+      return (
+        <tr key={c.appeal_id}>
+          <td style={td}>{c.claim_id}</td>
+          <td style={td}>{c.payer}</td>
+          <td style={td}>{formatDos(c.date_of_service)}</td>
+          <td style={td}>${Number(c.amount).toFixed(2)}</td>
+          <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{pr.label}</td>
+          <td style={td}>{formatStatus(c.appeal_tracking_status)}</td>
+          <td style={td}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              <Link to={`/queue/${c.appeal_id}`} style={{ color: '#1d4ed8', fontWeight: 600, fontSize: 13 }}>
+                View appeal
+              </Link>
+              {c.has_letter && (
+                <a
+                  href={`${baseUrl}/api/appeals/${c.appeal_id}/download`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#059669', fontWeight: 600, fontSize: 13 }}
+                >
+                  Download PDF
+                </a>
+              )}
+              {fuOk && (
+                <button
+                  type="button"
+                  disabled={fuBusy === c.appeal_id}
+                  onClick={(e) => runFollowUp(e, c.appeal_id)}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: fuBusy === c.appeal_id ? 'wait' : 'pointer',
+                    border: '1px solid #0f172a',
+                    background: '#fff',
+                    color: '#0f172a',
+                    borderRadius: 6,
+                  }}
+                >
+                  {fuBusy === c.appeal_id ? '…' : 'Generate Follow-Up Appeal'}
+                </button>
+              )}
+            </div>
+          </td>
+        </tr>
+      );
+    });
 
   return (
     <div>
@@ -150,69 +216,13 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              [0, 1, 2, 3, 4].map((k) => skeletonRow(`sk-${k}`))
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ ...td, color: '#64748b', padding: 20 }}>
-                  No claims match.{' '}
-                  <Link to="/start" style={{ color: '#1d4ed8', fontWeight: 600 }}>
-                    Add a claim
-                  </Link>
-                </td>
-              </tr>
-            ) : (
-              rows.map((c) => {
-                const pr = calculatePriority(c);
-                const fuOk = c.follow_up_eligible && c.appeal_generation_kind !== 'follow_up';
-                return (
-                  <tr key={c.appeal_id}>
-                    <td style={td}>{c.claim_id}</td>
-                    <td style={td}>{c.payer}</td>
-                    <td style={td}>{formatDos(c.date_of_service)}</td>
-                    <td style={td}>${Number(c.amount).toFixed(2)}</td>
-                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{pr.label}</td>
-                    <td style={td}>{formatStatus(c.appeal_tracking_status)}</td>
-                    <td style={td}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                        <Link to={`/queue/${c.appeal_id}`} style={{ color: '#1d4ed8', fontWeight: 600, fontSize: 13 }}>
-                          View appeal
-                        </Link>
-                        {c.has_letter && (
-                          <a
-                            href={`${baseUrl}/api/appeals/${c.appeal_id}/download`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ color: '#059669', fontWeight: 600, fontSize: 13 }}
-                          >
-                            Download PDF
-                          </a>
-                        )}
-                        {fuOk && (
-                          <button
-                            type="button"
-                            disabled={fuBusy === c.appeal_id}
-                            onClick={(e) => runFollowUp(e, c.appeal_id)}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: fuBusy === c.appeal_id ? 'wait' : 'pointer',
-                              border: '1px solid #0f172a',
-                              background: '#fff',
-                              color: '#0f172a',
-                              borderRadius: 6,
-                            }}
-                          >
-                            {fuBusy === c.appeal_id ? '…' : 'Generate Follow-Up Appeal'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+            {loading
+              ? renderSkeletonRows()
+              : (claims || []).length > 0
+                ? rows.length > 0
+                  ? renderRows()
+                  : renderEmptyState('No claims match your filters.', false)
+                : renderEmptyState('No claims match.', true)}
           </tbody>
         </table>
       </div>

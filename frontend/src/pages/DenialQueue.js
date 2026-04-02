@@ -11,7 +11,6 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [claims, setClaims] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [listLoading, setListLoading] = useState(true);
-  const [metricsLoading, setMetricsLoading] = useState(true);
   const [queuePage, setQueuePage] = useState(1);
   /** null = count not loaded yet (list omits COUNT(*) for speed) */
   const [queueTotal, setQueueTotal] = useState(null);
@@ -38,34 +37,31 @@ export default function DenialQueue({ variant = 'queue' }) {
     const loadQueueFirst = async () => {
       try {
         setListLoading(true);
-        console.time('QUEUE_LOAD');
-        const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
-        console.timeEnd('QUEUE_LOAD');
+
+        const queueRes = await api.get(`/api/queue?limit=25&page=${queuePage}`);
+
         if (!isMounted) return;
-        setClaims(queueRes.data.claims || []);
+
+        setClaims(queueRes.data.claims ?? []);
         setListLoading(false);
 
         Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
           .then(([metricsRes, countRes]) => {
             if (!isMounted) return;
+
             setMetrics(metricsRes.data);
-            if (typeof countRes.data?.total === 'number') setQueueTotal(countRes.data.total);
-            setMetricsLoading(false);
+            const t = countRes.data?.total;
+            setQueueTotal(typeof t === 'number' ? t : null);
           })
-          .catch((err) => {
-            console.error(err);
-            if (isMounted) setMetricsLoading(false);
-          });
+          .catch(console.error);
       } catch (err) {
         console.error(err);
-        if (isMounted) {
-          setListLoading(false);
-          setMetricsLoading(false);
-        }
+        setListLoading(false);
       }
     };
 
     loadQueueFirst();
+
     return () => {
       isMounted = false;
     };
@@ -83,25 +79,19 @@ export default function DenialQueue({ variant = 'queue' }) {
   const refreshQueueAndMetrics = useCallback(async () => {
     setListLoading(true);
     try {
-      console.time('QUEUE_REFRESH');
-      const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
-      console.timeEnd('QUEUE_REFRESH');
-      setClaims(queueRes.data.claims || []);
+      const queueRes = await api.get(`/api/queue?limit=25&page=${queuePage}`);
+      setClaims(queueRes.data.claims ?? []);
       setListLoading(false);
       Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
         .then(([metricsRes, countRes]) => {
           setMetrics(metricsRes.data);
-          if (typeof countRes.data?.total === 'number') setQueueTotal(countRes.data.total);
-          setMetricsLoading(false);
+          const t = countRes.data?.total;
+          setQueueTotal(typeof t === 'number' ? t : null);
         })
-        .catch((e) => {
-          console.error(e);
-          setMetricsLoading(false);
-        });
+        .catch(console.error);
     } catch (e) {
       console.error(e);
       setListLoading(false);
-      setMetricsLoading(false);
     }
   }, [queuePage]);
 
@@ -283,25 +273,6 @@ export default function DenialQueue({ variant = 'queue' }) {
               Dismiss
             </button>
           </div>
-        </div>
-      )}
-
-      {metricsLoading && !metrics && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 12,
-            marginTop: 16,
-            marginBottom: 16,
-          }}
-        >
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} style={{ border: '1px solid #e2e8f0', padding: 10, borderRadius: 6, background: '#f8fafc' }}>
-              <div style={{ height: 12, width: '70%', background: '#e2e8f0', borderRadius: 4, marginBottom: 8 }} />
-              <div style={{ height: 22, width: '45%', background: '#e2e8f0', borderRadius: 4 }} />
-            </div>
-          ))}
         </div>
       )}
 

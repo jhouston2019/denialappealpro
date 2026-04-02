@@ -136,12 +136,6 @@ export default function DenialQueue({ variant = 'queue' }) {
         if (errorCount >= MAX_ERRORS && intervalId != null) {
           clearInterval(intervalId);
           console.error('Zip polling stopped after repeated failures');
-          if (isMounted) {
-            setAppealZipErr('Could not reach server for batch status. Try again.');
-            setAppealZipBusy(false);
-            setAppealZipJobId(null);
-            setZipStatus(null);
-          }
         }
       }
     };
@@ -162,7 +156,6 @@ export default function DenialQueue({ variant = 'queue' }) {
       setAppealZipErr(zipStatus.error || 'Batch failed');
       setAppealZipBusy(false);
       setAppealZipJobId(null);
-      setZipStatus(null);
     } else if (s === 'done') {
       setAppealZipDoneId(appealZipJobId);
       setAppealZipJobId(null);
@@ -212,7 +205,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     setAppealZipErr('');
     setAppealZipBusy(true);
     setAppealZipDoneId(null);
-    setAppealZipProgress(null);
+    setZipStatus(null);
     try {
       const fd = new FormData();
       fd.append('file', appealZipCsv);

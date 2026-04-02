@@ -283,6 +283,21 @@ def _appeal_to_pipeline_dict(a: Appeal):
     }
 
 
+def _batch_appeal_job_status_dict(job_id, user_id):
+    """Shared payload for batch-appeals status and lightweight zip-status polling."""
+    j = get_job(job_id)
+    if not j or j.get('user_id') != user_id:
+        return None
+    return {
+        'status': j.get('status'),
+        'job_kind': j.get('job_kind', 'csv'),
+        'total': j.get('total', 0),
+        'current': j.get('current', 0),
+        'ok_count': j.get('ok_count'),
+        'error': j.get('error'),
+    }
+
+
 def init_customer_portal(app, limiter, generator):
     app.extensions['appeal_generator'] = generator
 
@@ -1046,22 +1061,22 @@ def init_customer_portal(app, limiter, generator):
             {'job_id': job_id, 'max_files': MAX_PDF_BATCH_FILES, 'job_kind': 'pdf', 'file_count': len(pdf_items)}
         ), 202
 
+    @customer_bp.route('/queue/zip-status/<job_id>', methods=['GET'])
+    @require_customer_auth
+    def queue_zip_status(job_id):
+        """Lightweight job poll for batch ZIP generation (same payload as batch-appeals status)."""
+        body = _batch_appeal_job_status_dict(job_id, g.current_user_id)
+        if body is None:
+            return jsonify({'error': 'Not found'}), 404
+        return jsonify(body), 200
+
     @customer_bp.route('/queue/batch-appeals/<job_id>', methods=['GET'])
     @require_customer_auth
     def queue_batch_appeals_status(job_id):
-        j = get_job(job_id)
-        if not j or j.get('user_id') != g.current_user_id:
+        body = _batch_appeal_job_status_dict(job_id, g.current_user_id)
+        if body is None:
             return jsonify({'error': 'Not found'}), 404
-        return jsonify(
-            {
-                'status': j.get('status'),
-                'job_kind': j.get('job_kind', 'csv'),
-                'total': j.get('total', 0),
-                'current': j.get('current', 0),
-                'ok_count': j.get('ok_count'),
-                'error': j.get('error'),
-            }
-        ), 200
+        return jsonify(body), 200
 
     @customer_bp.route('/queue/batch-appeals/<job_id>/zip', methods=['GET'])
     @require_customer_auth

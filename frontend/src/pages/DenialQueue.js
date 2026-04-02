@@ -26,7 +26,8 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [batchMsg, setBatchMsg] = useState('');
   const [appealZipCsv, setAppealZipCsv] = useState(null);
   const [appealZipJobId, setAppealZipJobId] = useState(null);
-  const [appealZipProgress, setAppealZipProgress] = useState(null);
+  /** Polling updates this only — never queue/metrics state */
+  const [zipStatus, setZipStatus] = useState(null);
   const [appealZipDoneId, setAppealZipDoneId] = useState(null);
   const [appealZipBusy, setAppealZipBusy] = useState(false);
   const [appealZipErr, setAppealZipErr] = useState('');
@@ -97,37 +98,42 @@ export default function DenialQueue({ variant = 'queue' }) {
 
   useEffect(() => {
     if (!appealZipJobId) return undefined;
-    let cancelled = false;
-    const poll = async () => {
-      if (cancelled) return;
+
+    let isMounted = true;
+
+    const tick = async () => {
       try {
-        const { data } = await api.get(`/api/queue/batch-appeals/${appealZipJobId}`);
-        setAppealZipProgress(data);
-        if (data.status === 'error') {
-          setAppealZipErr(data.error || 'Batch failed');
-          setAppealZipBusy(false);
-          setAppealZipJobId(null);
-          return;
-        }
-        if (data.status === 'done') {
-          setAppealZipDoneId(appealZipJobId);
-          setAppealZipJobId(null);
-          setAppealZipBusy(false);
-          return;
-        }
-      } catch (e) {
-        setAppealZipErr(e.response?.data?.error || 'Batch failed');
-        setAppealZipBusy(false);
-        setAppealZipJobId(null);
-        return;
+        const res = await api.get(`/api/queue/zip-status/${appealZipJobId}`);
+        if (!isMounted) return;
+        setZipStatus(res.data);
+      } catch (err) {
+        console.error('Zip polling error:', err);
       }
-      setTimeout(poll, 1500);
     };
-    poll();
+
+    tick();
+    const interval = setInterval(tick, 3000);
+
     return () => {
-      cancelled = true;
+      isMounted = false;
+      clearInterval(interval);
     };
   }, [appealZipJobId]);
+
+  useEffect(() => {
+    if (!zipStatus || !appealZipJobId) return;
+    const s = zipStatus.status;
+    if (s === 'error') {
+      setAppealZipErr(zipStatus.error || 'Batch failed');
+      setAppealZipBusy(false);
+      setAppealZipJobId(null);
+      setZipStatus(null);
+    } else if (s === 'done') {
+      setAppealZipDoneId(appealZipJobId);
+      setAppealZipJobId(null);
+      setAppealZipBusy(false);
+    }
+  }, [zipStatus, appealZipJobId]);
 
   const submitBatchJson = async () => {
     setBatchMsg('');
@@ -482,18 +488,18 @@ export default function DenialQueue({ variant = 'queue' }) {
               {appealZipBusy ? 'Processing…' : 'Generate appeals + ZIP'}
             </button>
           </div>
-          {appealZipBusy && !appealZipProgress && (
+          {appealZipBusy && !zipStatus && (
             <p style={{ fontSize: 13, marginTop: 4 }}>Starting batch…</p>
           )}
-          {appealZipBusy && appealZipProgress && appealZipProgress.total > 0 && (
+          {appealZipBusy && zipStatus && zipStatus.total > 0 && (
             <p style={{ fontSize: 13, marginTop: 4 }}>
-              Processing {appealZipProgress.total} claims… ({appealZipProgress.current}/{appealZipProgress.total})
+              Processing {zipStatus.total} claims… ({zipStatus.current}/{zipStatus.total})
             </p>
           )}
           {appealZipDoneId && (
             <p style={{ fontSize: 14, marginTop: 8, fontWeight: 600 }}>
-              {appealZipProgress?.ok_count ?? 0} Appeals Generated
-              {appealZipProgress?.error ? ` — ${appealZipProgress.error}` : ''}
+              {zipStatus?.ok_count ?? 0} Appeals Generated
+              {zipStatus?.error ? ` — ${zipStatus.error}` : ''}
             </p>
           )}
           {appealZipDoneId && (

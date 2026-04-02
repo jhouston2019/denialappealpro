@@ -100,23 +100,58 @@ export default function DenialQueue({ variant = 'queue' }) {
     if (!appealZipJobId) return undefined;
 
     let isMounted = true;
+    let intervalId = null;
+    let errorCount = 0;
+    const MAX_ERRORS = 5;
 
     const tick = async () => {
       try {
         const res = await api.get(`/api/queue/zip-status/${appealZipJobId}`);
+
         if (!isMounted) return;
-        setZipStatus(res.data);
+
+        errorCount = 0;
+        const data = res.data;
+
+        setZipStatus((prev) => {
+          if (
+            prev &&
+            prev.status === data?.status &&
+            prev.current === data?.current &&
+            prev.total === data?.total &&
+            prev.ok_count === data?.ok_count &&
+            prev.error === data?.error
+          ) {
+            return prev;
+          }
+          return data;
+        });
+
+        if (data?.status === 'done' || data?.status === 'error') {
+          if (intervalId != null) clearInterval(intervalId);
+        }
       } catch (err) {
         console.error('Zip polling error:', err);
+        errorCount += 1;
+        if (errorCount >= MAX_ERRORS && intervalId != null) {
+          clearInterval(intervalId);
+          console.error('Zip polling stopped after repeated failures');
+          if (isMounted) {
+            setAppealZipErr('Could not reach server for batch status. Try again.');
+            setAppealZipBusy(false);
+            setAppealZipJobId(null);
+            setZipStatus(null);
+          }
+        }
       }
     };
 
+    intervalId = setInterval(tick, 3000);
     tick();
-    const interval = setInterval(tick, 3000);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (intervalId != null) clearInterval(intervalId);
     };
   }, [appealZipJobId]);
 

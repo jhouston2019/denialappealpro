@@ -26,7 +26,7 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [batchMsg, setBatchMsg] = useState('');
   const [appealZipCsv, setAppealZipCsv] = useState(null);
   const [appealZipJobId, setAppealZipJobId] = useState(null);
-  /** Polling updates this only — never queue/metrics state */
+  /** Batch ZIP job snapshot from GET /api/queue/zip-status (polling only updates this) */
   const [zipStatus, setZipStatus] = useState(null);
   const [appealZipDoneId, setAppealZipDoneId] = useState(null);
   const [appealZipBusy, setAppealZipBusy] = useState(false);

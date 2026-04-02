@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -31,58 +31,43 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [appealZipDoneId, setAppealZipDoneId] = useState(null);
   const [appealZipBusy, setAppealZipBusy] = useState(false);
   const [appealZipErr, setAppealZipErr] = useState('');
-  const metricsHydratedRef = useRef(false);
 
   useEffect(() => {
-    api
-      .get('/api/queue/count')
-      .then((res) => {
-        if (typeof res.data?.total === 'number') setQueueTotal(res.data.total);
-      })
-      .catch((err) => console.error(err));
-  }, []);
+    let isMounted = true;
 
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setListLoading(true);
-      if (queuePage === 1 && !metricsHydratedRef.current) setMetricsLoading(true);
+    const loadQueueFirst = async () => {
       try {
-        if (queuePage === 1 && !metricsHydratedRef.current) {
-          console.time('QUEUE_LOAD');
-          const [queueRes, metricsRes] = await Promise.all([
-            api.get(`/api/queue?limit=${queueLimit}&page=1`),
-            api.get('/api/queue/metrics'),
-          ]);
-          console.timeEnd('QUEUE_LOAD');
-          if (!cancelled) {
-            setClaims(queueRes.data.claims || []);
+        setListLoading(true);
+        console.time('QUEUE_LOAD');
+        const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
+        console.timeEnd('QUEUE_LOAD');
+        if (!isMounted) return;
+        setClaims(queueRes.data.claims || []);
+        setListLoading(false);
+
+        Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
+          .then(([metricsRes, countRes]) => {
+            if (!isMounted) return;
             setMetrics(metricsRes.data);
-            metricsHydratedRef.current = true;
-          }
-        } else if (queuePage === 1) {
-          console.time('QUEUE_LOAD');
-          const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=1`);
-          console.timeEnd('QUEUE_LOAD');
-          if (!cancelled) setClaims(queueRes.data.claims || []);
-        } else {
-          console.time('QUEUE_PAGE');
-          const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
-          console.timeEnd('QUEUE_PAGE');
-          if (!cancelled) setClaims(queueRes.data.claims || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (!cancelled) {
+            if (typeof countRes.data?.total === 'number') setQueueTotal(countRes.data.total);
+            setMetricsLoading(false);
+          })
+          .catch((err) => {
+            console.error(err);
+            if (isMounted) setMetricsLoading(false);
+          });
+      } catch (err) {
+        console.error(err);
+        if (isMounted) {
           setListLoading(false);
-          if (queuePage === 1) setMetricsLoading(false);
+          setMetricsLoading(false);
         }
       }
     };
-    run();
+
+    loadQueueFirst();
     return () => {
-      cancelled = true;
+      isMounted = false;
     };
   }, [queuePage]);
 
@@ -97,21 +82,24 @@ export default function DenialQueue({ variant = 'queue' }) {
 
   const refreshQueueAndMetrics = useCallback(async () => {
     setListLoading(true);
-    setMetricsLoading(true);
     try {
       console.time('QUEUE_REFRESH');
-      const [qr, mr, cr] = await Promise.all([
-        api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`),
-        api.get('/api/queue/metrics'),
-        api.get('/api/queue/count'),
-      ]);
+      const queueRes = await api.get(`/api/queue?limit=${queueLimit}&page=${queuePage}`);
       console.timeEnd('QUEUE_REFRESH');
-      setClaims(qr.data.claims || []);
-      setMetrics(mr.data);
-      if (typeof cr.data?.total === 'number') setQueueTotal(cr.data.total);
+      setClaims(queueRes.data.claims || []);
+      setListLoading(false);
+      Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
+        .then(([metricsRes, countRes]) => {
+          setMetrics(metricsRes.data);
+          if (typeof countRes.data?.total === 'number') setQueueTotal(countRes.data.total);
+          setMetricsLoading(false);
+        })
+        .catch((e) => {
+          console.error(e);
+          setMetricsLoading(false);
+        });
     } catch (e) {
       console.error(e);
-    } finally {
       setListLoading(false);
       setMetricsLoading(false);
     }
@@ -543,25 +531,6 @@ export default function DenialQueue({ variant = 'queue' }) {
             </button>
           )}
           {appealZipErr && <p style={{ fontSize: 13, marginTop: 8, color: '#b00020' }}>{appealZipErr}</p>}
-        </div>
-      )}
-
-      {listLoading && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            marginTop: 12,
-            marginBottom: 8,
-            padding: '6px 12px',
-            fontSize: 12,
-            color: '#0f172a',
-            background: '#e0f2fe',
-            borderRadius: 6,
-            borderLeft: '4px solid #0284c7',
-          }}
-        >
-          Loading queue…
         </div>
       )}
 

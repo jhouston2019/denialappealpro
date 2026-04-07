@@ -8,6 +8,7 @@ import stripe
 import os
 import uuid
 import io
+from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
 from config import Config
@@ -34,6 +35,44 @@ print("="*60)
 validate_environment(strict=False)
 
 app = Flask(__name__)
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    import traceback
+
+    app.logger.error("Unhandled 500: %s\n%s", e, traceback.format_exc())
+    return jsonify(
+        {
+            "error": "Internal server error",
+            "details": str(e),
+            "type": type(e).__name__,
+        }
+    ), 500
+
+
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    if isinstance(e, HTTPException):
+        return jsonify(
+            {
+                "error": e.name,
+                "details": e.description,
+                "type": type(e).__name__,
+            }
+        ), e.code
+    import traceback
+
+    app.logger.error("Unhandled exception: %s\n%s", e, traceback.format_exc())
+    return jsonify(
+        {
+            "error": "Internal server error",
+            "details": str(e),
+            "type": type(e).__name__,
+        }
+    ), 500
+
+
 app.config.from_object(Config)
 
 # CORS: production https://denialappealpro.com (+ www), Netlify hostnames for builds/previews, local dev

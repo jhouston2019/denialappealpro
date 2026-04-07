@@ -5,15 +5,47 @@ Mandatory section order, CARC interpretation, multi-denial handling, determinist
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
+import math
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+import openai
+
 from appeal_output_structure import extract_carc_rarc_from_intake, patient_initials
 
 logger = logging.getLogger(__name__)
+
+
+def _make_serializable(obj, _depth=0):
+    if _depth > 10:
+        return str(obj)
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+            return None
+        return obj
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {str(k): _make_serializable(v, _depth + 1) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_make_serializable(i, _depth + 1) for i in obj]
+    return str(obj)
+
+
+def _truncate_string_values(obj, max_len=2000, _depth=0):
+    if _depth > 10:
+        return obj
+    if isinstance(obj, str):
+        return obj[:max_len] + "…[truncated]" if len(obj) > max_len else obj
+    if isinstance(obj, dict):
+        return {k: _truncate_string_values(v, max_len, _depth + 1) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_truncate_string_values(i, max_len, _depth + 1) for i in obj]
+    return obj
 
 # CARC → interpretation label (Part 2)
 CARC_INTERPRETATION: Dict[str, str] = {
@@ -468,22 +500,39 @@ Billing Department
 def generate_submission_appeal_openai(client, structured: Dict[str, Any]) -> str:
     if client is None:
         raise ValueError("OpenAI client required")
+
+    try:
+        safe = _truncate_string_values(_make_serializable(structured))
+        structured_json = json.dumps(safe, indent=2, ensure_ascii=False)
+    except Exception as serial_exc:
+        raise ValueError(f"Could not serialize structured intake: {serial_exc}") from serial_exc
+
     model = os.getenv("OPENAI_APPEAL_MODEL", "gpt-4o")
     user_content = (
         "STRUCTURED CLAIM DATA (JSON — use only as facts; output must be plain text appeal, no JSON):\n"
-        + json.dumps(structured, indent=2)
+        + structured_json
         + "\n\nGenerate the full appeal letter now, following the system instructions exactly."
     )
-    resp = client.chat.completions.create(
-        model=model,
-        temperature=0.2,
-        max_tokens=4000,
-        messages=[
-            {"role": "system", "content": SUBMISSION_APPEAL_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-    )
-    return (resp.choices[0].message.content or "").strip()
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=0.2,
+            max_tokens=4000,
+            messages=[
+                {"role": "system", "content": SUBMISSION_APPEAL_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except openai.AuthenticationError:
+        raise
+    except openai.RateLimitError as e:
+        raise RuntimeError(f"OpenAI rate limit hit: {e}") from e
+    except openai.BadRequestError as e:
+        raise ValueError(f"OpenAI rejected the request (prompt too large or invalid): {e}") from e
+    except openai.OpenAIError as e:
+        raise RuntimeError(f"OpenAI API error: {e}") from e
 
 
 def generate_submission_appeal(

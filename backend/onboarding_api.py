@@ -3,6 +3,7 @@ High-conversion onboarding: preview without login, paywall, then account + full 
 """
 
 import os
+import traceback
 import uuid
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -257,12 +258,19 @@ def register_onboarding_routes(app, limiter, generator):
                         text = 'Unable to generate full appeal. Please review inputs.'
                 appeal.generated_letter_text = text
                 db.session.commit()
-            except Exception as gen_err:
+            except Exception as e:
                 db.session.rollback()
+                current_app.logger.error(
+                    "Preview generation failed | type=%s | details=%s\nFull traceback:\n%s",
+                    type(e).__name__,
+                    str(e),
+                    traceback.format_exc(),
+                )
                 return jsonify(
                     {
                         'error': 'Preview generation failed',
-                        'details': str(gen_err),
+                        'details': str(e),
+                        'type': type(e).__name__,
                     }
                 ), 500
 
@@ -283,11 +291,19 @@ def register_onboarding_routes(app, limiter, generator):
 
         except Exception as e:
             db.session.rollback()
-            import traceback
-
-            print('PREVIEW ERROR:', str(e))
-            traceback.print_exc()
-            return jsonify({'error': 'Preview generation failed', 'details': str(e)}), 500
+            current_app.logger.error(
+                "Preview generation failed | type=%s | details=%s\nFull traceback:\n%s",
+                type(e).__name__,
+                str(e),
+                traceback.format_exc(),
+            )
+            return jsonify(
+                {
+                    'error': 'Preview generation failed',
+                    'details': str(e),
+                    'type': type(e).__name__,
+                }
+            ), 500
 
     @onboarding_bp.route('/onboarding/appeal/<appeal_id>', methods=['GET'])
     def get_onboarding_appeal(appeal_id):

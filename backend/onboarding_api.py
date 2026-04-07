@@ -26,6 +26,24 @@ PREVIEW_CHARS = 900
 ALLOWED_UPLOAD = {'pdf', 'jpg', 'jpeg', 'png'}
 
 
+def normalize_denial_codes(codes):
+    if not codes:
+        return []
+
+    valid = []
+
+    for c in codes:
+        c = str(c).strip().upper()
+
+        if c.isdigit() and int(c) > 0:
+            valid.append(c)
+
+        elif c.startswith('N') and len(c) > 1 and c[1:].isdigit():
+            valid.append(c)
+
+    return list(set(valid))
+
+
 def _defaults_for_onboarding():
     return {
         'patient_id': 'ONBOARDING',
@@ -42,163 +60,234 @@ def register_onboarding_routes(app, limiter, generator):
     @onboarding_bp.route('/onboarding/preview', methods=['POST'])
     @limiter.limit('15 per hour')
     def create_preview():
-        """Create anonymous appeal + AI preview text (no PDF, no login)."""
-        denial_reason = ''
-        payer = ''
-        billed_amount = Decimal('0')
-        cpt_part = ''
-        icd_part = ''
-        denial_letter_path = None
-        intake_mode = 'paste'
+        """Create anonymous appeal + AI preview text (no PDF, no login). Always returns JSON."""
 
-        if request.content_type and 'multipart/form-data' in request.content_type:
-            intake_mode = request.form.get('intake_mode') or 'paste'
-            payer = (request.form.get('payer') or '').strip()
-            denial_reason = (request.form.get('denial_reason') or '').strip()
-            raw_amt = request.form.get('billed_amount') or request.form.get('amount')
-            cpt_icd = (request.form.get('cpt_icd') or '').strip()
-            if cpt_icd:
-                parts = [p.strip() for p in cpt_icd.replace(';', ',').split(',') if p.strip()]
-                if parts:
-                    cpt_part = parts[0][:200]
-                    if len(parts) > 1:
-                        icd_part = ','.join(parts[1:])[:100]
-            try:
-                billed_amount = Decimal(str(raw_amt)) if raw_amt not in (None, '') else Decimal('0')
-            except (InvalidOperation, TypeError):
-                billed_amount = Decimal('0')
-            paste_extra = (request.form.get('paste_details') or '').strip()
-            if paste_extra:
-                denial_reason = (denial_reason + '\n\n' + paste_extra).strip() if denial_reason else paste_extra
-            f = request.files.get('denial_file')
-            if f and f.filename:
-                ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
-                if ext not in ALLOWED_UPLOAD:
-                    return jsonify({'error': 'Invalid file type'}), 400
-                uid = uuid.uuid4().hex
-                path = os.path.join(current_app.config['UPLOAD_FOLDER'], f'{uid}_{secure_filename(f.filename)}')
-                f.save(path)
-                denial_letter_path = path
-        else:
-            data = request.json or {}
-            intake_mode = data.get('intake_mode') or 'paste'
-            payer = (data.get('payer') or '').strip()
-            denial_reason = (data.get('denial_reason') or '').strip()
-            raw_amt = data.get('billed_amount') or data.get('amount')
-            cpt_icd = (data.get('cpt_icd') or '').strip()
-            if cpt_icd:
-                parts = [p.strip() for p in cpt_icd.replace(';', ',').split(',') if p.strip()]
-                if parts:
-                    cpt_part = parts[0][:200]
-                    if len(parts) > 1:
-                        icd_part = ','.join(parts[1:])[:100]
-            try:
-                billed_amount = Decimal(str(raw_amt)) if raw_amt not in (None, '') else Decimal('0')
-            except (InvalidOperation, TypeError):
-                billed_amount = Decimal('0')
-            paste_extra = (data.get('paste_details') or '').strip()
-            if paste_extra:
-                denial_reason = (denial_reason + '\n\n' + paste_extra).strip() if denial_reason else paste_extra
-
-        # Structured intake: claim #, DOS, CPT/ICD columns, primary denial code
-        claim_number_in = ''
-        date_of_service_raw = None
-        cpt_direct = ''
-        icd_direct = ''
-        denial_code_in = ''
-        if request.content_type and 'multipart/form-data' in request.content_type:
-            claim_number_in = (request.form.get('claim_number') or '').strip()[:100]
-            date_of_service_raw = request.form.get('date_of_service')
-            cpt_direct = (request.form.get('cpt_codes') or '').strip()[:200]
-            icd_direct = (request.form.get('diagnosis_code') or request.form.get('icd_codes') or '').strip()[:200]
-            denial_code_in = (request.form.get('denial_code') or '').strip()[:50]
-        else:
-            data = request.json or {}
-            claim_number_in = (str(data.get('claim_number') or '') or '').strip()[:100]
-            date_of_service_raw = data.get('date_of_service')
-            cpt_direct = (str(data.get('cpt_codes') or '') or '').strip()[:200]
-            icd_direct = (str(data.get('diagnosis_code') or data.get('icd_codes') or '') or '').strip()[:200]
-            denial_code_in = (str(data.get('denial_code') or '') or '').strip()[:50]
-
-        if cpt_direct:
-            cpt_part = cpt_direct
-        if icd_direct:
-            icd_part = icd_direct
-
-        # Frictionless intake: defaults when payer or narrative omitted (upload / paste / CSV paths).
-        if not denial_reason or not str(denial_reason).strip():
-            denial_reason = (
-                'Denial details from uploaded or pasted documentation. '
-                'Review the generated appeal and attach supporting records as needed.'
-            )
-        if not payer or not str(payer).strip():
-            payer = 'Unknown payer'
-
-        d = _defaults_for_onboarding()
-        appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-        claim_number = claim_number_in or f"ONB-{datetime.utcnow().strftime('%H%M%S')}-{str(uuid.uuid4())[:6].upper()}"
-
-        dos = d['date_of_service']
-        if date_of_service_raw:
-            try:
-                ds = str(date_of_service_raw)[:10]
-                dos = datetime.strptime(ds, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-
-        appeal = Appeal(
-            appeal_id=appeal_id,
-            user_id=None,
-            payer=payer[:200],
-            claim_number=claim_number,
-            patient_id=d['patient_id'],
-            provider_name=d['provider_name'],
-            provider_npi=d['provider_npi'],
-            date_of_service=dos,
-            denial_reason=denial_reason,
-            denial_code=denial_code_in or None,
-            billed_amount=billed_amount,
-            cpt_codes=cpt_part or None,
-            diagnosis_code=icd_part or None,
-            denial_letter_path=denial_letter_path,
-            status='pending',
-            payment_status='unpaid',
-            price_charged=Decimal(str(PricingManager.RETAIL_PRICE)),
-            credit_used=False,
-            queue_status='pending',
-        )
-        db.session.add(appeal)
-        db.session.flush()
+        def _normalize_code_field(val, max_join_len=200):
+            if val is None:
+                return ''
+            if isinstance(val, list):
+                parts = [str(c).strip() for c in val if str(c).strip()]
+                return ','.join(parts)[:max_join_len]
+            s = str(val).strip()
+            if not s:
+                return ''
+            parts = [c.strip() for c in s.replace(';', ',').split(',') if c.strip()]
+            return ','.join(parts)[:max_join_len]
 
         try:
-            if not getattr(advanced_ai_generator, 'enabled', True):
-                text = (
-                    f"Basis for appeal (preview)\n\n"
-                    f"Payer: {payer}\nClaim: {claim_number}\nAmount: ${billed_amount}\n\n"
-                    f"{denial_reason[:2000]}"
-                )
+            denial_reason = ''
+            payer = ''
+            billed_amount = Decimal('0')
+            cpt_part = ''
+            icd_part = ''
+            denial_letter_path = None
+            intake_mode = 'paste'
+            is_multipart = bool(request.content_type and 'multipart/form-data' in request.content_type)
+            json_data = {}
+
+            if is_multipart:
+                intake_mode = request.form.get('intake_mode') or 'paste'
+                payer = (request.form.get('payer') or request.form.get('payer_name') or '').strip()
+                denial_reason = (request.form.get('denial_reason') or '').strip()
+                raw_amt = request.form.get('billed_amount') or request.form.get('amount')
+                cpt_icd = (request.form.get('cpt_icd') or '').strip()
+                if cpt_icd:
+                    parts = [p.strip() for p in cpt_icd.replace(';', ',').split(',') if p.strip()]
+                    if parts:
+                        cpt_part = parts[0][:200]
+                        if len(parts) > 1:
+                            icd_part = ','.join(parts[1:])[:100]
+                try:
+                    billed_amount = Decimal(str(raw_amt)) if raw_amt not in (None, '') else Decimal('0')
+                except (InvalidOperation, TypeError):
+                    billed_amount = Decimal('0')
+                paste_extra = (request.form.get('paste_details') or '').strip()
+                if paste_extra:
+                    denial_reason = (denial_reason + '\n\n' + paste_extra).strip() if denial_reason else paste_extra
+                f = request.files.get('denial_file')
+                if f and f.filename:
+                    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+                    if ext not in ALLOWED_UPLOAD:
+                        return jsonify({'error': 'Invalid file type'}), 400
+                    uid = uuid.uuid4().hex
+                    path = os.path.join(current_app.config['UPLOAD_FOLDER'], f'{uid}_{secure_filename(f.filename)}')
+                    f.save(path)
+                    denial_letter_path = path
             else:
-                text = advanced_ai_generator.generate_appeal_content(appeal)
-            appeal.generated_letter_text = text
-            db.session.commit()
+                json_data = request.get_json(silent=True)
+                if json_data is None:
+                    ct = (request.content_type or '').lower()
+                    if 'application/json' in ct:
+                        return jsonify({'error': 'Missing or invalid JSON body'}), 400
+                    json_data = {}
+                if not isinstance(json_data, dict):
+                    return jsonify({'error': 'Request body must be a JSON object'}), 400
+
+                intake_mode = json_data.get('intake_mode') or 'paste'
+                payer = (json_data.get('payer') or json_data.get('payer_name') or '').strip()
+                denial_reason = (json_data.get('denial_reason') or '').strip()
+                raw_amt = json_data.get('billed_amount') or json_data.get('amount')
+                cpt_icd = (json_data.get('cpt_icd') or '').strip()
+                if cpt_icd:
+                    parts = [p.strip() for p in cpt_icd.replace(';', ',').split(',') if p.strip()]
+                    if parts:
+                        cpt_part = parts[0][:200]
+                        if len(parts) > 1:
+                            icd_part = ','.join(parts[1:])[:100]
+                try:
+                    billed_amount = Decimal(str(raw_amt)) if raw_amt not in (None, '') else Decimal('0')
+                except (InvalidOperation, TypeError):
+                    billed_amount = Decimal('0')
+                paste_extra = (json_data.get('paste_details') or '').strip()
+                if paste_extra:
+                    denial_reason = (denial_reason + '\n\n' + paste_extra).strip() if denial_reason else paste_extra
+
+                if not payer:
+                    return jsonify({'error': 'Missing payer'}), 400
+
+            # Structured intake: claim #, DOS, CPT/ICD columns, primary denial code
+            claim_number_in = ''
+            date_of_service_raw = None
+            cpt_direct = ''
+            icd_direct = ''
+            raw_denial_codes = []
+            if is_multipart:
+                claim_number_in = (request.form.get('claim_number') or '').strip()[:100]
+                date_of_service_raw = request.form.get('date_of_service')
+                cpt_direct = _normalize_code_field(request.form.get('cpt_codes'), 200)
+                icd_direct = _normalize_code_field(
+                    request.form.get('diagnosis_code') or request.form.get('icd_codes'), 200
+                )
+                dc_str = (request.form.get('denial_code') or '').strip()
+                if dc_str:
+                    for part in dc_str.replace(';', ',').split(','):
+                        p = part.strip()
+                        if p:
+                            raw_denial_codes.append(p)
+                raw_denial_codes.extend(request.form.getlist('denial_codes'))
+            else:
+                claim_number_in = (str(json_data.get('claim_number') or '') or '').strip()[:100]
+                date_of_service_raw = json_data.get('date_of_service')
+                cpt_direct = _normalize_code_field(json_data.get('cpt_codes'), 200)
+                icd_direct = _normalize_code_field(
+                    json_data.get('diagnosis_code') or json_data.get('icd_codes'), 200
+                )
+                denial_codes_payload = json_data.get('denial_codes', [])
+                if isinstance(denial_codes_payload, list):
+                    raw_denial_codes.extend(denial_codes_payload)
+                elif isinstance(denial_codes_payload, str) and denial_codes_payload.strip():
+                    for part in denial_codes_payload.replace(';', ',').split(','):
+                        p = part.strip()
+                        if p:
+                            raw_denial_codes.append(p)
+                dc_str = str(json_data.get('denial_code') or '').strip()
+                if dc_str:
+                    for part in dc_str.replace(';', ',').split(','):
+                        p = part.strip()
+                        if p:
+                            raw_denial_codes.append(p)
+
+            denial_codes = normalize_denial_codes(raw_denial_codes)
+            if not denial_codes:
+                denial_codes = ['97']
+            denial_code_stored = ' / '.join(denial_codes)[:50]
+
+            if cpt_direct:
+                cpt_part = cpt_direct
+            if icd_direct:
+                icd_part = icd_direct
+
+            # Frictionless intake: defaults when payer or narrative omitted (upload / paste / CSV paths).
+            if not denial_reason or not str(denial_reason).strip():
+                denial_reason = (
+                    'Denial details from uploaded or pasted documentation. '
+                    'Review the generated appeal and attach supporting records as needed.'
+                )
+            if not payer or not str(payer).strip():
+                payer = 'Unknown payer'
+
+            d = _defaults_for_onboarding()
+            appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+            claim_number = claim_number_in or f"ONB-{datetime.utcnow().strftime('%H%M%S')}-{str(uuid.uuid4())[:6].upper()}"
+
+            dos = d['date_of_service']
+            if date_of_service_raw:
+                try:
+                    ds = str(date_of_service_raw)[:10]
+                    dos = datetime.strptime(ds, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+
+            appeal = Appeal(
+                appeal_id=appeal_id,
+                user_id=None,
+                payer=payer[:200],
+                claim_number=claim_number,
+                patient_id=d['patient_id'],
+                provider_name=d['provider_name'],
+                provider_npi=d['provider_npi'],
+                date_of_service=dos,
+                denial_reason=denial_reason,
+                denial_code=denial_code_stored or None,
+                billed_amount=billed_amount,
+                cpt_codes=cpt_part or None,
+                diagnosis_code=icd_part or None,
+                denial_letter_path=denial_letter_path,
+                status='pending',
+                payment_status='unpaid',
+                price_charged=Decimal(str(PricingManager.RETAIL_PRICE)),
+                credit_used=False,
+                queue_status='pending',
+            )
+            db.session.add(appeal)
+            db.session.flush()
+
+            try:
+                if not getattr(advanced_ai_generator, 'enabled', True):
+                    text = (
+                        f"Basis for appeal (preview)\n\n"
+                        f"Payer: {payer}\nClaim: {claim_number}\nAmount: ${billed_amount}\n\n"
+                        f"{denial_reason[:2000]}"
+                    )
+                else:
+                    try:
+                        text = advanced_ai_generator.generate_appeal_content(appeal)
+                    except Exception as gen_exc:
+                        print('GENERATOR ERROR:', gen_exc)
+                        text = 'Unable to generate full appeal. Please review inputs.'
+                appeal.generated_letter_text = text
+                db.session.commit()
+            except Exception as gen_err:
+                db.session.rollback()
+                return jsonify(
+                    {
+                        'error': 'Preview generation failed',
+                        'details': str(gen_err),
+                    }
+                ), 500
+
+            text = appeal.generated_letter_text or ''
+            excerpt = text[:PREVIEW_CHARS]
+            total_len = len(text)
+            return jsonify(
+                {
+                    'appeal_id': appeal_id,
+                    'revenue_at_risk': float(billed_amount),
+                    'revenue_message': f"This claim represents ${float(billed_amount):,.2f} in denied revenue",
+                    'preview_excerpt': excerpt,
+                    'preview_total_length': total_len,
+                    'preview_truncated': total_len > PREVIEW_CHARS,
+                    'intake_mode': intake_mode,
+                }
+            ), 201
+
         except Exception as e:
             db.session.rollback()
-            return jsonify({'error': f'Preview generation failed: {str(e)}'}), 500
+            import traceback
 
-        text = appeal.generated_letter_text or ''
-        excerpt = text[:PREVIEW_CHARS]
-        total_len = len(text)
-        return jsonify(
-            {
-                'appeal_id': appeal_id,
-                'revenue_at_risk': float(billed_amount),
-                'revenue_message': f"This claim represents ${float(billed_amount):,.2f} in denied revenue",
-                'preview_excerpt': excerpt,
-                'preview_total_length': total_len,
-                'preview_truncated': total_len > PREVIEW_CHARS,
-                'intake_mode': intake_mode,
-            }
-        ), 201
+            print('PREVIEW ERROR:', str(e))
+            traceback.print_exc()
+            return jsonify({'error': 'Preview generation failed', 'details': str(e)}), 500
 
     @onboarding_bp.route('/onboarding/appeal/<appeal_id>', methods=['GET'])
     def get_onboarding_appeal(appeal_id):

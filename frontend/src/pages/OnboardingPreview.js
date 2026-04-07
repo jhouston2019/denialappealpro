@@ -21,7 +21,10 @@ export default function OnboardingPreview() {
     api
       .get(`/api/onboarding/appeal/${appealId}`)
       .then(({ data: d }) => setData(d))
-      .catch(() => setErr('Could not load preview'))
+      .catch((err) => {
+        console.error('Preview error:', err.response?.data || err);
+        setErr('Could not load preview');
+      })
       .finally(() => setLoading(false));
   }, [appealId]);
 

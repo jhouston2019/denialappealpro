@@ -279,41 +279,46 @@ export default function OnboardingStart() {
 
   const runPreview = useCallback(async () => {
     const payload = serializeIntakeForBackend(intake);
-    const payer = (intake.payer || '').trim();
+    const payer = (intake.payer || '').trim() || 'Unknown payer';
     const claimNum = (intake.claimNumber || '').trim();
     const pasteSupplement =
       mode === 'paste' && pasteText.trim() ? pasteText.trim().slice(0, 15000) : '';
     const pasteBlock = [payload.paste_details, pasteSupplement].filter(Boolean).join('\n\n');
-    if (mode === 'upload' || mode === 'csv') {
-      const fd = new FormData();
-      fd.append('intake_mode', mode);
-      fd.append('payer', payer);
-      fd.append('denial_reason', payload.denial_reason);
-      fd.append('billed_amount', intake.billedAmount || '0');
-      fd.append('paste_details', pasteBlock);
-      fd.append('claim_number', claimNum);
-      fd.append('date_of_service', intake.dateOfService || '');
-      fd.append('cpt_codes', payload.cpt_codes || '');
-      fd.append('diagnosis_code', payload.diagnosis_code || '');
-      fd.append('denial_code', payload.denial_code || '');
-      if (file) fd.append('denial_file', file);
-      const { data } = await api.post('/api/onboarding/preview', fd);
+    try {
+      if (mode === 'upload' || mode === 'csv') {
+        const fd = new FormData();
+        fd.append('intake_mode', mode);
+        fd.append('payer', payer);
+        fd.append('denial_reason', payload.denial_reason);
+        fd.append('billed_amount', intake.billedAmount || '0');
+        fd.append('paste_details', pasteBlock);
+        fd.append('claim_number', claimNum);
+        fd.append('date_of_service', intake.dateOfService || '');
+        fd.append('cpt_codes', payload.cpt_codes || '');
+        fd.append('diagnosis_code', payload.diagnosis_code || '');
+        fd.append('denial_code', payload.denial_code || '');
+        if (file) fd.append('denial_file', file);
+        const { data } = await api.post('/api/onboarding/preview', fd);
+        navigate(`/start/preview/${data.appeal_id}`);
+        return;
+      }
+      const { data } = await api.post('/api/onboarding/preview', {
+        intake_mode: 'paste',
+        payer,
+        denial_reason: payload.denial_reason,
+        billed_amount: intake.billedAmount || '0',
+        paste_details: pasteBlock,
+        claim_number: claimNum,
+        date_of_service: intake.dateOfService || '',
+        cpt_codes: payload.cpt_codes || '',
+        diagnosis_code: payload.diagnosis_code || '',
+        denial_code: payload.denial_code || '',
+      });
       navigate(`/start/preview/${data.appeal_id}`);
-      return;
+    } catch (err) {
+      console.error('Preview error:', err.response?.data || err);
+      throw err;
     }
-    const { data } = await api.post('/api/onboarding/preview', {
-      intake_mode: 'paste',
-      payer,
-      denial_reason: payload.denial_reason,
-      billed_amount: intake.billedAmount || '0',
-      paste_details: pasteBlock,
-      claim_number: claimNum,
-      date_of_service: intake.dateOfService || '',
-      cpt_codes: payload.cpt_codes || '',
-      diagnosis_code: payload.diagnosis_code || '',
-      denial_code: payload.denial_code || '',
-    });
-    navigate(`/start/preview/${data.appeal_id}`);
   }, [mode, intake, file, navigate, pasteText]);
 
   const categoryInfo = useMemo(
@@ -469,6 +474,7 @@ export default function OnboardingStart() {
       }
       await runPreview();
     } catch (ex) {
+      console.error('Preview error:', ex.response?.data || ex);
       setErr(ex.response?.data?.error || 'Could not create preview');
     } finally {
       setLoading(false);

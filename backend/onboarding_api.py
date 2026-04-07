@@ -223,6 +223,7 @@ def register_onboarding_routes(app, limiter, generator):
                 appeal_id=appeal_id,
                 user_id=None,
                 payer=payer[:200],
+                payer_name=payer[:200],
                 claim_number=claim_number,
                 patient_id=d['patient_id'],
                 provider_name=d['provider_name'],

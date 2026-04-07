@@ -144,6 +144,7 @@ class Appeal(db.Model):
     
     # Intake data
     payer = db.Column(db.String(200), nullable=False)  # Renamed from payer_name for consistency
+    payer_name = db.Column(db.String, nullable=True)
     claim_number = db.Column(db.String(100), nullable=False, index=True)
     patient_id = db.Column(db.String(100), nullable=False)
     provider_name = db.Column(db.String(200), nullable=False)

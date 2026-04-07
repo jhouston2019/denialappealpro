@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
 import { useAppeal } from '../context/AppealContext';
+import { mapExtractedToForm } from '../utils/mapExtractedToForm';
 
 function AppealForm() {
   const navigate = useNavigate();
-  const { appealData, uploadedFile } = useAppeal();
+  const { appealData, uploadedFile, mergeAppealData, setUploadedFile } = useAppeal();
   const [loading, setLoading] = useState(false);
   const [docExtracting, setDocExtracting] = useState(false);
+  const [pasteTextIntake, setPasteTextIntake] = useState(false);
   const [formData, setFormData] = useState({
     payer_name: '',
     claim_number: '',
@@ -54,8 +56,29 @@ function AppealForm() {
   };
 
   const handleDenialFile = (file) => {
+    setPasteTextIntake(false);
     setFormData((prev) => ({ ...prev, denial_letter: file }));
   };
+
+  const handlePasteText = useCallback(
+    async (text) => {
+      try {
+        setDocExtracting(true);
+        const res = await api.post('/api/parse/denial-text', { text });
+        const mapped = mapExtractedToForm(res.data);
+        mergeAppealData(mapped);
+        setUploadedFile(null);
+        if (res.data?.success !== false) {
+          setPasteTextIntake(true);
+        }
+      } catch (err) {
+        console.error('Paste parse error:', err);
+      } finally {
+        setDocExtracting(false);
+      }
+    },
+    [mergeAppealData, setUploadedFile]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -93,7 +116,7 @@ function AppealForm() {
     }
 
     // Validate file is attached
-    if (!(uploadedFile ?? formData.denial_letter)) {
+    if (!(uploadedFile ?? formData.denial_letter) && !pasteTextIntake) {
       alert('❌ Missing Document\n\nPlease attach your denial letter or EOB (Explanation of Benefits).\n\nAccepted formats: PDF, JPG, JPEG, PNG');
       return;
     }
@@ -311,12 +334,16 @@ function AppealForm() {
                 accept=".pdf,.jpg,.jpeg,.png"
                 extractAfterDrop
                 onFile={handleDenialFile}
+                onPasteText={handlePasteText}
                 onUploadingChange={setDocExtracting}
                 disabled={loading || docExtracting}
                 inputId="appeal-form-denial-letter"
               >
                 <div style={{ textAlign: 'center', padding: '6px 4px' }}>
-                  <strong style={{ fontSize: 15 }}>Drag and drop your denial letter or EOB here</strong>
+                  <strong style={{ fontSize: 15 }}>Drag, drop, or paste your denial here</strong>
+                  <p style={{ margin: '8px 0 4px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
+                    Paste text, screenshot, or PDF — we&apos;ll extract it automatically
+                  </p>
                   <p style={{ margin: '10px 0 4px', color: '#64748b', fontSize: 14 }}>
                     Or click to browse — PDF, JPG, JPEG, or PNG (max 10MB)
                   </p>

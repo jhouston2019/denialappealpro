@@ -42,10 +42,15 @@ export default function DenialDocumentDropZone({
   onParseResult,
   navigateAfterExtract,
   onUploadingChange,
+  /** When set, plain-text clipboard paste is routed here (e.g. switch to paste mode). */
+  onPasteText,
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pasteDetected, setPasteDetected] = useState(false);
   const depth = useRef(0);
+  const pasteFeedbackTimerRef = useRef(null);
+  const handleChosenFileRef = useRef(() => {});
   const navigate = useNavigate();
   const { setAppealData, setUploadedFile } = useAppeal();
 
@@ -108,6 +113,94 @@ export default function DenialDocumentDropZone({
     onFile?.(file);
   };
 
+  handleChosenFileRef.current = handleChosenFile;
+
+  const flashPasteDetected = useCallback(() => {
+    setPasteDetected(true);
+    if (pasteFeedbackTimerRef.current) clearTimeout(pasteFeedbackTimerRef.current);
+    pasteFeedbackTimerRef.current = setTimeout(() => {
+      setPasteDetected(false);
+      pasteFeedbackTimerRef.current = null;
+    }, 2000);
+  }, []);
+
+  useEffect(() => () => {
+    if (pasteFeedbackTimerRef.current) clearTimeout(pasteFeedbackTimerRef.current);
+  }, []);
+
+  const busy = disabled || uploading;
+
+  useEffect(() => {
+    if (busy) return undefined;
+
+    const onPaste = (e) => {
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) {
+        return;
+      }
+
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      if (cd.files && cd.files.length > 0) {
+        const file = cd.files[0];
+        if (fileMatchesAccept(file, accept)) {
+          e.preventDefault();
+          flashPasteDetected();
+          handleChosenFileRef.current(file);
+        }
+        return;
+      }
+
+      for (let i = 0; i < cd.items.length; i += 1) {
+        const item = cd.items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file && fileMatchesAccept(file, accept)) {
+            e.preventDefault();
+            flashPasteDetected();
+            handleChosenFileRef.current(file);
+            return;
+          }
+        }
+      }
+
+      let stringItem = null;
+      for (let i = 0; i < cd.items.length; i += 1) {
+        const item = cd.items[i];
+        if (item.kind === 'string' && item.type === 'text/plain') {
+          stringItem = item;
+          break;
+        }
+      }
+      if (!stringItem) {
+        for (let i = 0; i < cd.items.length; i += 1) {
+          const item = cd.items[i];
+          if (item.kind === 'string') {
+            stringItem = item;
+            break;
+          }
+        }
+      }
+      if (stringItem) {
+        e.preventDefault();
+        stringItem.getAsString((text) => {
+          if (!text?.trim()) return;
+          flashPasteDetected();
+          if (onPasteText) {
+            onPasteText(text);
+          } else {
+            console.warn('Paste detected but no handler attached');
+          }
+        });
+      }
+    };
+
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [busy, accept, onPasteText, flashPasteDetected]);
+
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -147,8 +240,6 @@ export default function DenialDocumentDropZone({
     if (file) handleChosenFile(file);
   };
 
-  const busy = disabled || uploading;
-
   return (
     <div
       onDragEnter={handleDragEnter}
@@ -184,6 +275,18 @@ export default function DenialDocumentDropZone({
       >
         {children}
       </label>
+      {pasteDetected && (
+        <div
+          style={{
+            marginTop: '10px',
+            color: 'green',
+            fontWeight: '500',
+            textAlign: 'center',
+          }}
+        >
+          ✓ Pasted and extracted
+        </div>
+      )}
     </div>
   );
 }

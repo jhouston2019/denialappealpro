@@ -919,9 +919,16 @@ export default function OnboardingStart() {
             onFile={(f) => runPdfExtract(f)}
             disabled={extracting}
             inputId="onboarding-denial-letter-file"
+            onPasteText={(text) => {
+              setMode('paste');
+              setPasteText(text);
+            }}
           >
             <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-              <strong style={{ color: navy, fontSize: 15 }}>Drag and drop your file here</strong>
+              <strong style={{ color: navy, fontSize: 15 }}>Drag, drop, or paste your denial here</strong>
+              <p style={{ margin: '8px 0 4px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
+                Paste text, screenshot, or PDF — we&apos;ll extract it automatically
+              </p>
               <p style={{ margin: '10px 0 6px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
                 Release to upload — or click to choose from your device
               </p>

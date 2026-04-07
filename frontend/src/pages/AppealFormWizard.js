@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useUser } from '../context/UserContext';
@@ -6,11 +6,12 @@ import { useAppeal } from '../context/AppealContext';
 import UsageTracker from '../components/UsageTracker';
 import UpgradeModal from '../components/UpgradeModal';
 import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
+import { mapExtractedToForm } from '../utils/mapExtractedToForm';
 
 function AppealFormWizard() {
   const navigate = useNavigate();
   const { userEmail, setUser } = useUser();
-  const { appealData, uploadedFile } = useAppeal();
+  const { appealData, uploadedFile, mergeAppealData, setUploadedFile } = useAppeal();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [parsedData, setParsedData] = useState(null);
@@ -89,9 +90,35 @@ function AppealFormWizard() {
     }
   };
 
+  const handlePasteText = useCallback(
+    async (text) => {
+      try {
+        setDocExtracting(true);
+        const res = await api.post('/api/parse/denial-text', { text });
+        const mapped = mapExtractedToForm(res.data);
+        mergeAppealData(mapped);
+        setUploadedFile(null);
+        setFormData((prev) => ({ ...prev, denial_letter: null }));
+        if (res.data?.success !== false) {
+          setParsedData(res.data);
+          setStep(2);
+        }
+      } catch (err) {
+        console.error('Paste parse error:', err);
+      } finally {
+        setDocExtracting(false);
+      }
+    },
+    [mergeAppealData, setUploadedFile]
+  );
+
   const nextStep = () => {
-    if (step === 1 && !(uploadedFile ?? formData.denial_letter)) {
-      alert('Please upload your denial letter');
+    const hasDoc = uploadedFile ?? formData.denial_letter;
+    const hasPasteExtract =
+      appealData &&
+      (appealData.claim_number || appealData.payer_name || appealData.payer);
+    if (step === 1 && !hasDoc && !hasPasteExtract) {
+      alert('Please upload your denial letter or paste denial text into the drop zone');
       return;
     }
     if (step === 2) {
@@ -178,6 +205,7 @@ function AppealFormWizard() {
         accept=".pdf,application/pdf"
         extractAfterDrop
         onFile={(file) => setFormData((prev) => ({ ...prev, denial_letter: file }))}
+        onPasteText={handlePasteText}
         onParseResult={(data) => {
           if (data?.success) setParsedData(data);
         }}
@@ -192,8 +220,11 @@ function AppealFormWizard() {
       >
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
-          <p style={{ margin: '0 0 12px', color: '#334155', fontSize: '18px', fontWeight: 700 }}>
-            Drag and drop your denial letter here
+          <p style={{ margin: '0 0 8px', color: '#334155', fontSize: '18px', fontWeight: 700 }}>
+            Drag, drop, or paste your denial here
+          </p>
+          <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '15px', lineHeight: 1.5 }}>
+            Paste text or a PDF from your clipboard — we&apos;ll extract it automatically
           </p>
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '15px', lineHeight: 1.5 }}>
             Drop a PDF on this area, or click to upload from your computer

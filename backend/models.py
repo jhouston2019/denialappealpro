@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.postgresql import JSONB
 
 db = SQLAlchemy()
 
@@ -213,14 +214,14 @@ class Appeal(db.Model):
     prior_submission_date = db.Column(db.Date, nullable=True)
 
     # Pre-generation coding intelligence snapshot (analytics / future outcome linkage)
-    intelligence_snapshot_json = db.Column(db.Text, nullable=True)
+    intelligence_snapshot_json = db.Column(JSONB, nullable=True)
 
     # Denial prediction + auto-fix / resubmission (API ingest & recovery workflow)
     denial_prediction_score = db.Column(db.Integer, nullable=True)  # 0-100
     fix_status = db.Column(db.String(32), nullable=True, default='none')  # none | pending | applied | needs_review
     resubmission_ready = db.Column(db.Boolean, nullable=False, default=False)
-    corrected_claim_json = db.Column(db.Text, nullable=True)
-    resubmission_package_json = db.Column(db.Text, nullable=True)
+    corrected_claim_json = db.Column(JSONB, nullable=True)
+    resubmission_package_json = db.Column(JSONB, nullable=True)
     
     def __repr__(self):
         return f'<Appeal {self.appeal_id}>'

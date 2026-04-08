@@ -93,7 +93,7 @@ LETTER STRUCTURE:
 [Provider NPI]
 [Provider Address if available]
 
-[Today's date]
+Use the letter date from the structured data field today_date (full month name, day, year — e.g. March 31, 2026). If today_date is missing, omit the date line.
 
 Appeals Review Department
 [Payer Name]
@@ -449,6 +449,7 @@ def generate_submission_appeal_openai(client, structured: Dict[str, Any]) -> str
 
     try:
         safe = _truncate_string_values(_make_serializable(structured))
+        safe['today_date'] = datetime.date.today().strftime('%B %d, %Y')
         structured_json = json.dumps(safe, indent=2, ensure_ascii=False)
     except Exception as serial_exc:
         raise ValueError(f"Could not serialize structured intake: {serial_exc}") from serial_exc

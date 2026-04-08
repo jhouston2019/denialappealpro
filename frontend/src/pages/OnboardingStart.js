@@ -157,6 +157,7 @@ export default function OnboardingStart() {
       claimNumber: data.claim_number || '',
       dateOfService: parseServiceDate(data.service_date || data.denial_date),
       payer: data.payer_name || '',
+      patientName: data.patient_name || '',
       carcCodes: carcFromDoc.length ? carcFromDoc : [],
       rarcCodes: rarcs,
       cptCodes: cpts,
@@ -293,6 +294,9 @@ export default function OnboardingStart() {
         fd.append('billed_amount', intake.billedAmount || '0');
         fd.append('paste_details', pasteBlock);
         fd.append('claim_number', claimNum);
+        fd.append('patient_name', (intake.patientName || '').trim());
+        fd.append('provider_name', (intake.providerName || '').trim());
+        fd.append('provider_npi', (intake.providerNpi || '').trim());
         fd.append('date_of_service', intake.dateOfService || '');
         fd.append('cpt_codes', payload.cpt_codes || '');
         fd.append('diagnosis_code', payload.diagnosis_code || '');
@@ -309,6 +313,9 @@ export default function OnboardingStart() {
         billed_amount: intake.billedAmount || '0',
         paste_details: pasteBlock,
         claim_number: claimNum,
+        patient_name: (intake.patientName || '').trim(),
+        provider_name: (intake.providerName || '').trim(),
+        provider_npi: (intake.providerNpi || '').trim(),
         date_of_service: intake.dateOfService || '',
         cpt_codes: payload.cpt_codes || '',
         diagnosis_code: payload.diagnosis_code || '',
@@ -1211,6 +1218,33 @@ export default function OnboardingStart() {
                 <option key={p} value={p} />
               ))}
             </datalist>
+          </label>
+          <label style={{ display: 'block', marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Patient name</span>
+            <input
+              value={intake.patientName}
+              onChange={(e) => setIntake((s) => ({ ...s, patientName: e.target.value }))}
+              placeholder="Jane Doe"
+              style={{ ...inputBase, border: `1px solid ${border}` }}
+            />
+          </label>
+          <label style={{ display: 'block', marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name</span>
+            <input
+              value={intake.providerName}
+              onChange={(e) => setIntake((s) => ({ ...s, providerName: e.target.value }))}
+              placeholder="e.g. Riverside Medical Group"
+              style={{ ...inputBase, border: `1px solid ${border}` }}
+            />
+          </label>
+          <label style={{ display: 'block', marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider NPI</span>
+            <input
+              value={intake.providerNpi}
+              onChange={(e) => setIntake((s) => ({ ...s, providerNpi: e.target.value }))}
+              placeholder="10-digit NPI"
+              style={{ ...inputBase, border: `1px solid ${border}` }}
+            />
           </label>
           <label style={{ display: 'block' }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Plan type</span>

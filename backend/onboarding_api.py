@@ -79,6 +79,8 @@ def register_onboarding_routes(app, limiter, generator):
             denial_reason = ''
             payer = ''
             patient_name = ''
+            provider_name_in = ''
+            provider_npi_in = ''
             billed_amount = Decimal('0')
             cpt_part = ''
             icd_part = ''
@@ -93,6 +95,8 @@ def register_onboarding_routes(app, limiter, generator):
                 patient_name = (
                     request.form.get('patient_name') or request.form.get('patient') or ''
                 ).strip()
+                provider_name_in = (request.form.get('provider_name') or '').strip()
+                provider_npi_in = (request.form.get('provider_npi') or '').strip()
                 denial_reason = (request.form.get('denial_reason') or '').strip()
                 raw_amt = request.form.get('billed_amount') or request.form.get('amount')
                 cpt_icd = (request.form.get('cpt_icd') or '').strip()
@@ -133,6 +137,8 @@ def register_onboarding_routes(app, limiter, generator):
                 patient_name = (
                     json_data.get('patient_name') or json_data.get('patient') or ''
                 ).strip()
+                provider_name_in = (str(json_data.get('provider_name') or '')).strip()
+                provider_npi_in = (str(json_data.get('provider_npi') or '')).strip()
                 denial_reason = (json_data.get('denial_reason') or '').strip()
                 raw_amt = json_data.get('billed_amount') or json_data.get('amount')
                 cpt_icd = (json_data.get('cpt_icd') or '').strip()
@@ -216,6 +222,9 @@ def register_onboarding_routes(app, limiter, generator):
 
             patient_name = patient_name or 'Patient'
 
+            provider_name = (provider_name_in or 'Your Practice')[:200]
+            provider_npi = (provider_npi_in or '')[:20]
+
             d = _defaults_for_onboarding()
             appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
             claim_number = claim_number_in or f"ONB-{datetime.utcnow().strftime('%H%M%S')}-{str(uuid.uuid4())[:6].upper()}"
@@ -235,8 +244,8 @@ def register_onboarding_routes(app, limiter, generator):
                 payer_name=payer[:200],
                 claim_number=claim_number,
                 patient_id=patient_name[:100],
-                provider_name=d['provider_name'],
-                provider_npi=d['provider_npi'],
+                provider_name=provider_name,
+                provider_npi=provider_npi,
                 date_of_service=dos,
                 denial_reason=denial_reason,
                 denial_code=denial_code_stored or None,

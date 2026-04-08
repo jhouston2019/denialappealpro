@@ -578,7 +578,9 @@ def generate_appeal_with_credits(appeal_id):
         if appeal.user_id:
             user = User.query.get(appeal.user_id)
             if user:
-                allowed, _used, used_free_trial = CreditManager.try_begin_generation(user.id)
+                # TESTING: payment disabled
+                # allowed, _used, used_free_trial = CreditManager.try_begin_generation(user.id)
+                allowed, _used, used_free_trial = True, False, False
                 if allowed:
                     appeal.credit_used = True
                     appeal.payment_status = 'free_trial' if used_free_trial else 'paid'

@@ -644,16 +644,18 @@ def init_customer_portal(app, limiter, generator):
             return jsonify({'error': 'Appeal already completed'}), 400
 
         user = User.query.get(g.current_user_id)
-        allowed, _used_credit, used_free_trial = CreditManager.try_begin_generation(user.id)
-        if not allowed:
-            usage = CreditManager.get_usage_stats(user.id)
-            return jsonify(
-                {
-                    'error': 'No credits, subscription, or free claims remaining',
-                    'requires_payment': True,
-                    'usage': usage,
-                }
-            ), 402
+        # TESTING: payment disabled
+        # allowed, _used_credit, used_free_trial = CreditManager.try_begin_generation(user.id)
+        allowed, _used_credit, used_free_trial = True, False, False
+        # if not allowed:
+        #     usage = CreditManager.get_usage_stats(user.id)
+        #     return jsonify(
+        #         {
+        #             'error': 'No credits, subscription, or free claims remaining',
+        #             'requires_payment': True,
+        #             'usage': usage,
+        #         }
+        #     ), 402
 
         a.queue_status = 'in_progress'
         a.generation_count = (a.generation_count or 0) + 1
@@ -757,16 +759,18 @@ def init_customer_portal(app, limiter, generator):
             return jsonify({'error': msg, 'follow_up_reason': msg}), 400
 
         user = User.query.get(g.current_user_id)
-        allowed, _used_credit, used_free_trial = CreditManager.try_begin_generation(user.id)
-        if not allowed:
-            usage = CreditManager.get_usage_stats(user.id)
-            return jsonify(
-                {
-                    'error': 'No credits, subscription, or free claims remaining',
-                    'requires_payment': True,
-                    'usage': usage,
-                }
-            ), 402
+        # TESTING: payment disabled
+        # allowed, _used_credit, used_free_trial = CreditManager.try_begin_generation(user.id)
+        allowed, _used_credit, used_free_trial = True, False, False
+        # if not allowed:
+        #     usage = CreditManager.get_usage_stats(user.id)
+        #     return jsonify(
+        #         {
+        #             'error': 'No credits, subscription, or free claims remaining',
+        #             'requires_payment': True,
+        #             'usage': usage,
+        #         }
+        #     ), 402
 
         if a.last_generated_at:
             a.prior_submission_date = a.last_generated_at.date()

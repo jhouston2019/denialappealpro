@@ -244,6 +244,7 @@ def register_onboarding_routes(app, limiter, generator):
             db.session.add(appeal)
             db.session.flush()
 
+            # TESTING: payment disabled — create_preview has no payment/credit checks before generation (anonymous preview is intentionally pre-pay).
             try:
                 if not getattr(advanced_ai_generator, 'enabled', True):
                     text = (

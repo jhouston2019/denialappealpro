@@ -17,7 +17,7 @@
    - Redirect to success page
 
 2. APPEAL GENERATION
-   User → AppealFormWizard → Submit → Generate → Download
+   User → OnboardingStart (`/start`) → Submit → Generate → Download
    
    Backend Actions:
    - Check/reset counters if needed
@@ -160,10 +160,10 @@
 ```
 App (with UserProvider)
 │
-├── AppealFormWizard
+├── OnboardingStart (new appeal flow at `/start`)
 │   ├── UsageTracker ← fetches usage by email
 │   ├── UpgradeModal ← triggered by usage thresholds
-│   └── Form Steps
+│   └── Intake / preview steps
 │
 ├── AppealDownload
 │   ├── UsageTracker ← fetches usage by email
@@ -630,7 +630,7 @@ denial-appeal-pro/
 │   │   ├── context/
 │   │   │   └── UserContext.js         [NEW]
 │   │   ├── pages/
-│   │   │   ├── AppealFormWizard.js    [MODIFIED]
+│   │   │   ├── OnboardingStart.js     [MODIFIED]
 │   │   │   ├── AppealDownload.js      [MODIFIED]
 │   │   │   ├── Pricing.js             [MODIFIED]
 │   │   │   └── SubscriptionSuccess.js [NEW]

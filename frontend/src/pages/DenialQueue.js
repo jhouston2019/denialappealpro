@@ -11,6 +11,10 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [claims, setClaims] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [listLoading, setListLoading] = useState(true);
+  /** Summary: GET /api/queue/metrics (independent of list + count) */
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  /** Pagination total: GET /api/queue/count */
+  const [countLoading, setCountLoading] = useState(true);
   const [queuePage, setQueuePage] = useState(1);
   /** null = count not loaded yet (list omits COUNT(*) for speed) */
   const [queueTotal, setQueueTotal] = useState(null);
@@ -32,41 +36,59 @@ export default function DenialQueue({ variant = 'queue' }) {
   const [appealZipBusy, setAppealZipBusy] = useState(false);
   const [appealZipErr, setAppealZipErr] = useState('');
 
-  useEffect(() => {
-    let isMounted = true;
+  /** Queue list, metrics, and count start together; each branch clears its own loading flag when done. */
+  const loadQueuePageParallel = useCallback(async (shouldCommit = () => true) => {
+    setListLoading(true);
+    setMetricsLoading(true);
+    setCountLoading(true);
 
-    const loadQueueFirst = async () => {
-      try {
-        setListLoading(true);
+    const queueP = api.get(`/api/queue?limit=25&page=${queuePage}`);
+    const metricsP = api.get('/api/queue/metrics');
+    const countP = api.get('/api/queue/count');
 
-        const queueRes = await api.get(`/api/queue?limit=25&page=${queuePage}`);
-
-        if (!isMounted) return;
-
-        setClaims(queueRes.data.claims ?? []);
-        setListLoading(false);
-
-        Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
-          .then(([metricsRes, countRes]) => {
-            if (!isMounted) return;
-
-            setMetrics(metricsRes.data);
-            const t = countRes.data?.total;
-            setQueueTotal(typeof t === 'number' ? t : null);
-          })
-          .catch(console.error);
-      } catch (err) {
-        console.error(err);
-        setListLoading(false);
-      }
-    };
-
-    loadQueueFirst();
-
-    return () => {
-      isMounted = false;
-    };
+    await Promise.all([
+      queueP
+        .then((queueRes) => {
+          if (shouldCommit()) setClaims(queueRes.data.claims ?? []);
+        })
+        .catch((err) => {
+          console.error(err);
+        })
+        .finally(() => {
+          if (shouldCommit()) setListLoading(false);
+        }),
+      metricsP
+        .then((metricsRes) => {
+          if (shouldCommit()) setMetrics(metricsRes.data);
+        })
+        .catch((err) => {
+          console.error(err);
+        })
+        .finally(() => {
+          if (shouldCommit()) setMetricsLoading(false);
+        }),
+      countP
+        .then((countRes) => {
+          if (!shouldCommit()) return;
+          const t = countRes.data?.total;
+          setQueueTotal(typeof t === 'number' ? t : null);
+        })
+        .catch((err) => {
+          console.error(err);
+        })
+        .finally(() => {
+          if (shouldCommit()) setCountLoading(false);
+        }),
+    ]);
   }, [queuePage]);
+
+  useEffect(() => {
+    let alive = true;
+    void loadQueuePageParallel(() => alive);
+    return () => {
+      alive = false;
+    };
+  }, [loadQueuePageParallel]);
 
   const processedClaims = useMemo(
     () =>
@@ -77,24 +99,7 @@ export default function DenialQueue({ variant = 'queue' }) {
     [claims]
   );
 
-  const refreshQueueAndMetrics = useCallback(async () => {
-    setListLoading(true);
-    try {
-      const queueRes = await api.get(`/api/queue?limit=25&page=${queuePage}`);
-      setClaims(queueRes.data.claims ?? []);
-      setListLoading(false);
-      Promise.all([api.get('/api/queue/metrics'), api.get('/api/queue/count')])
-        .then(([metricsRes, countRes]) => {
-          setMetrics(metricsRes.data);
-          const t = countRes.data?.total;
-          setQueueTotal(typeof t === 'number' ? t : null);
-        })
-        .catch(console.error);
-    } catch (e) {
-      console.error(e);
-      setListLoading(false);
-    }
-  }, [queuePage]);
+  const refreshQueueAndMetrics = useCallback(() => loadQueuePageParallel(() => true), [loadQueuePageParallel]);
 
   useEffect(() => {
     if (!appealZipJobId) return undefined;
@@ -238,6 +243,22 @@ export default function DenialQueue({ variant = 'queue' }) {
   const totalPages = countKnown ? Math.max(1, Math.ceil(queueTotal / queueLimit)) : null;
   const canNext = countKnown ? queuePage * queueLimit < queueTotal : claims.length === queueLimit;
   const canPrev = queuePage > 1;
+  const paginationTotalHint = countLoading || (!countKnown && canNext);
+
+  const queuePagination =
+    canPrev || canNext
+      ? {
+          page: queuePage,
+          totalPages,
+          totalClaims: queueTotal,
+          countKnown,
+          paginationTotalHint,
+          canPrev,
+          canNext,
+          onPrev: () => setQueuePage((p) => Math.max(1, p - 1)),
+          onNext: () => setQueuePage((p) => p + 1),
+        }
+      : undefined;
   const pct =
     metrics && metrics.added_today > 0
       ? Math.min(100, Math.round((metrics.processed_today / metrics.added_today) * 100))
@@ -310,6 +331,27 @@ export default function DenialQueue({ variant = 'queue' }) {
         </div>
       )}
 
+      {metricsLoading && !metrics && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 12,
+            marginTop: 16,
+            marginBottom: 16,
+          }}
+          aria-busy="true"
+          aria-label="Loading queue metrics"
+        >
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} style={{ border: '1px solid #e5e7eb', padding: 10, borderRadius: 4, background: '#f9fafb' }}>
+              <div style={{ height: 12, width: '72%', background: '#e5e7eb', borderRadius: 3, marginBottom: 10 }} />
+              <div style={{ height: 22, width: '45%', background: '#e5e7eb', borderRadius: 3 }} />
+            </div>
+          ))}
+        </div>
+      )}
+
       {metrics && (
         <div
           style={{
@@ -318,6 +360,8 @@ export default function DenialQueue({ variant = 'queue' }) {
             gap: 12,
             marginTop: 16,
             marginBottom: 16,
+            opacity: metricsLoading ? 0.65 : 1,
+            transition: 'opacity 0.2s ease',
           }}
         >
           <div style={{ border: '1px solid #ccc', padding: 10 }}>
@@ -543,42 +587,8 @@ export default function DenialQueue({ variant = 'queue' }) {
         claims={processedClaims}
         loading={listLoading}
         onRefresh={refreshQueueAndMetrics}
+        queuePagination={queuePagination}
       />
-
-      {(canPrev || canNext) && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-            marginTop: 20,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button
-            type="button"
-            disabled={!canPrev || listLoading}
-            onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
-            style={{ padding: '8px 16px', cursor: !canPrev ? 'not-allowed' : 'pointer' }}
-          >
-            Previous
-          </button>
-          <span style={{ fontSize: 14, color: '#334155' }}>
-            Page {queuePage}
-            {countKnown && totalPages != null ? ` of ${totalPages} (${queueTotal} claims)` : ''}
-            {!countKnown && canNext ? ' — loading total…' : ''}
-          </span>
-          <button
-            type="button"
-            disabled={!canNext || listLoading}
-            onClick={() => setQueuePage((p) => p + 1)}
-            style={{ padding: '8px 16px', cursor: !canNext ? 'not-allowed' : 'pointer' }}
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
 }

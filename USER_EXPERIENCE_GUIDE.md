@@ -295,7 +295,7 @@ Modal appears again with "You've reached your plan limit"
 
 ### 1. UsageTracker Component
 
-**Location:** Top of AppealFormWizard and AppealDownload pages
+**Location:** New appeal flow (`OnboardingStart` at `/start`) and AppealDownload pages
 
 **Elements:**
 - Large usage numbers (35 / 50)

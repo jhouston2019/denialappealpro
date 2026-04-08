@@ -205,7 +205,7 @@ Navigate to:
 
 ### Test Usage Tracking
 
-1. Go to `/appeal-form`
+1. Go to `/start`
 2. Submit an appeal (uses credit or subscription)
 3. Check usage counter updates
 4. Verify overage tracking when limit exceeded

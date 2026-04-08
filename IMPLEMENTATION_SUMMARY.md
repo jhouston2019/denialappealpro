@@ -45,7 +45,7 @@ GET  /api/user/email/<email>
 **Files Modified:**
 1. `frontend/src/App.js` - Added UserProvider and SubscriptionSuccess route
 2. `frontend/src/pages/Pricing.js` - Updated with new tiers and messaging
-3. `frontend/src/pages/AppealFormWizard.js` - Integrated usage tracking and upgrade prompts
+3. `frontend/src/pages/OnboardingStart.js` - Integrated usage tracking and upgrade prompts (new appeal flow at `/start`)
 4. `frontend/src/pages/AppealDownload.js` - Added usage display and upgrade CTAs
 
 **Files Created:**
@@ -332,7 +332,7 @@ Run `python backend/test_usage_tracking.py` to verify:
 - `components/UpgradeModal.js` - Upgrade prompt
 - `components/UpgradeCTA.js` - Upgrade banner
 - `context/UserContext.js` - User state
-- `pages/AppealFormWizard.js` - Integrated tracking
+- `pages/OnboardingStart.js` - Integrated tracking (new appeal flow at `/start`)
 - `pages/AppealDownload.js` - Integrated tracking
 - `pages/Pricing.js` - Updated tiers
 - `pages/SubscriptionSuccess.js` - Confirmation page

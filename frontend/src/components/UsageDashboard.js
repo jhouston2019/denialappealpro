@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -7,13 +7,7 @@ function UsageDashboard({ email }) {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (email) {
-      fetchUsage();
-    }
-  }, [email]);
-
-  const fetchUsage = async () => {
+  const fetchUsage = useCallback(async () => {
     try {
       const response = await api.get(`/api/usage/email/${encodeURIComponent(email)}`);
       setUsage(response.data);
@@ -22,7 +16,13 @@ function UsageDashboard({ email }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [email]);
+
+  useEffect(() => {
+    if (email) {
+      fetchUsage();
+    }
+  }, [email, fetchUsage]);
 
   if (loading) {
     return (
@@ -194,7 +194,7 @@ function UsageDashboard({ email }) {
       {/* Action Buttons */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
         <button
-          onClick={() => navigate('/appeal-form')}
+          onClick={() => navigate('/start')}
           style={{
             padding: '20px',
             fontSize: '18px',

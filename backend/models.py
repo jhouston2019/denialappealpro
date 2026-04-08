@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 db = SQLAlchemy()
@@ -68,6 +69,12 @@ class User(db.Model):
     # Acquisition: 3 free generations for users without an active subscription (tracked per account)
     free_trial_generations_used = db.Column(db.Integer, default=0, nullable=False)
     referred_by_id = db.Column(db.Integer, db.ForeignKey('referral_partners.id'), nullable=True, index=True)
+
+    provider_name = db.Column(db.String(200), nullable=True)
+    provider_npi = db.Column(db.String(20), nullable=True)
+    provider_address = db.Column(db.String(500), nullable=True)
+    provider_phone = db.Column(db.String(50), nullable=True)
+    provider_fax = db.Column(db.String(50), nullable=True)
 
     # Relationships
     appeals = db.relationship('Appeal', backref='user', lazy=True)
@@ -259,6 +266,31 @@ class RetentionEmailLog(db.Model):
     __table_args__ = (
         db.UniqueConstraint('user_id', 'campaign', 'sent_day', name='uq_retention_user_campaign_day'),
     )
+
+
+class BatchAppealJob(db.Model):
+    """Durable metadata for CSV/PDF batch appeal ZIP jobs (survives process restarts)."""
+
+    __tablename__ = 'batch_appeal_jobs'
+
+    job_id = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    status = db.Column(db.String(32), nullable=False, default='queued')
+    job_kind = db.Column(db.String(16), nullable=False, default='csv')
+    total = db.Column(db.Integer, nullable=True)
+    current = db.Column(db.Integer, nullable=True)
+    ok_count = db.Column(db.Integer, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    zip_path = db.Column(db.String(1024), nullable=True)
+    zip_name = db.Column(db.String(512), nullable=True)
+    summary_rows = db.Column(JSON, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('batch_appeal_jobs', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<BatchAppealJob {self.job_id} {self.status}>'
 
 
 class ClaimStatusEvent(db.Model):

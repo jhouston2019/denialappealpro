@@ -27,35 +27,45 @@ function formatDos(iso) {
 }
 
 /**
- * Focused recovery table: priority = amount, sort high → low, filter status / payer.
- * When loading, filters + table chrome stay mounted; only tbody shows skeleton rows (no full-page block).
+ * Optional queue pagination (same UX as DenialQueue): Previous / Next + page X of Y (N claims).
+ * @typedef {{ page: number, totalPages: number|null, totalClaims: number|null, countKnown: boolean, paginationTotalHint: boolean, canPrev: boolean, canNext: boolean, onPrev: () => void, onNext: () => void }} QueuePaginationConfig
  */
-export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
+
+/**
+ * Focused recovery table: priority = amount, sort high → low, filter status / payer.
+ * Initial load (no rows yet): tbody skeleton rows. Refresh while rows exist: thead spinner only.
+ * @param {{ claims: unknown[], loading: boolean, onRefresh?: () => void, queuePagination?: QueuePaginationConfig }} props
+ */
+export default function RecoveryClaimsTable({ claims, loading, onRefresh, queuePagination }) {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('');
   const [payerFilter, setPayerFilter] = useState('');
   const [fuBusy, setFuBusy] = useState(null);
 
+  const list = useMemo(() => (Array.isArray(claims) ? claims : []), [claims]);
+  const isInitialLoad = Boolean(loading && list.length === 0);
+  const isRefreshing = Boolean(loading && list.length > 0);
+
   const payers = useMemo(() => {
     const set = new Set();
-    (claims || []).forEach((c) => {
+    list.forEach((c) => {
       if (c.payer) set.add(c.payer);
     });
     return [...set].sort();
-  }, [claims]);
+  }, [list]);
 
   const rows = useMemo(() => {
-    let list = [...(claims || [])];
+    let rowList = [...list];
     if (statusFilter) {
-      list = list.filter((c) => (c.appeal_tracking_status || '').toLowerCase() === statusFilter.toLowerCase());
+      rowList = rowList.filter((c) => (c.appeal_tracking_status || '').toLowerCase() === statusFilter.toLowerCase());
     }
     if (payerFilter.trim()) {
       const q = payerFilter.trim().toLowerCase();
-      list = list.filter((c) => (c.payer || '').toLowerCase().includes(q));
+      rowList = rowList.filter((c) => (c.payer || '').toLowerCase().includes(q));
     }
-    list.sort((a, b) => calculatePriority(b).priorityScore - calculatePriority(a).priorityScore);
-    return list;
-  }, [claims, statusFilter, payerFilter]);
+    rowList.sort((a, b) => calculatePriority(b).priorityScore - calculatePriority(a).priorityScore);
+    return rowList;
+  }, [list, statusFilter, payerFilter]);
 
   const runFollowUp = useCallback(
     async (e, appealId) => {
@@ -168,6 +178,9 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
+        @keyframes rqspin {
+          to { transform: rotate(360deg); }
+        }
       `}</style>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 14 }}>
         <label style={{ fontSize: 13, color: '#334155' }}>
@@ -214,11 +227,43 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
               <th style={th}>Status</th>
               <th style={th}>Actions</th>
             </tr>
+            {isRefreshing && (
+              <tr>
+                <th
+                  colSpan={7}
+                  style={{
+                    ...th,
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    textAlign: 'center',
+                    fontWeight: 500,
+                    color: '#64748b',
+                    padding: '10px 10px',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+                    <span
+                      aria-hidden
+                      style={{
+                        display: 'inline-block',
+                        width: 16,
+                        height: 16,
+                        border: '2px solid #cbd5e1',
+                        borderTopColor: '#1d4ed8',
+                        borderRadius: '50%',
+                        animation: 'rqspin 0.65s linear infinite',
+                      }}
+                    />
+                    Updating list…
+                  </span>
+                </th>
+              </tr>
+            )}
           </thead>
           <tbody>
-            {loading
+            {isInitialLoad
               ? renderSkeletonRows()
-              : (claims || []).length > 0
+              : list.length > 0
                 ? rows.length > 0
                   ? renderRows()
                   : renderEmptyState('No claims match your filters.', false)
@@ -226,6 +271,43 @@ export default function RecoveryClaimsTable({ claims, loading, onRefresh }) {
           </tbody>
         </table>
       </div>
+
+      {queuePagination && (queuePagination.canPrev || queuePagination.canNext) && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+            marginTop: 20,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type="button"
+            disabled={!queuePagination.canPrev || loading}
+            onClick={queuePagination.onPrev}
+            style={{ padding: '8px 16px', cursor: !queuePagination.canPrev ? 'not-allowed' : 'pointer' }}
+          >
+            Previous
+          </button>
+          <span style={{ fontSize: 14, color: '#334155' }}>
+            Page {queuePagination.page}
+            {queuePagination.countKnown && queuePagination.totalPages != null && queuePagination.totalClaims != null
+              ? ` of ${queuePagination.totalPages} (${queuePagination.totalClaims} claims)`
+              : ''}
+            {queuePagination.paginationTotalHint ? ' — loading total…' : ''}
+          </span>
+          <button
+            type="button"
+            disabled={!queuePagination.canNext || loading}
+            onClick={queuePagination.onNext}
+            style={{ padding: '8px 16px', cursor: !queuePagination.canNext ? 'not-allowed' : 'pointer' }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

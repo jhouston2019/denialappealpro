@@ -493,9 +493,9 @@ SQLALCHEMY_ENGINE_OPTIONS = {
 
 ### ❌ ISSUES:
 
-**Issue 9.1: WIZARD STILL FEELS GENERIC**
+**Issue 9.1: NEW APPEAL FLOW STILL FEELS GENERIC**
 ```javascript
-// AppealFormWizard.js line 2
+// OnboardingStart.js (new appeal flow at /start) — example step copy
 <h2>Step 1: Upload Denial Letter</h2>
 <p>Upload your denial letter or EOB. We'll automatically extract key information.</p>
 ```
@@ -532,7 +532,7 @@ SQLALCHEMY_ENGINE_OPTIONS = {
 
 5. Add appeal content validation (remove AI disclaimers)
 6. Add subscription revenue to admin dashboard
-7. Update wizard copy for professional positioning
+7. Update new appeal / onboarding copy for professional positioning
 8. Add webhook setup documentation
 
 ### 🟢 MEDIUM (Fix Before Scale):

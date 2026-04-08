@@ -37,7 +37,7 @@ npm start
 
 #### B. Generate Appeals and Watch Usage
 
-1. Go to `/appeal-form`
+1. Go to `/start`
 2. Upload a denial letter PDF
 3. Fill in the form (email should be pre-filled)
 4. Submit and generate appeal
@@ -92,7 +92,7 @@ npm start
 
 ### Frontend Tests
 
-- [ ] UsageTracker displays on AppealFormWizard
+- [ ] UsageTracker displays during the new appeal flow (`OnboardingStart` at `/start`)
 - [ ] UsageTracker displays on AppealDownload
 - [ ] Usage updates in real-time after generation
 - [ ] Progress bar color changes at thresholds

@@ -79,7 +79,7 @@ function Pricing() {
   };
 
   const handleRunAppeal = () => {
-    navigate('/appeal-form');
+    navigate('/start');
   };
 
   if (pricingData == null) {

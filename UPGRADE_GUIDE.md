@@ -63,12 +63,12 @@ This upgrade transforms Denial Appeal Pro from a single retail tool into a compr
 
 #### 1. New Pages
 - **Pricing.js**: Full pricing page with all tiers
-- **AppealFormWizard.js**: 3-step workflow with PDF upload
+- **OnboardingStart.js**: New appeal flow at `/start` (denial intake, PDF upload, preview/checkout)
 - **Landing.js**: Updated positioning and messaging
 
 #### 2. Updated Routes
 - `/pricing` - Pricing page
-- `/appeal-form` - New wizard workflow
+- `/start` - New appeal onboarding flow (`OnboardingStart`)
 - `/submit` - Original form (maintained for compatibility)
 
 ---
@@ -174,7 +174,7 @@ No additional dependencies needed. The frontend already has `@stripe/stripe-js` 
 ### 5. Test the System
 
 1. **Test Pricing Page**: Navigate to `/pricing`
-2. **Test Wizard Flow**: Navigate to `/appeal-form`
+2. **Test new appeal flow**: Navigate to `/start`
 3. **Test PDF Parsing**: Upload a denial letter PDF
 4. **Test Subscription**: Complete a test subscription purchase
 5. **Test Credit Pack**: Purchase a test credit pack
@@ -378,7 +378,7 @@ PRICE_PER_APPEAL=10.00
 - [ ] Stripe products created
 - [ ] Price IDs updated in database
 - [ ] Pricing page loads correctly
-- [ ] Wizard workflow completes
+- [ ] New appeal flow (`/start`) completes
 - [ ] PDF parsing extracts data
 - [ ] Subscription purchase works
 - [ ] Credit pack purchase works

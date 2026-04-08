@@ -406,21 +406,49 @@ def init_customer_portal(app, limiter, generator):
             }
         ), 200
 
-    @customer_bp.route('/user/profile', methods=['GET'])
+    @customer_bp.route('/user/profile', methods=['GET', 'PUT'])
     @require_customer_auth
     def user_profile():
-        """Provider defaults for intake: latest appeal on this account (editable in UI)."""
         user = User.query.get(g.current_user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        latest = (
-            Appeal.query.filter_by(user_id=user.id)
-            .order_by(Appeal.created_at.desc())
-            .first()
-        )
-        pn = (latest.provider_name or '').strip() if latest else ''
-        npi = (latest.provider_npi or '').strip() if latest else ''
-        return jsonify({'provider_name': pn, 'provider_npi': npi}), 200
+
+        if request.method == 'GET':
+            return jsonify(
+                {
+                    'provider_name': user.provider_name or '',
+                    'provider_npi': user.provider_npi or '',
+                    'provider_address': user.provider_address or '',
+                    'provider_phone': user.provider_phone or '',
+                    'provider_fax': user.provider_fax or '',
+                }
+            ), 200
+
+        data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        if not isinstance(data, dict):
+            return jsonify({'error': 'Invalid JSON body'}), 400
+
+        def _clip(val, max_len):
+            t = (str(val) if val is not None else '').strip()
+            if not t:
+                return None
+            return t[:max_len]
+
+        if 'provider_name' in data:
+            user.provider_name = _clip(data.get('provider_name'), 200)
+        if 'provider_npi' in data:
+            user.provider_npi = _clip(data.get('provider_npi'), 20)
+        if 'provider_address' in data:
+            user.provider_address = _clip(data.get('provider_address'), 500)
+        if 'provider_phone' in data:
+            user.provider_phone = _clip(data.get('provider_phone'), 50)
+        if 'provider_fax' in data:
+            user.provider_fax = _clip(data.get('provider_fax'), 50)
+
+        db.session.commit()
+        return jsonify({'success': True}), 200
 
     @customer_bp.route('/auth/queue-viewed', methods=['POST'])
     @require_customer_auth

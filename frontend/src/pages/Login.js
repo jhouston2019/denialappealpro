@@ -125,7 +125,7 @@ export default function Login() {
           </button>
         </form>
         <p style={{ marginTop: '16px', fontSize: '13px' }}>
-          <Link to="/appeal-form">Single appeal (no account)</Link>
+          <Link to="/start">Single appeal (no account)</Link>
           {' · '}
           <Link to="/">Home</Link>
         </p>

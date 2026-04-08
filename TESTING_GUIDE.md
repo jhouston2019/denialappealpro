@@ -43,7 +43,7 @@
 ### 2. Functional Testing
 
 #### Navigation
-- [ ] "Run Denial Analysis → Generate Appeal" button navigates to `/appeal-form`
+- [ ] "Run Denial Analysis → Generate Appeal" button navigates to `/start`
 - [ ] "See a Sample Letter ↓" button scrolls to sample letter section
 - [ ] All footer links work (Terms, Privacy, Admin)
 - [ ] Smooth scroll behavior works

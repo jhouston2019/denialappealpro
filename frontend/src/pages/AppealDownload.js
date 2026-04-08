@@ -144,7 +144,7 @@ function AppealDownload() {
         <button className="btn btn-primary btn-large" onClick={handleDownload} style={{ width: '100%' }}>
           Download Appeal PDF
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/appeal-form')} style={{ width: '100%', marginTop: '1rem' }}>
+        <button className="btn btn-secondary" onClick={() => navigate('/start')} style={{ width: '100%', marginTop: '1rem' }}>
           Process Next Denial
         </button>
         <button className="btn btn-secondary" onClick={() => navigate('/history')} style={{ width: '100%', marginTop: '0.5rem' }}>

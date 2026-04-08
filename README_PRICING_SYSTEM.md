@@ -159,7 +159,7 @@ frontend/src/
 ├── context/
 │   └── UserContext.js             [NEW] - State management
 ├── pages/
-│   ├── AppealFormWizard.js        [MODIFIED] - Integrated tracking
+│   ├── OnboardingStart.js         [MODIFIED] - Integrated tracking (`/start`)
 │   ├── AppealDownload.js          [MODIFIED] - Integrated tracking
 │   ├── Pricing.js                 [MODIFIED] - New tiers
 │   └── SubscriptionSuccess.js     [NEW] - Confirmation

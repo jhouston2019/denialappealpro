@@ -164,6 +164,16 @@ with app.app_context():
         ensure_retention_schema(db)
     except Exception as e:
         print(f"⚠️  Retention schema migration: {e}")
+    try:
+        from migrate_batch_appeal_jobs import (
+            ensure_batch_appeal_jobs_schema,
+            sweep_interrupted_batch_jobs,
+        )
+
+        ensure_batch_appeal_jobs_schema(db)
+        sweep_interrupted_batch_jobs(db)
+    except Exception as e:
+        print(f"⚠️  Batch appeal jobs migration: {e}")
     # Gunicorn loads app:app — __main__ block never runs; ensure tables, pricing, and admin exist.
     try:
         db.create_all()

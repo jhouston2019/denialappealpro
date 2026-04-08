@@ -198,7 +198,7 @@ function BillingManagement() {
 
       {/* Actions */}
       <div style={styles.actions}>
-        <button onClick={() => navigate('/appeal-form')} style={styles.secondaryButton}>
+        <button onClick={() => navigate('/start')} style={styles.secondaryButton}>
           Process New Denial
         </button>
         <button onClick={() => navigate('/pricing')} style={styles.secondaryButton}>

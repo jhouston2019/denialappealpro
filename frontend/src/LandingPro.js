@@ -448,7 +448,7 @@ function LandingPro() {
             flexWrap: 'wrap'
           }}>
             <button 
-              onClick={() => navigate('/appeal-form')}
+              onClick={() => navigate('/start')}
               style={{
                 background: 'white',
                 color: '#0f172a',
@@ -1413,7 +1413,7 @@ function LandingPro() {
                   Delivered as PDF — ready for portal, fax, or mail
                 </div>
                 <button 
-                  onClick={() => navigate('/appeal-form')}
+                  onClick={() => navigate('/start')}
                   style={{
                     background: 'white',
                     color: '#0f172a',
@@ -2013,7 +2013,7 @@ function LandingPro() {
               </p>
               
               <button 
-                onClick={() => navigate('/appeal-form')}
+                onClick={() => navigate('/start')}
                 style={{
                   background: 'white',
                   color: '#0f172a',
@@ -2167,7 +2167,7 @@ function LandingPro() {
           </p>
           
           <button 
-            onClick={() => navigate('/appeal-form')}
+            onClick={() => navigate('/start')}
             style={{
               background: 'white',
               color: '#0f172a',

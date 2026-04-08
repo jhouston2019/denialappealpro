@@ -179,7 +179,7 @@ GET  /api/user/email/<email>
 
 ### 4. Integration Points
 
-**AppealFormWizard:**
+**OnboardingStart (`/start` — new appeal flow):**
 - UsageTracker displayed when email entered
 - UpgradeModal triggered after successful generation
 - UpgradeCTA shown throughout workflow

@@ -130,10 +130,16 @@ export default function OnboardingStart() {
         if (cancelled) return;
         const pn = (data?.provider_name || '').trim();
         const npi = (data?.provider_npi || '').trim();
+        const addr = (data?.provider_address || '').trim();
+        const ph = (data?.provider_phone || '').trim();
+        const fx = (data?.provider_fax || '').trim();
         setIntake((s) => ({
           ...s,
           ...(pn && !s.providerName?.trim() ? { providerName: pn } : {}),
           ...(npi && !s.providerNpi?.trim() ? { providerNpi: npi } : {}),
+          ...(addr && !s.providerAddress?.trim() ? { providerAddress: addr } : {}),
+          ...(ph && !s.providerPhone?.trim() ? { providerPhone: ph } : {}),
+          ...(fx && !s.providerFax?.trim() ? { providerFax: fx } : {}),
         }));
       } catch {
         /* not logged in or profile unavailable */

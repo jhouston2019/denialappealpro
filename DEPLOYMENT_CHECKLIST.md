@@ -21,7 +21,7 @@
 - [x] UpgradeCTA component created
 - [x] UserContext for state management
 - [x] SubscriptionSuccess page created
-- [x] AppealFormWizard integrated with tracking
+- [x] OnboardingStart (`/start`) integrated with tracking
 - [x] AppealDownload integrated with tracking
 - [x] Pricing page updated with new tiers
 - [x] No linter errors

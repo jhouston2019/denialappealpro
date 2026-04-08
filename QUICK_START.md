@@ -85,14 +85,14 @@ App opens at `http://localhost:3000`
 2. Verify all tiers display correctly
 3. Enter test email: `test@example.com`
 
-### Test 2: New Wizard Workflow
-1. Navigate to `http://localhost:3000/appeal-form`
+### Test 2: New appeal flow (/start)
+1. Navigate to `http://localhost:3000/start`
 2. Upload a test PDF (or skip)
-3. Complete the 3-step workflow
+3. Complete the onboarding steps through preview/checkout as applicable
 4. Verify appeal submission
 
 ### Test 3: PDF Parsing
-1. In the wizard, upload a denial letter PDF
+1. In the new appeal flow, upload a denial letter PDF
 2. Wait for automatic extraction
 3. Review extracted information
 4. Confidence level should display
@@ -102,7 +102,7 @@ App opens at `http://localhost:3000`
 ## What You Get Immediately
 
 ### ✅ Working Features (No Configuration Needed)
-- Multi-step wizard workflow
+- New appeal onboarding flow (`/start`)
 - PDF parsing and extraction
 - Denial rules engine (17 CARC codes)
 - Timely filing calculator (14 payers)
@@ -124,14 +124,14 @@ App opens at `http://localhost:3000`
 ## Quick Test Scenarios
 
 ### Scenario 1: Retail User (Works Immediately)
-1. Go to `/appeal-form`
+1. Go to `/start`
 2. Upload denial letter
 3. Complete form
 4. Submit appeal
 5. See payment page
 
 ### Scenario 2: Test PDF Parsing
-1. Go to `/appeal-form`
+1. Go to `/start`
 2. Upload any PDF with text
 3. System extracts:
    - Denial codes
@@ -227,7 +227,7 @@ System works without Stripe for testing. Stripe is only needed for actual paymen
 - [ ] Backend server running on :5000
 - [ ] Frontend app running on :3000
 - [ ] Pricing page loads
-- [ ] Wizard workflow works
+- [ ] New appeal flow (`/start`) works
 - [ ] PDF parsing extracts data
 - [ ] Admin dashboard accessible
 

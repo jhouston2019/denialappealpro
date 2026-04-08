@@ -337,7 +337,7 @@ function AppealForm() {
                 onPasteText={handlePasteText}
                 onUploadingChange={setDocExtracting}
                 disabled={loading || docExtracting}
-                inputId="appeal-form-denial-letter"
+                inputId="submit-denial-letter-file"
               >
                 <div style={{ textAlign: 'center', padding: '6px 4px' }}>
                   <strong style={{ fontSize: 15 }}>Drag, drop, or paste your denial here</strong>

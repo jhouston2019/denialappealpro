@@ -107,7 +107,7 @@ function SubscriptionSuccess() {
       {/* Action Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '400px', margin: '0 auto' }}>
         <button
-          onClick={() => navigate('/appeal-form')}
+          onClick={() => navigate('/start')}
           style={{
             padding: '16px',
             fontSize: '18px',

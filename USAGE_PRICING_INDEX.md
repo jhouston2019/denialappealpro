@@ -96,7 +96,7 @@ Comprehensive summaries and status reports.
 **Modified:**
 - `frontend/src/App.js` - UserProvider + routes
 - `frontend/src/pages/Pricing.js` - New tiers
-- `frontend/src/pages/AppealFormWizard.js` - Tracking integration
+- `frontend/src/pages/OnboardingStart.js` - Tracking integration (new appeal flow at `/start`)
 - `frontend/src/pages/AppealDownload.js` - Tracking integration
 
 **Created:**

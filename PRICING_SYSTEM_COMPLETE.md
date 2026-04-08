@@ -29,7 +29,7 @@
 - Overage calculation
 
 **Display locations:**
-- Appeal form wizard
+- New appeal flow (`/start`, `OnboardingStart`)
 - Download page
 - User dashboard (optional)
 
@@ -78,7 +78,7 @@
 **Modified:**
 1. `frontend/src/App.js` - Added UserProvider + routes
 2. `frontend/src/pages/Pricing.js` - Updated tiers + messaging
-3. `frontend/src/pages/AppealFormWizard.js` - Integrated tracking
+3. `frontend/src/pages/OnboardingStart.js` - Integrated tracking (new appeal flow at `/start`)
 4. `frontend/src/pages/AppealDownload.js` - Integrated tracking
 
 **Created:**
@@ -292,7 +292,7 @@ npm start
 
 # Navigate to:
 # - http://localhost:3000/pricing
-# - http://localhost:3000/appeal-form
+# - http://localhost:3000/start
 # - http://localhost:3000/download/APP-xxx
 ```
 

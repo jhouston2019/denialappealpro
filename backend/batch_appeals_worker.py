@@ -16,9 +16,10 @@ from types import SimpleNamespace
 
 from flask import current_app
 
+from appeal_automation import AppealAutomationHooks
 from credit_manager import CreditManager
 from stripe_billing import StripeBilling
-from models import db, User
+from models import db, User, Appeal, ClaimStatusEvent, BatchAppealJob
 from advanced_ai_generator import advanced_ai_generator
 from appeal_pdf_builder import build_professional_pdf_bytes, build_appeal_pdf_filename
 from pdf_parser import parse_denial_pdf
@@ -26,7 +27,79 @@ from pdf_parser import parse_denial_pdf
 MAX_BATCH_ROWS = 100
 MAX_PDF_BATCH_FILES = 100
 _jobs_lock = threading.Lock()
-_jobs = {}  # job_id -> dict
+_jobs = {}  # job_id -> dict (write-through cache; durable fields also in BatchAppealJob)
+
+
+def _job_row_to_dict(row):
+    """Shape matches in-memory job dict for status + ZIP endpoints (no worker-only payloads)."""
+    return {
+        'job_id': row.job_id,
+        'user_id': row.user_id,
+        'status': row.status,
+        'job_kind': row.job_kind or 'csv',
+        'total': row.total if row.total is not None else 0,
+        'current': row.current if row.current is not None else 0,
+        'ok_count': row.ok_count if row.ok_count is not None else 0,
+        'error': row.error,
+        'zip_path': row.zip_path,
+        'zip_name': row.zip_name,
+        'summary_rows': list(row.summary_rows) if row.summary_rows is not None else [],
+        'out_dir': None,
+        'defaults': {},
+        'csv_path': None,
+        'rows': None,
+        'pdf_items': None,
+        'pdf_temp_dir': None,
+    }
+
+
+def _insert_job_record(job_id, job):
+    now = datetime.utcnow()
+    row = BatchAppealJob(
+        job_id=job_id,
+        user_id=job['user_id'],
+        status=job.get('status') or 'queued',
+        job_kind=job.get('job_kind') or 'csv',
+        total=job.get('total', 0),
+        current=job.get('current', 0),
+        ok_count=job.get('ok_count', 0),
+        error=job.get('error'),
+        zip_path=job.get('zip_path'),
+        zip_name=job.get('zip_name'),
+        summary_rows=list(job.get('summary_rows') or []),
+        created_at=now,
+        updated_at=now,
+    )
+    db.session.add(row)
+    db.session.commit()
+
+
+def _flush_job_to_db(job_id, job):
+    """Persist durable fields from in-memory job to BatchAppealJob."""
+    if not job_id:
+        return
+    try:
+        row = BatchAppealJob.query.filter_by(job_id=job_id).first()
+        if row is None:
+            return
+        row.status = job.get('status') or row.status
+        row.job_kind = job.get('job_kind') or row.job_kind
+        row.total = job.get('total')
+        row.current = job.get('current')
+        row.ok_count = job.get('ok_count')
+        row.error = job.get('error')
+        row.zip_path = job.get('zip_path')
+        row.zip_name = job.get('zip_name')
+        sr = job.get('summary_rows')
+        row.summary_rows = list(sr) if sr is not None else []
+        row.updated_at = datetime.utcnow()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception('BatchAppealJob flush failed job_id=%s', job_id)
+        except RuntimeError:
+            pass
 
 
 def _gval(row, key, alt_keys=()):
@@ -236,6 +309,65 @@ def _parse_pdf_to_ephemeral(parse: dict, defaults, index: int, source_name: str)
 SUMMARY_FIELDS = ['row', 'source_file', 'claim_number', 'status', 'reason', 'seconds']
 
 
+def _persist_pdf_batch_appeal_row(user_id, ep, generated_text, appeal_pdf_abs_path, source_label, used_free_trial):
+    """Persist one Appeal + events after bulk-PDF generation (mirrors queue import + completed generate state)."""
+    appeal_id = f"APP-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+    abs_pdf = os.path.abspath(appeal_pdf_abs_path)
+    price = current_app.config.get('PRICE_PER_APPEAL', 79)
+    note = f'Bulk PDF batch: {source_label}'[:500]
+    appeal_row = Appeal(
+        appeal_id=appeal_id[:50],
+        user_id=user_id,
+        payer=(ep.payer or '')[:200],
+        payer_name=(ep.payer or '')[:200] if ep.payer else None,
+        claim_number=(ep.claim_number or '')[:100],
+        patient_id=(ep.patient_id or 'PT')[:100],
+        provider_name=(ep.provider_name or 'Provider')[:200],
+        provider_npi=(ep.provider_npi or '0000000000')[:20],
+        date_of_service=ep.date_of_service,
+        denial_reason=ep.denial_reason or '',
+        denial_code=(ep.denial_code or '')[:50] if ep.denial_code else None,
+        diagnosis_code=(ep.diagnosis_code or '')[:100] if ep.diagnosis_code else None,
+        cpt_codes=(ep.cpt_codes or '')[:200] if ep.cpt_codes else None,
+        billed_amount=ep.billed_amount,
+        appeal_level=str(getattr(ep, 'appeal_level', None) or 'level_1')[:50],
+        status='completed',
+        payment_status='free_trial' if used_free_trial else 'paid',
+        price_charged=price,
+        credit_used=True,
+        queue_status='generated',
+        queue_notes=note,
+        generated_letter_text=generated_text,
+        appeal_letter_path=abs_pdf[:500],
+        generation_count=1,
+        last_generated_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+        appeal_generation_kind='initial',
+        appeal_tracking_status='generated',
+        tracking_updated_at=datetime.utcnow(),
+    )
+    db.session.add(appeal_row)
+    db.session.flush()
+    db.session.add(
+        ClaimStatusEvent(
+            appeal_db_id=appeal_row.id,
+            user_id=user_id,
+            event_type='created',
+            message='Added from bulk PDF batch',
+        )
+    )
+    db.session.add(
+        ClaimStatusEvent(
+            appeal_db_id=appeal_row.id,
+            user_id=user_id,
+            event_type='generated',
+            message='Appeal PDF generated (bulk PDF batch)',
+        )
+    )
+    db.session.commit()
+    AppealAutomationHooks.on_appeal_generated(appeal_row)
+
+
 def _finalize_batch_zip(job, summary_rows, ok_count, job_label: str):
     out_dir = job['out_dir']
     zip_name = f"appeals_batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
@@ -280,6 +412,9 @@ def _finalize_batch_zip(job, summary_rows, ok_count, job_label: str):
     job['zip_name'] = zip_name
     job['ok_count'] = ok_count
     job['summary_rows'] = summary_rows
+    jid = job.get('job_id')
+    if jid:
+        _flush_job_to_db(jid, job)
 
 
 def _run_job(app, job_id):
@@ -290,6 +425,12 @@ def _run_job(app, job_id):
                 _run_pdf_batch_inner(app, job_id)
             else:
                 _run_job_inner(app, job_id)
+        except Exception as e:
+            job = _jobs.get(job_id)
+            if job:
+                job['status'] = 'error'
+                job['error'] = str(e)[:2000]
+                _flush_job_to_db(job_id, job)
         finally:
             db.session.remove()
 
@@ -309,6 +450,7 @@ def _run_job_inner(app, job_id):
     if not user:
         job['status'] = 'error'
         job['error'] = 'User not found'
+        _flush_job_to_db(job_id, job)
         return
 
     rows = []
@@ -318,6 +460,7 @@ def _run_job_inner(app, job_id):
         if not csv_path:
             job['status'] = 'error'
             job['error'] = 'No CSV file or rows provided'
+            _flush_job_to_db(job_id, job)
             return
         try:
             with open(csv_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -327,23 +470,28 @@ def _run_job_inner(app, job_id):
         except Exception as e:
             job['status'] = 'error'
             job['error'] = str(e)
+            _flush_job_to_db(job_id, job)
             return
 
     if len(rows) > MAX_BATCH_ROWS:
         job['status'] = 'error'
         job['error'] = f'Maximum {MAX_BATCH_ROWS} rows allowed'
+        _flush_job_to_db(job_id, job)
         return
 
     if not rows:
         job['status'] = 'error'
         job['error'] = 'No data rows'
+        _flush_job_to_db(job_id, job)
         return
 
     job['total'] = len(rows)
     job['status'] = 'running'
+    _flush_job_to_db(job_id, job)
 
     for i, row in enumerate(rows):
         job['current'] = i + 1
+        _flush_job_to_db(job_id, job)
         rnum = i + 1
         row = _normalize_row_keys(row)
         ep, err = _row_to_ephemeral_appeal(row, defaults, i)
@@ -377,6 +525,7 @@ def _run_job_inner(app, job_id):
             job['error'] = (
                 f'Insufficient credits at row {rnum} — partial ZIP contains rows processed before this point'
             )
+            _flush_job_to_db(job_id, job)
             break
 
         try:
@@ -398,6 +547,7 @@ def _run_job_inner(app, job_id):
                 out.write(pdf_bytes)
             ok_count += 1
             job['ok_count'] = ok_count
+            _flush_job_to_db(job_id, job)
             elapsed = time.perf_counter() - t0
             summary_rows.append(
                 {
@@ -449,35 +599,40 @@ def _run_pdf_batch_inner(app, job_id):
     summary_rows = []
     ok_count = 0
     try:
-        _run_pdf_batch_inner_core(job, uid, out_dir, defaults, items, summary_rows)
+        _run_pdf_batch_inner_core(job_id, job, uid, out_dir, defaults, items, summary_rows)
     finally:
         td = job.get('pdf_temp_dir')
         if td and os.path.isdir(td):
             shutil.rmtree(td, ignore_errors=True)
 
 
-def _run_pdf_batch_inner_core(job, uid, out_dir, defaults, items, summary_rows):
+def _run_pdf_batch_inner_core(job_id, job, uid, out_dir, defaults, items, summary_rows):
     ok_count = 0
     user = User.query.get(uid)
     if not user:
         job['status'] = 'error'
         job['error'] = 'User not found'
+        _flush_job_to_db(job_id, job)
         return
 
     if len(items) > MAX_PDF_BATCH_FILES:
         job['status'] = 'error'
         job['error'] = f'Maximum {MAX_PDF_BATCH_FILES} PDF files per batch'
+        _flush_job_to_db(job_id, job)
         return
     if not items:
         job['status'] = 'error'
         job['error'] = 'No PDF files uploaded'
+        _flush_job_to_db(job_id, job)
         return
 
     job['total'] = len(items)
     job['status'] = 'running'
+    _flush_job_to_db(job_id, job)
 
     for i, item in enumerate(items):
         job['current'] = i + 1
+        _flush_job_to_db(job_id, job)
         rnum = i + 1
         path = item.get('path')
         label = item.get('name') or (os.path.basename(path) if path else f'file_{rnum}')
@@ -546,6 +701,7 @@ def _run_pdf_batch_inner_core(job, uid, out_dir, defaults, items, summary_rows):
             job['error'] = (
                 f'Insufficient credits at file {rnum} — partial ZIP contains appeals generated before this point'
             )
+            _flush_job_to_db(job_id, job)
             break
 
         try:
@@ -565,8 +721,10 @@ def _run_pdf_batch_inner_core(job, uid, out_dir, defaults, items, summary_rows):
             pdf_path = os.path.join(out_dir, safe_unique)
             with open(pdf_path, 'wb') as out:
                 out.write(pdf_bytes)
+            _persist_pdf_batch_appeal_row(uid, ep, text, pdf_path, label, used_free)
             ok_count += 1
             job['ok_count'] = ok_count
+            _flush_job_to_db(job_id, job)
             elapsed = time.perf_counter() - t0
             summary_rows.append(
                 {
@@ -632,10 +790,18 @@ def start_batch_job(app, user_id, csv_path, defaults=None):
     out_dir = os.path.join(app.config['GENERATED_FOLDER'], f'batch_{job_id}')
     os.makedirs(out_dir, exist_ok=True)
     job = _base_job_dict(user_id, out_dir, defaults)
+    job['job_id'] = job_id
     job['csv_path'] = csv_path
     job['job_kind'] = 'csv'
     with _jobs_lock:
         _jobs[job_id] = job
+    try:
+        _insert_job_record(job_id, job)
+    except Exception:
+        db.session.rollback()
+        with _jobs_lock:
+            _jobs.pop(job_id, None)
+        raise
     t = threading.Thread(target=_run_job, args=(app, job_id), daemon=True)
     t.start()
     return job_id
@@ -646,10 +812,18 @@ def start_batch_job_from_rows(app, user_id, rows, defaults=None):
     out_dir = os.path.join(app.config['GENERATED_FOLDER'], f'batch_{job_id}')
     os.makedirs(out_dir, exist_ok=True)
     job = _base_job_dict(user_id, out_dir, defaults)
+    job['job_id'] = job_id
     job['rows'] = list(rows or [])
     job['job_kind'] = 'csv'
     with _jobs_lock:
         _jobs[job_id] = job
+    try:
+        _insert_job_record(job_id, job)
+    except Exception:
+        db.session.rollback()
+        with _jobs_lock:
+            _jobs.pop(job_id, None)
+        raise
     t = threading.Thread(target=_run_job, args=(app, job_id), daemon=True)
     t.start()
     return job_id
@@ -660,11 +834,19 @@ def start_pdf_batch_job(app, user_id, pdf_items, defaults=None, pdf_temp_dir=Non
     out_dir = os.path.join(app.config['GENERATED_FOLDER'], f'batch_{job_id}')
     os.makedirs(out_dir, exist_ok=True)
     job = _base_job_dict(user_id, out_dir, defaults)
+    job['job_id'] = job_id
     job['pdf_items'] = list(pdf_items or [])
     job['job_kind'] = 'pdf'
     job['pdf_temp_dir'] = pdf_temp_dir
     with _jobs_lock:
         _jobs[job_id] = job
+    try:
+        _insert_job_record(job_id, job)
+    except Exception:
+        db.session.rollback()
+        with _jobs_lock:
+            _jobs.pop(job_id, None)
+        raise
     t = threading.Thread(target=_run_job, args=(app, job_id), daemon=True)
     t.start()
     return job_id
@@ -672,4 +854,16 @@ def start_pdf_batch_job(app, user_id, pdf_items, defaults=None, pdf_temp_dir=Non
 
 def get_job(job_id):
     with _jobs_lock:
-        return _jobs.get(job_id)
+        cached = _jobs.get(job_id)
+        if cached is not None:
+            return cached
+    row = BatchAppealJob.query.filter_by(job_id=job_id).first()
+    if row is None:
+        return None
+    d = _job_row_to_dict(row)
+    with _jobs_lock:
+        existing = _jobs.get(job_id)
+        if existing is not None:
+            return existing
+        _jobs[job_id] = d
+        return d

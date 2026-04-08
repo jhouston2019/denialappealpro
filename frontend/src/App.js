@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate, Link } from 'react-router-dom';
 import { UserProvider } from './context/UserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppealProvider } from './context/AppealContext';
@@ -11,7 +11,6 @@ import './App.css';
 const LandingPro = lazy(() => import('./LandingPro'));
 const LandingConsumer = lazy(() => import('./LandingConsumer'));
 const AppealForm = lazy(() => import('./pages/AppealForm'));
-const AppealFormWizard = lazy(() => import('./pages/AppealFormWizard'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const AppealHistory = lazy(() => import('./pages/AppealHistory'));
 const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
@@ -29,6 +28,7 @@ const OnboardingStart = lazy(() => import('./pages/OnboardingStart'));
 const OnboardingPreview = lazy(() => import('./pages/OnboardingPreview'));
 const OnboardingAccount = lazy(() => import('./pages/OnboardingAccount'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 
 // Loading component
 const PageLoader = () => (
@@ -61,16 +61,11 @@ const PageLoader = () => (
   </div>
 );
 
-/** Sets wizard step 2 hint and sends user to the full appeal wizard (used after document extract). */
+/** After document extract confirmation, send user into the new-appeal onboarding flow. */
 function AppealConfirmRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    try {
-      sessionStorage.setItem('dap_wizard_step', '2');
-    } catch (_) {
-      /* ignore */
-    }
-    navigate('/appeal-form', { replace: true });
+    navigate('/start', { replace: true });
   }, [navigate]);
   return <PageLoader />;
 }
@@ -83,14 +78,13 @@ const Navbar = ({ transparent }) => {
   const { isAuthenticated, logout, newDenialsBanner, newDenialsDollarValue } = useAuth();
 
   const navLinks = [
-    { label: 'Get started', path: '/start' },
+    { label: 'New Appeal', path: '/start' },
     ...(isAuthenticated
       ? [
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Queue', path: '/queue' },
         ]
       : []),
-    { label: 'Full wizard', path: '/appeal-form' },
     { label: 'Pricing', path: '/pricing' },
     { label: 'History', path: '/history' },
     { label: 'Billing', path: '/billing' },
@@ -267,7 +261,7 @@ const Navbar = ({ transparent }) => {
             onMouseEnter={e => { e.target.style.background = '#e2e8f0'; }}
             onMouseLeave={e => { e.target.style.background = 'white'; }}
           >
-            Get started →
+            New Appeal →
           </button>
         </div>
 
@@ -359,7 +353,7 @@ const Navbar = ({ transparent }) => {
               textAlign: 'left',
             }}
           >
-            Get started →
+            New Appeal →
           </button>
         </div>
       )}
@@ -415,7 +409,7 @@ function AppContent() {
             {/* App pages */}
             <Route path="/submit" element={<AppealForm />} />
             <Route path="/appeal/confirm" element={<AppealConfirmRedirect />} />
-            <Route path="/appeal-form" element={<AppealFormWizard />} />
+            <Route path="/appeal-form" element={<Navigate to="/start" replace />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/history" element={<AppealHistory />} />
             <Route path="/login" element={<Login />} />
@@ -443,6 +437,14 @@ function AppContent() {
               element={
                 <ProtectedRoute>
                   <ClaimDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
                 </ProtectedRoute>
               }
             />

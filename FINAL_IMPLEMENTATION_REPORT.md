@@ -156,7 +156,7 @@ User thinks: "We use this every day — upgrading just makes sense."
 **Modified:**
 1. `frontend/src/App.js` - Added UserProvider + routes
 2. `frontend/src/pages/Pricing.js` - Updated tiers + messaging
-3. `frontend/src/pages/AppealFormWizard.js` - Integrated usage tracking
+3. `frontend/src/pages/OnboardingStart.js` - Integrated usage tracking (new appeal flow at `/start`)
 4. `frontend/src/pages/AppealDownload.js` - Integrated usage tracking
 
 **Created:**
@@ -577,7 +577,7 @@ frontend/src/
 ├── context/
 │   └── UserContext.js             [NEW] 47 lines
 ├── pages/
-│   ├── AppealFormWizard.js        [MODIFIED] 625 lines
+│   ├── OnboardingStart.js         [MODIFIED] — new appeal flow at `/start`
 │   ├── AppealDownload.js          [MODIFIED] 145 lines
 │   ├── Pricing.js                 [MODIFIED] 325 lines
 │   └── SubscriptionSuccess.js     [NEW] 128 lines

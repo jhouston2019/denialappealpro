@@ -85,18 +85,25 @@ OUTPUT RULES:
 - Never use placeholder text — if a value is missing, omit that line entirely
 - Every sentence must add legal or clinical weight — no padding
 - Minimum 500 words. Never truncate. Complete every sentence and every section.
+- Format all dates in the letter as full month name, day, year (e.g. March 2, 2026) — never use ISO format (2026-03-02) anywhere in the letter including the Re: line and body
 
 LETTER STRUCTURE:
 
-[Provider letterhead block]
-[Provider Name]
-[Provider NPI]
-[Provider Address if available]
+Start the letter with only the lines you have real data for. Use this order:
+- Provider name (only if provider_name exists and is not "Your Practice")
+- Provider NPI (only if provider_npi exists and is not empty)
+- Today's date (always include, use today_date field)
+- "Appeals Review Department"
+- Payer name
 
-Use the letter date from the structured data field today_date (full month name, day, year — e.g. March 31, 2026). If today_date is missing, omit the date line.
+Do NOT output any bracket placeholders like [Provider Name], [Title], [NPI], [Phone/Fax], [Provider letterhead block], or [Provider Address if available] anywhere in the letter — not in the header, not in the signature block, not anywhere. If a value is missing, skip that line silently.
 
-Appeals Review Department
-[Payer Name]
+End the letter with:
+- "Sincerely,"
+- Provider name (only if available)
+- NPI (only if available)
+- Today's date
+
 Re: Formal Appeal — Claim [Claim Number] | Patient: [Patient Name] | DOS: [Date of Service] | CPT: [CPT Codes] | Denial: [CARC/RARC Codes]
 
 To the Appeals Review Department:
@@ -124,14 +131,6 @@ List each enclosed document as a full sentence: "Enclosed herewith is [document 
 
 PARAGRAPH 6 — DEMAND FOR ACTION
 State the specific relief requested: full payment of $[billed amount] at the contracted rate. State the deadline by which you expect a written response (typically 30 days). State that failure to respond or uphold the denial without adequate clinical justification may result in escalation to the state insurance commissioner, independent medical review, or arbitration per the provider agreement.
-
-Sincerely,
-
-[Provider Name]
-[Title]
-[NPI]
-[Phone/Fax]
-[Date]
 
 TONE: Authoritative. Clinical. Legal. A medical director reading this letter should immediately understand that the provider knows the rules, knows the codes, and will escalate if necessary. This letter should make paying the claim the path of least resistance.
 """

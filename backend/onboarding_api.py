@@ -338,8 +338,9 @@ def register_onboarding_routes(app, limiter, generator):
             return jsonify({'error': 'Not found'}), 404
         if not str(a.appeal_id or '').startswith('APP-ONB-'):
             return jsonify({'error': 'Not found'}), 404
-        if a.user_id is None:
-            return jsonify({'error': 'Unlock full appeal after checkout'}), 402
+        # TESTING: payment disabled
+        # if a.user_id is None:
+        #     return jsonify({'error': 'Unlock full appeal after checkout'}), 402
         return jsonify({'full_text': a.generated_letter_text or ''}), 200
 
     @onboarding_bp.route('/onboarding/appeal/<appeal_id>/pdf', methods=['GET'])
@@ -350,8 +351,9 @@ def register_onboarding_routes(app, limiter, generator):
             return jsonify({'error': 'Not found'}), 404
         if not str(a.appeal_id or '').startswith('APP-ONB-'):
             return jsonify({'error': 'Not found'}), 404
-        if a.user_id is None:
-            return jsonify({'error': 'Unlock full appeal after checkout'}), 402
+        # TESTING: payment disabled
+        # if a.user_id is None:
+        #     return jsonify({'error': 'Unlock full appeal after checkout'}), 402
         if not (a.generated_letter_text or '').strip():
             return jsonify({'error': 'No appeal text yet'}), 400
         pdf_bytes = build_professional_pdf_bytes(a)

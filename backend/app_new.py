@@ -368,42 +368,63 @@ def generate_appeal_with_credits(appeal_id):
         if appeal.status == 'completed':
             return jsonify({'error': 'Appeal already generated'}), 400
         
-        # Check if user has credits
         if appeal.user_id:
             user = User.query.get(appeal.user_id)
-            if user and user.credit_balance > 0:
-                # Use credit
-                if CreditManager.deduct_credit(user.id):
+            if user:
+                # if not allowed:
+                #     return jsonify(
+                #         {
+                #             'error': 'No credits available',
+                #             'message': 'Please purchase credits or pay for this appeal',
+                #             'requires_payment': True,
+                #         }
+                #     ), 402
+                # TESTING: payment disabled
+                allowed = True
+                if allowed:
+                    # Use credit (TESTING: bypass balance / deduct gate)
+                    # if not (user.credit_balance > 0 and CreditManager.deduct_credit(user.id)):
+                    #     pass
                     appeal.credit_used = True
                     appeal.payment_status = 'paid'
                     appeal.status = 'paid'
                     db.session.commit()
-                    
-                    # Generate appeal
+
                     try:
                         pdf_path = generator.generate_appeal(appeal)
                         appeal.appeal_letter_path = pdf_path
                         appeal.status = 'completed'
                         appeal.completed_at = datetime.utcnow()
                         db.session.commit()
-                        
-                        return jsonify({
-                            'message': 'Appeal generated successfully using credit',
-                            'appeal_id': appeal_id,
-                            'status': 'completed',
-                            'credit_balance': user.credit_balance
-                        }), 200
+
+                        return jsonify(
+                            {
+                                'message': 'Appeal generated successfully using credit',
+                                'appeal_id': appeal_id,
+                                'status': 'completed',
+                                'credit_balance': user.credit_balance,
+                            }
+                        ), 200
                     except Exception as e:
                         appeal.status = 'failed'
                         db.session.commit()
                         return jsonify({'error': f'Generation failed: {str(e)}'}), 500
-        
+
         # No credits available - require payment
-        return jsonify({
-            'error': 'No credits available',
-            'message': 'Please purchase credits or pay for this appeal',
-            'requires_payment': True
-        }), 402
+        # return jsonify({
+        #     'error': 'No credits available',
+        #     'message': 'Please purchase credits or pay for this appeal',
+        #     'requires_payment': True
+        # }), 402
+        # TESTING: payment disabled
+        allowed = True
+        return jsonify(
+            {
+                'error': 'No credits available',
+                'message': 'Please purchase credits or pay for this appeal',
+                'requires_payment': True,
+            }
+        ), 400
         
     except Exception as e:
         print(f"❌ Error generating appeal: {e}")

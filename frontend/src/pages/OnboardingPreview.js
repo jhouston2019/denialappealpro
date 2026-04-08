@@ -6,6 +6,8 @@ import api from '../api/axios';
 const stripePk = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = stripePk && !stripePk.includes('your_') ? loadStripe(stripePk) : null;
 
+const TESTING_PAYWALL_DISABLED = true; // TESTING: paywall disabled
+
 export default function OnboardingPreview() {
   const { appealId } = useParams();
   const [data, setData] = useState(null);
@@ -29,12 +31,14 @@ export default function OnboardingPreview() {
   }, [appealId]);
 
   useEffect(() => {
-    if (!data?.account_linked || !appealId) return;
+    if (!appealId || !data) return;
+    // TESTING: paywall disabled — fetch full text even when account_linked is false
+    if (!TESTING_PAYWALL_DISABLED && !data.account_linked) return;
     api
       .get(`/api/onboarding/appeal/${appealId}/full-text`)
       .then(({ data: d }) => setFullLetter(d.full_text || ''))
       .catch(() => {});
-  }, [data?.account_linked, appealId]);
+  }, [appealId, data]);
 
   const startRetail = async () => {
     if (!stripePromise) {
@@ -168,25 +172,27 @@ export default function OnboardingPreview() {
       </div>
     </div>
   );
-  const letterBlock =
-    data.account_linked && fullLetter != null ? (
-      <div
-        style={{
-          marginTop: 12,
-          border: '1px solid #ddd',
-          borderRadius: 6,
-          background: '#fff',
-          padding: 12,
-          fontSize: 14,
-          lineHeight: 1.55,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        {fullLetter}
-      </div>
-    ) : (
-      blur
-    );
+  // TESTING: paywall disabled — treat as unlocked for display (use full API text when present, else excerpt)
+  const unlockedForDisplay = TESTING_PAYWALL_DISABLED || data.account_linked;
+  const letterBody = fullLetter != null ? fullLetter : excerpt;
+  const letterBlock = unlockedForDisplay ? (
+    <div
+      style={{
+        marginTop: 12,
+        border: '1px solid #ddd',
+        borderRadius: 6,
+        background: '#fff',
+        padding: 12,
+        fontSize: 14,
+        lineHeight: 1.55,
+        whiteSpace: 'pre-wrap',
+      }}
+    >
+      {letterBody}
+    </div>
+  ) : (
+    blur
+  );
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
@@ -194,10 +200,15 @@ export default function OnboardingPreview() {
       <h1 style={{ fontSize: 22, marginTop: 16 }}>Your appeal preview</h1>
       <p style={{ fontSize: 17, fontWeight: 600, color: '#0a0' }}>{data.revenue_message}</p>
       <h2 style={{ fontSize: 15, marginTop: 24 }}>
-        {data.account_linked ? 'Structured appeal (full)' : 'Structured appeal (excerpt)'}
+        {
+          // TESTING: paywall disabled
+          TESTING_PAYWALL_DISABLED || data.account_linked ? 'Structured appeal (full)' : 'Structured appeal (excerpt)'
+        }
       </h2>
       {letterBlock}
-      {data.account_linked && (
+      {
+        // TESTING: paywall disabled
+        (TESTING_PAYWALL_DISABLED || data.account_linked) && (
         <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button
             type="button"
@@ -216,7 +227,8 @@ export default function OnboardingPreview() {
             {pdfBusy ? 'Preparing…' : 'Download PDF'}
           </button>
         </div>
-      )}
+        )
+      }
       {err && <p style={{ color: '#b00020', marginTop: 12 }}>{err}</p>}
 
       <h2 style={{ fontSize: 15, marginTop: 32 }}>Choose a plan</h2>

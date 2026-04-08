@@ -406,6 +406,22 @@ def init_customer_portal(app, limiter, generator):
             }
         ), 200
 
+    @customer_bp.route('/user/profile', methods=['GET'])
+    @require_customer_auth
+    def user_profile():
+        """Provider defaults for intake: latest appeal on this account (editable in UI)."""
+        user = User.query.get(g.current_user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        latest = (
+            Appeal.query.filter_by(user_id=user.id)
+            .order_by(Appeal.created_at.desc())
+            .first()
+        )
+        pn = (latest.provider_name or '').strip() if latest else ''
+        npi = (latest.provider_npi or '').strip() if latest else ''
+        return jsonify({'provider_name': pn, 'provider_npi': npi}), 200
+
     @customer_bp.route('/auth/queue-viewed', methods=['POST'])
     @require_customer_auth
     def auth_queue_viewed():

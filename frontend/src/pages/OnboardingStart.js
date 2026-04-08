@@ -113,8 +113,36 @@ export default function OnboardingStart() {
   const [bulkDoneJobId, setBulkDoneJobId] = useState(null);
   const [intelligence, setIntelligence] = useState(null);
   const [intelligenceLoading, setIntelligenceLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({
+    patientName: '',
+    providerName: '',
+    providerNpi: '',
+  });
   const intelDebounceRef = useRef(null);
   const pasteExtractTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/api/user/profile');
+        if (cancelled) return;
+        const pn = (data?.provider_name || '').trim();
+        const npi = (data?.provider_npi || '').trim();
+        setIntake((s) => ({
+          ...s,
+          ...(pn && !s.providerName?.trim() ? { providerName: pn } : {}),
+          ...(npi && !s.providerNpi?.trim() ? { providerNpi: npi } : {}),
+        }));
+      } catch {
+        /* not logged in or profile unavailable */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const applyExtractionData = useCallback((data) => {
     const sfc = data.field_confidence || data.fieldConfidence || {};
@@ -362,6 +390,7 @@ export default function OnboardingStart() {
     setFieldConfidence({});
     setIntelligence(null);
     setPasteText('');
+    setFieldErrors({ patientName: '', providerName: '', providerNpi: '' });
   };
 
   const applyCsvRow = useCallback(
@@ -466,9 +495,15 @@ export default function OnboardingStart() {
   const submit = async (e) => {
     e.preventDefault();
     setErr('');
+    const fe = {
+      patientName: !(intake.patientName || '').trim() ? 'Patient name is required.' : '',
+      providerName: !(intake.providerName || '').trim() ? 'Provider or practice name is required.' : '',
+      providerNpi: !(intake.providerNpi || '').trim() ? 'Provider NPI is required.' : '',
+    };
+    setFieldErrors(fe);
     const v = validate();
-    if (v) {
-      setErr(v);
+    if (fe.patientName || fe.providerName || fe.providerNpi || v) {
+      if (v) setErr(v);
       return;
     }
     setLoading(true);
@@ -1220,31 +1255,64 @@ export default function OnboardingStart() {
             </datalist>
           </label>
           <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Patient name</span>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+              Patient name <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
+            </span>
             <input
               value={intake.patientName}
-              onChange={(e) => setIntake((s) => ({ ...s, patientName: e.target.value }))}
+              onChange={(e) => {
+                setFieldErrors((f) => ({ ...f, patientName: '' }));
+                setIntake((s) => ({ ...s, patientName: e.target.value }));
+              }}
               placeholder="Jane Doe"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
+              style={{
+                ...inputBase,
+                border: fieldErrors.patientName ? '1px solid #dc2626' : `1px solid ${border}`,
+              }}
             />
+            {fieldErrors.patientName ? (
+              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.patientName}</div>
+            ) : null}
           </label>
           <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name</span>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+              Provider or practice name <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
+            </span>
             <input
               value={intake.providerName}
-              onChange={(e) => setIntake((s) => ({ ...s, providerName: e.target.value }))}
+              onChange={(e) => {
+                setFieldErrors((f) => ({ ...f, providerName: '' }));
+                setIntake((s) => ({ ...s, providerName: e.target.value }));
+              }}
               placeholder="e.g. Riverside Medical Group"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
+              style={{
+                ...inputBase,
+                border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}`,
+              }}
             />
+            {fieldErrors.providerName ? (
+              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerName}</div>
+            ) : null}
           </label>
           <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider NPI</span>
+            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+              Provider NPI <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
+            </span>
             <input
               value={intake.providerNpi}
-              onChange={(e) => setIntake((s) => ({ ...s, providerNpi: e.target.value }))}
+              onChange={(e) => {
+                setFieldErrors((f) => ({ ...f, providerNpi: '' }));
+                setIntake((s) => ({ ...s, providerNpi: e.target.value }));
+              }}
               placeholder="10-digit NPI"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
+              style={{
+                ...inputBase,
+                border: fieldErrors.providerNpi ? '1px solid #dc2626' : `1px solid ${border}`,
+              }}
             />
+            {fieldErrors.providerNpi ? (
+              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerNpi}</div>
+            ) : null}
           </label>
           <label style={{ display: 'block' }}>
             <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Plan type</span>

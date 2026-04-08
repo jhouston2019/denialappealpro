@@ -211,6 +211,9 @@ def register_onboarding_routes(app, limiter, generator):
             if icd_direct:
                 icd_part = icd_direct
 
+            if not patient_name or not provider_name_in or not provider_npi_in:
+                return jsonify({'error': 'Patient name, provider name, and NPI are required'}), 400
+
             # Frictionless intake: defaults when payer or narrative omitted (upload / paste / CSV paths).
             if not denial_reason or not str(denial_reason).strip():
                 denial_reason = (
@@ -220,10 +223,8 @@ def register_onboarding_routes(app, limiter, generator):
             if not payer or not str(payer).strip():
                 payer = 'Unknown payer'
 
-            patient_name = patient_name or 'Patient'
-
-            provider_name = (provider_name_in or 'Your Practice')[:200]
-            provider_npi = (provider_npi_in or '')[:20]
+            provider_name = provider_name_in[:200]
+            provider_npi = provider_npi_in[:20]
 
             d = _defaults_for_onboarding()
             appeal_id = f"APP-ONB-{datetime.utcnow().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"

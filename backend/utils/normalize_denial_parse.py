@@ -116,6 +116,8 @@ def normalize_denial_parse(raw: Dict[str, Any]) -> Dict[str, Any]:
         seen.add(k)
         deduped.append(c)
 
+    patient_nm = safe_string(raw.get("patient_name") or raw.get("patient") or raw.get("member_name"))
+
     out = {
         "payer_name": payer,
         "claim_number": claim,
@@ -130,6 +132,7 @@ def normalize_denial_parse(raw: Dict[str, Any]) -> Dict[str, Any]:
         "provider_npi": safe_string(raw.get("provider_npi")),
         "provider_name": safe_string(raw.get("provider_name")),
         "patient_id": safe_string(raw.get("patient_id")),
+        "patient_name": patient_nm,
     }
 
     # Optional high-impact default for common CARC
@@ -177,10 +180,27 @@ def extract_structured(text: str) -> Dict[str, Any]:
     remark = get(r"Remark:\s*(.+)")
     denial_reason_text = (note + " " + remark).strip()
 
+    def get_patient_line() -> str:
+        patterns = [
+            r"(?:Patient|Member|Subscriber|Insured|Beneficiary)(?:\s+Name)?\s*[:#]\s*([^\n\r]{2,120})",
+            r"Pt\.?\s*Name\s*[:#]\s*([^\n\r]{2,120})",
+            r"(?:Name\s+of\s+(?:Patient|Member|Subscriber))\s*[:#]\s*([^\n\r]{2,120})",
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.I)
+            if m:
+                s = m.group(1).strip().strip('"').strip("'").rstrip(",").strip()
+                if len(s) >= 2:
+                    return s
+        return ""
+
+    patient_name = get_patient_line()
+
     return {
         "payer_name": get(r"PAYER:\s*(.+)"),
         "claim_number": get(r"CLM#:\s*([A-Z0-9\-]+)"),
         "service_date": get(r"DOS:\s*([0-9/\-]+)"),
+        "patient_name": patient_name,
         "cpt_codes": cpt_codes,
         "icd_codes": icd_codes,
         "primary_denial_code": primary_denial_code,

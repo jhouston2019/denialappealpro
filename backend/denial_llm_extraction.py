@@ -21,30 +21,32 @@ Extract structured claim data from the input text.
 
 The input may be messy, incomplete, or poorly formatted.
 
-Your job is to identify and extract ONLY the following fields:
+You MUST return a single JSON object with EXACTLY these keys (use null when unknown — never omit a key):
 
-- payer_name
+- payer_name: insurance payer / plan name (same as "payer" on forms)
 - claim_number
-- patient_name (or initials if available)
-- date_of_service
-- cpt_codes (array)
-- icd10_codes (array)
-- modifiers (array)
-- carc_codes (array)
-- rarc_codes (array)
-- billed_amount
-- paid_amount
-- denial_reason_text (short, exact wording from document)
+- patient_name: full patient or member name as printed (look for labels: Patient, Member, Subscriber, Insured, Beneficiary, Pt Name). This is required as its own string field whenever any patient/member name appears in the document.
+- date_of_service: service or DOS date; YYYY-MM-DD when possible
+- cpt_codes: array of procedure codes
+- icd10_codes: array of diagnosis codes (ICD-10); same as icd_codes
+- modifiers: array
+- carc_codes: array of numeric CARC values only (e.g. "50")
+- rarc_codes: array (e.g. "N115")
+- billed_amount: numeric only
+- paid_amount: numeric only
+- denial_reason_text: short exact denial wording from the document (1–2 sentences max)
+
+Do not rename keys. Do not nest patient name under another object. Put the member/patient string only in patient_name.
 
 -----------------------------------
 RULES:
 -----------------------------------
 
 1. DO NOT GUESS
-   - If a value is not clearly present, return null
+   - If a value is not clearly present, return null for that key
 
 2. HANDLE MULTIPLE VALUES
-   - CPT, ICD, CARC, RARC must be arrays
+   - CPT, ICD-10, CARC, RARC, modifiers must be arrays (use [] when none)
 
 3. NORMALIZE DATA:
    - CPT codes: numeric strings (e.g. "99213")
@@ -69,21 +71,21 @@ OUTPUT FORMAT (STRICT JSON):
 -----------------------------------
 
 {
-  "payer_name": "",
-  "claim_number": "",
-  "patient_name": "",
-  "date_of_service": "",
+  "payer_name": null,
+  "claim_number": null,
+  "patient_name": null,
+  "date_of_service": null,
   "cpt_codes": [],
   "icd10_codes": [],
   "modifiers": [],
   "carc_codes": [],
   "rarc_codes": [],
-  "billed_amount": "",
-  "paid_amount": "",
-  "denial_reason_text": ""
+  "billed_amount": null,
+  "paid_amount": null,
+  "denial_reason_text": null
 }
 
-Use null for any field you cannot support with confidence (not empty string)."""
+Use null for unknown scalars and [] for unknown arrays (not empty string for scalars)."""
 
 
 EXPECTED_KEYS = (
@@ -177,10 +179,69 @@ def _normalize_rarc_token(c: str) -> str:
     return s
 
 
+def _apply_llm_response_aliases(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Map common alternate keys from the model into our canonical schema before
+    EXPECTED_KEYS processing (fixes missing patient_name when model uses member_name, etc.).
+    """
+    d = dict(data)
+    if d.get("payer_name") in (None, "") and d.get("payer"):
+        d["payer_name"] = d.get("payer")
+
+    cur = d.get("patient_name")
+    empty = cur is None or (isinstance(cur, str) and not str(cur).strip())
+    if empty:
+        for alt in (
+            "patient",
+            "member_name",
+            "member",
+            "insured_name",
+            "subscriber_name",
+            "subscriber",
+            "patient_full_name",
+            "beneficiary_name",
+            "member_full_name",
+            "insured",
+            "name_of_patient",
+        ):
+            v = d.get(alt)
+            if v is not None and str(v).strip():
+                d["patient_name"] = v
+                break
+
+    icd = d.get("icd10_codes")
+    icd_empty = icd is None or icd == [] or (isinstance(icd, list) and not icd)
+    if icd_empty and d.get("icd_codes") not in (None, []):
+        d["icd10_codes"] = d.get("icd_codes")
+
+    return d
+
+
+def _person_name_in_raw(name: str, raw_text: str) -> bool:
+    """Looser match for patient names vs raw text (middle initials, comma order, extra spaces)."""
+    if _verbatim_in_raw(name, raw_text):
+        return True
+    n = str(name).strip()
+    if len(n) < 2 or not raw_text:
+        return False
+    alpha_tokens = re.findall(r"[A-Za-z]{2,}", n)
+    if len(alpha_tokens) < 2:
+        return _verbatim_in_raw(n, raw_text)
+    raw_l = raw_text.lower()
+    pos = 0
+    for tok in (alpha_tokens[0], alpha_tokens[-1]):
+        i = raw_l.find(tok.lower(), pos)
+        if i < 0:
+            return False
+        pos = i + 1
+    return True
+
+
 def post_process_extraction(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Validate shape, empty string → null, dedupe arrays, normalize amounts/dates."""
     if not data or not isinstance(data, dict):
         data = {}
+    data = _apply_llm_response_aliases(data)
     out: Dict[str, Any] = {}
     for k in EXPECTED_KEYS:
         out[k] = None
@@ -338,7 +399,12 @@ def calculate_confidence(extracted_data: Dict[str, Any], raw_text: str) -> Dict[
             else:
                 set_field(field, "low")
         else:
-            if _verbatim_in_raw(sval, raw):
+            if field == "patient_name":
+                if _person_name_in_raw(sval, raw):
+                    set_field(field, "high")
+                else:
+                    set_field(field, "medium")
+            elif _verbatim_in_raw(sval, raw):
                 set_field(field, "high")
             else:
                 set_field(field, "medium")

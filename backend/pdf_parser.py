@@ -193,6 +193,23 @@ class DenialLetterParser:
                 return line
         
         return None
+
+    def extract_patient_name(self, text: str) -> Optional[str]:
+        """Extract patient / member / subscriber name from common EOB and denial labels."""
+        if not text:
+            return None
+        patterns = [
+            r"(?:Patient|Member|Subscriber|Insured|Beneficiary)(?:\s+Name)?\s*[:#]\s*([^\n\r,]{2,120})",
+            r"Pt\.?\s*Name\s*[:#]\s*([^\n\r,]{2,120})",
+            r"(?:Name\s+of\s+(?:Patient|Member|Subscriber))\s*[:#]\s*([^\n\r,]{2,120})",
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.I)
+            if m:
+                s = m.group(1).strip().strip('"').strip("'").rstrip(",").strip()
+                if len(s) >= 2 and len(s.split()) <= 10:
+                    return s
+        return None
     
     def extract_amounts(self, text: str) -> Dict[str, Optional[float]]:
         """Extract monetary amounts from text"""
@@ -271,6 +288,7 @@ class DenialLetterParser:
         dates = self.extract_dates(text)
         claim_number = self.extract_claim_number(text)
         payer_name = self.extract_payer_name(text)
+        patient_name = self.extract_patient_name(text)
         amounts = self.extract_amounts(text)
         npi = self.extract_npi(text)
         rarc_codes = self.extract_rarc_codes(text)
@@ -288,7 +306,7 @@ class DenialLetterParser:
         return {
             "payer_name": payer_name,
             "claim_number": claim_number,
-            "patient_name": None,
+            "patient_name": patient_name,
             "service_date": dates.get("service_date"),
             "denial_date": dates.get("denial_date"),
             "cpt_codes": list(cpt_codes or []),

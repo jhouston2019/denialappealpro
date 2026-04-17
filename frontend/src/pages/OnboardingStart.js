@@ -213,6 +213,8 @@ export default function OnboardingStart() {
   const [codingAccordionOpen, setCodingAccordionOpen] = useState(false);
   const intelDebounceRef = useRef(null);
   const firstGapRef = useRef(null);
+  /** Latest /api/parse/denial-letter|denial-text payload for Step 2 debugging */
+  const lastDenialParseResponseRef = useRef(null);
 
   const advanceSingle = (next) => {
     setSingleStep(next);
@@ -273,6 +275,7 @@ export default function OnboardingStart() {
   }, [token]);
 
   const applyExtractionData = useCallback((data) => {
+    lastDenialParseResponseRef.current = data;
     const sfc = data.field_confidence || data.fieldConfidence || {};
     const hasServerFc = Object.keys(sfc).length > 0;
     const uiFc = (key) => (sfc[key] === 'low' ? 'low' : 'high');
@@ -308,19 +311,28 @@ export default function OnboardingStart() {
       return forceLow || !hasValue ? 'low' : 'high';
     };
 
+    const patientRaw =
+      data.patient_name ??
+      data.patientName ??
+      data.member_name ??
+      data.memberName ??
+      data.patient;
+    const patientStr =
+      patientRaw != null && String(patientRaw).trim() !== '' ? String(patientRaw).trim() : '';
+
     setIntake({
       ...emptyIntake(),
       claimNumber: data.claim_number || '',
       dateOfService: parseServiceDate(data.service_date || data.denial_date),
-      payer: data.payer_name || '',
-      patientName: data.patient_name || '',
+      payer: data.payer_name || data.payer || '',
+      patientName: patientStr,
       carcCodes: carcFromDoc.length ? carcFromDoc : [],
       rarcCodes: rarcs,
       cptCodes: cpts,
       icdCodes: icds,
       billedAmount: data.billed_amount != null && data.billed_amount !== '' ? String(data.billed_amount) : '',
       paidAmount: paid,
-      treatmentProvided: data.patient_name ? `Patient: ${data.patient_name}` : '',
+      treatmentProvided: patientStr ? `Patient: ${patientStr}` : '',
       medicalNecessity: rawSnippet || 'Document payer denial rationale from uploaded or pasted content.',
       modifiers: modStr,
       specialCircumstances: '',
@@ -330,7 +342,8 @@ export default function OnboardingStart() {
     setFieldConfidence({
       claimNumber: pick('claimNumber', !!data.claim_number),
       dateOfService: pick('dateOfService', !!(data.service_date || data.denial_date)),
-      payer: pick('payer', !!data.payer_name),
+      payer: pick('payer', !!(data.payer_name || data.payer)),
+      patientName: pick('patientName', !!patientStr),
       carcCodes: pick('carcCodes', carcFromDoc.length > 0),
       rarcCodes: pick('rarcCodes', rarcs.length > 0),
       cptCodes: pick('cptCodes', cpts.length > 0),
@@ -428,6 +441,10 @@ export default function OnboardingStart() {
 
   useEffect(() => {
     if (singleStep !== 1) return;
+    const raw = lastDenialParseResponseRef.current;
+    if (raw != null) {
+      console.log('[Denial extraction] raw API response (Step 2 — review):', raw);
+    }
     const t = window.setTimeout(() => {
       try {
         firstGapRef.current?.focus?.();
@@ -797,7 +814,7 @@ export default function OnboardingStart() {
       { key: 'claimNumber', label: 'Claim number', type: 'text', fc: 'claimNumber' },
       { key: 'dateOfService', label: 'Date of service', type: 'date', fc: 'dateOfService' },
       { key: 'payer', label: 'Payer', type: 'payer', fc: 'payer' },
-      { key: 'patientName', label: 'Patient name', type: 'text', fc: null },
+      { key: 'patientName', label: 'Patient name', type: 'text', fc: 'patientName' },
     ];
     const firstGapKey =
       order.find((f) => (f.fc ? fieldConfidence[f.fc] === 'low' : !(intake[f.key] || '').trim()))?.key ||

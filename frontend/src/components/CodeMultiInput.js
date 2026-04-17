@@ -21,15 +21,16 @@ export default function CodeMultiInput({
   highlightCodes,
 }) {
   const [draft, setDraft] = useState('');
+  const vals = Array.isArray(values) ? values : [];
 
   const add = (raw) => {
     const t = raw.trim();
     if (!t) return;
-    if (values.includes(t)) {
+    if (vals.includes(t)) {
       setDraft('');
       return;
     }
-    onChange([...values, t]);
+    onChange([...vals, t]);
     setDraft('');
   };
 
@@ -37,7 +38,7 @@ export default function CodeMultiInput({
   const warnSet = new Set((highlightCodes || []).map(normalizeCodeKey));
 
   const verifyTitle = lowConfidence ? 'Please verify this field' : undefined;
-  const confirmedExtracted = values.length > 0 && !lowConfidence && !values.some((v) => warnSet.has(normalizeCodeKey(v)));
+  const confirmedExtracted = vals.length > 0 && !lowConfidence && !vals.some((v) => warnSet.has(normalizeCodeKey(v)));
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -54,7 +55,7 @@ export default function CodeMultiInput({
           alignItems: 'center',
           padding: '8px 10px',
           border:
-            lowConfidence || (values.some((v) => warnSet.has(normalizeCodeKey(v))) && warnSet.size > 0)
+            lowConfidence || (vals.some((v) => warnSet.has(normalizeCodeKey(v))) && warnSet.size > 0)
               ? '2px solid #fb923c'
               : border,
           borderLeft: confirmedExtracted ? '3px solid #bbf7d0' : undefined,
@@ -63,11 +64,11 @@ export default function CodeMultiInput({
           minHeight: 44,
         }}
       >
-        {values.map((v) => (
+        {vals.map((v) => (
           <button
             key={v}
             type="button"
-            onClick={() => onChange(values.filter((x) => x !== v))}
+            onClick={() => onChange(vals.filter((x) => x !== v))}
             style={{
               border: warnSet.has(normalizeCodeKey(v)) ? '2px solid #f59e0b' : '1px solid #cbd5e1',
               background: warnSet.has(normalizeCodeKey(v)) ? '#fffbeb' : '#f1f5f9',

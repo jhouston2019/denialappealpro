@@ -49,6 +49,29 @@ const VERIFY_TOOLTIP = 'Please verify this field';
 const STEP1_EXTRACTION_FAILED_MSG =
   'Extraction failed — please check your file and try again.';
 
+/** Safe string for profile text fields (API may return numbers). */
+function profileTextField(v) {
+  if (v == null || v === '') return '';
+  return String(v).trim();
+}
+
+/** True only for exactly 10 digits (ignores formatting characters). */
+function isValidNpi10Digits(v) {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return d.length === 10;
+}
+
+/** Normalize saved profile NPI; reject placeholders like "1". */
+function normalizeProfileNpi(raw) {
+  const d = String(raw ?? '').replace(/\D/g, '');
+  return d.length === 10 ? d : '';
+}
+
+function shouldRetryApiCall(status) {
+  if (status == null) return true;
+  return [408, 502, 503, 504].includes(Number(status));
+}
+
 const backBtnStyle = {
   marginBottom: 16,
   background: 'none',
@@ -209,6 +232,8 @@ export default function OnboardingStart() {
     providerName: '',
     providerNpi: '',
   });
+  /** Step 4 client-side gate before preview API (missing patient/provider/NPI). */
+  const [step4GenerateError, setStep4GenerateError] = useState('');
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
   const profileSnapshotRef = useRef(null);
@@ -218,22 +243,57 @@ export default function OnboardingStart() {
   const firstGapRef = useRef(null);
   /** Latest /api/parse/denial-letter|denial-text payload for Step 2 debugging */
   const lastDenialParseResponseRef = useRef(null);
+  const previewSubmitLockRef = useRef(false);
 
   const advanceSingle = (next) => {
     setSingleStep(next);
   };
 
+  const applyProviderProfilePayload = useCallback((data) => {
+    const pn = profileTextField(data?.provider_name);
+    const npi = normalizeProfileNpi(data?.provider_npi);
+    const addr = profileTextField(data?.provider_address);
+    const ph = profileTextField(data?.provider_phone);
+    const fx = profileTextField(data?.provider_fax);
+    profileSnapshotRef.current = {
+      providerName: pn,
+      providerNpi: npi,
+      providerAddress: addr,
+      providerPhone: ph,
+      providerFax: fx,
+    };
+    setProviderProfileEmpty(!pn && !npi && !addr && !ph && !fx);
+    setIntake((s) => {
+      const next = { ...s };
+      if (pn && !s.providerName?.trim()) next.providerName = pn;
+      if (npi) {
+        if (!isValidNpi10Digits(s.providerNpi)) next.providerNpi = npi;
+      } else if (s.providerNpi && !isValidNpi10Digits(s.providerNpi)) {
+        next.providerNpi = '';
+      }
+      if (addr && !s.providerAddress?.trim()) next.providerAddress = addr;
+      if (ph && !s.providerPhone?.trim()) next.providerPhone = ph;
+      if (fx && !s.providerFax?.trim()) next.providerFax = fx;
+      return next;
+    });
+  }, []);
+
   const mergeProfileSnapshotIntoIntake = useCallback(() => {
     const p = profileSnapshotRef.current;
     if (!p) return;
-    setIntake((s) => ({
-      ...s,
-      ...(p.providerName && !s.providerName?.trim() ? { providerName: p.providerName } : {}),
-      ...(p.providerNpi && !s.providerNpi?.trim() ? { providerNpi: p.providerNpi } : {}),
-      ...(p.providerAddress && !s.providerAddress?.trim() ? { providerAddress: p.providerAddress } : {}),
-      ...(p.providerPhone && !s.providerPhone?.trim() ? { providerPhone: p.providerPhone } : {}),
-      ...(p.providerFax && !s.providerFax?.trim() ? { providerFax: p.providerFax } : {}),
-    }));
+    setIntake((s) => {
+      const next = { ...s };
+      if (p.providerName && !s.providerName?.trim()) next.providerName = p.providerName;
+      if (p.providerNpi) {
+        if (!isValidNpi10Digits(s.providerNpi)) next.providerNpi = p.providerNpi;
+      } else if (s.providerNpi && !isValidNpi10Digits(s.providerNpi)) {
+        next.providerNpi = '';
+      }
+      if (p.providerAddress && !s.providerAddress?.trim()) next.providerAddress = p.providerAddress;
+      if (p.providerPhone && !s.providerPhone?.trim()) next.providerPhone = p.providerPhone;
+      if (p.providerFax && !s.providerFax?.trim()) next.providerFax = p.providerFax;
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -246,36 +306,34 @@ export default function OnboardingStart() {
       try {
         const { data } = await api.get('/api/user/profile');
         if (cancelled) return;
-        const pn = (data?.provider_name || '').trim();
-        const npi = (data?.provider_npi || '').trim();
-        const addr = (data?.provider_address || '').trim();
-        const ph = (data?.provider_phone || '').trim();
-        const fx = (data?.provider_fax || '').trim();
-        profileSnapshotRef.current = {
-          providerName: pn,
-          providerNpi: npi,
-          providerAddress: addr,
-          providerPhone: ph,
-          providerFax: fx,
-        };
-        setProviderProfileEmpty(!pn && !npi && !addr && !ph && !fx);
-        setIntake((s) => ({
-          ...s,
-          ...(pn && !s.providerName?.trim() ? { providerName: pn } : {}),
-          ...(npi && !s.providerNpi?.trim() ? { providerNpi: npi } : {}),
-          ...(addr && !s.providerAddress?.trim() ? { providerAddress: addr } : {}),
-          ...(ph && !s.providerPhone?.trim() ? { providerPhone: ph } : {}),
-          ...(fx && !s.providerFax?.trim() ? { providerFax: fx } : {}),
-        }));
+        applyProviderProfilePayload(data);
       } catch {
         if (token) setProviderProfileEmpty(true);
-        /* not logged in or profile unavailable */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, applyProviderProfilePayload]);
+
+  /** Re-hydrate after landing actions call setIntake(emptyIntake()) and clear provider fields. */
+  useEffect(() => {
+    if (!token || !mode) return undefined;
+    if (mode !== 'upload' && mode !== 'paste') return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/api/user/profile');
+        if (cancelled) return;
+        applyProviderProfilePayload(data);
+      } catch {
+        if (!cancelled) setProviderProfileEmpty(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, token, applyProviderProfilePayload]);
 
   const applyExtractionData = useCallback((data) => {
     lastDenialParseResponseRef.current = data;
@@ -394,6 +452,7 @@ export default function OnboardingStart() {
 
   useEffect(() => {
     if (!mode) return;
+    if (singleStep >= 3) return;
     if (intelDebounceRef.current) clearTimeout(intelDebounceRef.current);
     intelDebounceRef.current = setTimeout(async () => {
       setIntelligenceLoading(true);
@@ -409,7 +468,7 @@ export default function OnboardingStart() {
     return () => {
       if (intelDebounceRef.current) clearTimeout(intelDebounceRef.current);
     };
-  }, [mode, buildIntelPayload]);
+  }, [mode, singleStep, buildIntelPayload]);
 
   /** Refresh profile when user reaches Step 3 so Settings saves apply mid-flow. */
   useEffect(() => {
@@ -419,20 +478,7 @@ export default function OnboardingStart() {
       try {
         const { data } = await api.get('/api/user/profile');
         if (cancelled) return;
-        const pn = (data?.provider_name || '').trim();
-        const npi = (data?.provider_npi || '').trim();
-        const addr = (data?.provider_address || '').trim();
-        const ph = (data?.provider_phone || '').trim();
-        const fx = (data?.provider_fax || '').trim();
-        profileSnapshotRef.current = {
-          providerName: pn,
-          providerNpi: npi,
-          providerAddress: addr,
-          providerPhone: ph,
-          providerFax: fx,
-        };
-        setProviderProfileEmpty(!pn && !npi && !addr && !ph && !fx);
-        mergeProfileSnapshotIntoIntake();
+        applyProviderProfilePayload(data);
       } catch {
         if (!cancelled) setProviderProfileEmpty(true);
       }
@@ -440,7 +486,7 @@ export default function OnboardingStart() {
     return () => {
       cancelled = true;
     };
-  }, [singleStep, token, mergeProfileSnapshotIntoIntake]);
+  }, [singleStep, token, applyProviderProfilePayload]);
 
   useEffect(() => {
     if (singleStep !== 1) return;
@@ -542,6 +588,7 @@ export default function OnboardingStart() {
     setIntelligence(null);
     setPasteText('');
     setFieldErrors({ patientName: '', providerName: '', providerNpi: '' });
+    setStep4GenerateError('');
     setSingleStep(0);
     setBulkStep(0);
     setCodingAccordionOpen(false);
@@ -685,32 +732,53 @@ export default function OnboardingStart() {
 
   const submit = async (e) => {
     e?.preventDefault?.();
+    if (previewSubmitLockRef.current) return;
     setErr('');
+    setStep4GenerateError('');
+
+    const missing = [];
+    if (!(intake.patientName || '').trim()) missing.push('patient name');
+    if (!(intake.providerName || '').trim()) missing.push('provider name');
+    if (!isValidNpi10Digits(intake.providerNpi)) missing.push('provider NPI (10 digits)');
+
     const fe = {
       patientName: !(intake.patientName || '').trim() ? 'Patient name is required.' : '',
-      providerName: '',
-      providerNpi: !(intake.providerNpi || '').trim() ? 'Provider NPI is required.' : '',
+      providerName: !(intake.providerName || '').trim() ? 'Provider name is required.' : '',
+      providerNpi: !isValidNpi10Digits(intake.providerNpi) ? 'Enter a valid 10-digit NPI.' : '',
     };
     setFieldErrors(fe);
+
+    if (missing.length) {
+      setStep4GenerateError(missing.join(', '));
+      return;
+    }
+
     const v = validate();
-    if (fe.patientName || fe.providerNpi || v) {
+    if (fe.patientName || fe.providerName || fe.providerNpi || v) {
       if (v) setErr(v);
       return;
     }
+
+    previewSubmitLockRef.current = true;
     setLoading(true);
     try {
       try {
-        const { data } = await api.post('/api/intelligence/analyze', buildIntelPayload());
-        setIntelligence(data);
-      } catch {
-        /* analysis optional; never blocks generation */
+        await runPreview();
+      } catch (ex) {
+        const status = ex.response?.status;
+        if (shouldRetryApiCall(status)) {
+          await new Promise((r) => setTimeout(r, 500));
+          await runPreview();
+        } else {
+          throw ex;
+        }
       }
-      await runPreview();
     } catch (ex) {
       console.error('Preview error:', ex.response?.data || ex);
       setErr(ex.response?.data?.error || 'Could not create preview');
     } finally {
       setLoading(false);
+      previewSubmitLockRef.current = false;
     }
   };
 
@@ -840,7 +908,7 @@ export default function OnboardingStart() {
     !(intake.billedAmount || '').trim() || fieldConfidence.billedAmount === 'low';
   const showStep3Paid = !(intake.paidAmount || '').trim() || fieldConfidence.paidAmount === 'low';
   const showStep3ProviderName = !(intake.providerName || '').trim();
-  const showStep3ProviderNpi = !(intake.providerNpi || '').trim();
+  const showStep3ProviderNpi = !isValidNpi10Digits(intake.providerNpi);
   const showStep3Addr = !(intake.providerAddress || '').trim();
   const showStep3Phone = !(intake.providerPhone || '').trim();
   const showStep3Fax = !(intake.providerFax || '').trim();
@@ -1901,23 +1969,38 @@ export default function OnboardingStart() {
                   <legend style={{ fontWeight: 800, color: navy, padding: '0 8px', fontSize: 13 }}>Provider (from profile or enter missing)</legend>
                   {showStep3ProviderName && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name (optional)</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+                        Provider or practice name <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
+                      </span>
                       <input
                         value={intake.providerName}
-                        onChange={(e) => setIntake((s) => ({ ...s, providerName: e.target.value }))}
-                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                        onChange={(e) => {
+                          setFieldErrors((fe) => ({ ...fe, providerName: '' }));
+                          setIntake((s) => ({ ...s, providerName: e.target.value }));
+                        }}
+                        style={{
+                          ...inputBase,
+                          border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}`,
+                        }}
                       />
+                      {fieldErrors.providerName ? (
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerName}</div>
+                      ) : null}
                     </label>
                   )}
                   {showStep3ProviderNpi && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
                       <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider NPI *</span>
                       <input
+                        inputMode="numeric"
+                        autoComplete="off"
                         value={intake.providerNpi}
                         onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
                           setFieldErrors((fe) => ({ ...fe, providerNpi: '' }));
-                          setIntake((s) => ({ ...s, providerNpi: e.target.value }));
+                          setIntake((s) => ({ ...s, providerNpi: digits }));
                         }}
+                        placeholder="10-digit NPI"
                         style={{ ...inputBase, border: fieldErrors.providerNpi ? '1px solid #dc2626' : `1px solid ${border}` }}
                       />
                       {fieldErrors.providerNpi ? (
@@ -2010,7 +2093,10 @@ export default function OnboardingStart() {
             {err && <p style={{ color: '#c2410c', fontSize: 14, fontWeight: 600, marginTop: 12 }}>{err}</p>}
             <button
               type="button"
-              onClick={() => advanceSingle(3)}
+              onClick={() => {
+                setStep4GenerateError('');
+                advanceSingle(3);
+              }}
               style={{ ...ctaButton(false, false, ''), marginTop: 16 }}
               onMouseEnter={(e) => {
                 e.target.style.background = primaryCtaHover;
@@ -2054,7 +2140,11 @@ export default function OnboardingStart() {
                 <strong>Patient:</strong> {intake.patientName || '—'}
               </div>
               <div>
-                <strong>Provider:</strong> {intake.providerName || '—'} (NPI {intake.providerNpi || '—'})
+                <strong>Provider:</strong> {intake.providerName || '—'} (NPI{' '}
+                {isValidNpi10Digits(intake.providerNpi)
+                  ? String(intake.providerNpi).replace(/\D/g, '')
+                  : '—'}
+                )
               </div>
               <div>
                 <strong>CARC / RARC:</strong> {(intake.carcCodes || []).join(', ') || '—'} / {(intake.rarcCodes || []).join(', ') || '—'}
@@ -2069,6 +2159,45 @@ export default function OnboardingStart() {
                 Est. recovery: ${recoveryAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
+            {step4GenerateError ? (
+              <div
+                style={{
+                  textAlign: 'left',
+                  maxWidth: 420,
+                  margin: '0 auto 16px',
+                  padding: 14,
+                  borderRadius: 10,
+                  border: '1px solid #fecaca',
+                  background: '#fef2f2',
+                  fontSize: 14,
+                  color: '#991b1b',
+                  lineHeight: 1.55,
+                }}
+              >
+                Missing required fields: <strong>{step4GenerateError}</strong>.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep4GenerateError('');
+                    setSingleStep(2);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    cursor: 'pointer',
+                    color: primaryCta,
+                    fontWeight: 700,
+                    fontSize: 14,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Go back to Step 3
+                </button>{' '}
+                to complete them.
+              </div>
+            ) : null}
             {fieldErrors.patientName ? (
               <p style={{ color: '#c2410c', fontSize: 14, marginBottom: 12 }}>{fieldErrors.patientName}</p>
             ) : null}

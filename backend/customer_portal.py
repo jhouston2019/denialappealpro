@@ -406,7 +406,7 @@ def init_customer_portal(app, limiter, generator):
             }
         ), 200
 
-    @customer_bp.route('/user/profile', methods=['GET', 'PUT'])
+    @customer_bp.route('/user/profile', methods=['GET', 'POST', 'PUT'])
     @require_customer_auth
     def user_profile():
         user = User.query.get(g.current_user_id)

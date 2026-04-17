@@ -46,7 +46,7 @@ export default function ProfilePage() {
     setSuccess(false);
     setSaving(true);
     try {
-      await api.put('/api/user/profile', {
+      await api.post('/api/user/profile', {
         provider_name: practiceName,
         provider_npi: npi,
         provider_address: address,

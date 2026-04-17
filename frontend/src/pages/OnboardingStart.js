@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import CodeMultiInput from '../components/CodeMultiInput';
 import CodingIntelligencePanel from '../components/CodingIntelligencePanel';
 import DenialDocumentDropZone from '../components/DenialDocumentDropZone';
+import IntakeStepper from '../components/IntakeStepper';
 import {
   parseCsvText,
   parseExcelFile,
@@ -22,72 +23,139 @@ import {
 } from '../utils/denialIntakeEngine';
 
 const navy = '#0f172a';
-const accent = '#1e40af';
 const border = '#e2e8f0';
 const softBlue = '#eff6ff';
-
-function WorkflowSteps() {
-  const steps = [
-    { n: 1, label: 'Upload denial' },
-    { n: 2, label: 'We extract & analyze' },
-    { n: 3, label: 'Generate submission-ready appeal' },
-  ];
-  return (
-    <div
-      style={{
-        marginTop: 28,
-        padding: '20px 16px',
-        background: '#f8fafc',
-        borderRadius: 10,
-        border: `1px solid ${border}`,
-      }}
-    >
-      <p style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em' }}>
-        HOW IT WORKS
-      </p>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-        {steps.map((s) => (
-          <div key={s.n} style={{ flex: '1 1 160px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                flexShrink: 0,
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: navy,
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: 14,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {s.n}
-            </div>
-            <span style={{ fontSize: 14, color: '#334155', fontWeight: 600, lineHeight: 1.35 }}>{s.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function fieldBorder(fc, key) {
-  return fc[key] === 'low' ? '2px solid #f59e0b' : `1px solid ${border}`;
-}
-
-function fieldBg(fc, key) {
-  return fc[key] === 'low' ? '#fffbeb' : '#fff';
-}
+const pageBg = '#f8fafc';
+const cardBg = '#ffffff';
+const primaryCta = '#22c55e';
+const primaryCtaHover = '#16a34a';
+const extractedBorder = '#bbf7d0';
+const orangeBorder = '#fb923c';
+const orangeBg = '#fff7ed';
+const disclaimerBorder = '#fde047';
 
 const VERIFY_TOOLTIP = 'Please verify this field';
+
+const SINGLE_STEPS = [
+  { key: 'upload', label: 'Upload' },
+  { key: 'review', label: 'Review Extraction' },
+  { key: 'confirm', label: 'Confirm Details' },
+  { key: 'generate', label: 'Generate' },
+];
+
+const BULK_STEPS = [
+  { key: 'upload', label: 'Upload' },
+  { key: 'queue', label: 'Processing Queue' },
+];
 
 function parseServiceDate(s) {
   if (!s) return '';
   const str = String(s).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
   return '';
+}
+
+/** Per-file/row status from aggregate job progress (API returns current/total only). */
+function deriveLineStatus(index, job) {
+  const cur = job?.current || 0;
+  if (job?.status === 'error') {
+    if (cur === index + 1) return 'failed';
+    if (cur > index + 1) return 'complete';
+    return 'pending';
+  }
+  if (job?.status === 'done') {
+    return 'complete';
+  }
+  if (job?.status === 'running') {
+    if (cur > index + 1) return 'complete';
+    if (cur === index + 1) return 'processing';
+    return 'pending';
+  }
+  return 'pending';
+}
+
+function BulkQueueRows({ labels, job, jobKind }) {
+  if (!labels.length) return null;
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        border: `1px solid ${border}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        background: cardBg,
+      }}
+    >
+      <div
+        style={{
+          padding: '10px 14px',
+          background: '#f1f5f9',
+          fontWeight: 700,
+          fontSize: 13,
+          color: navy,
+        }}
+      >
+        {jobKind === 'pdf' ? 'Files' : 'Rows'} ({labels.length})
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 280, overflow: 'auto' }}>
+        {labels.map((label, i) => {
+          const st = deriveLineStatus(i, job);
+          const dot =
+            st === 'complete'
+              ? { bg: '#22c55e', label: 'Complete' }
+              : st === 'processing'
+                ? { bg: '#3b82f6', label: 'Processing' }
+                : st === 'failed'
+                  ? { bg: '#ea580c', label: 'Failed' }
+                  : { bg: '#94a3b8', label: 'Pending' };
+          const pct = st === 'processing' ? 55 : st === 'complete' ? 100 : st === 'failed' ? 100 : 0;
+          return (
+            <li
+              key={`${label}-${i}`}
+              style={{
+                padding: '10px 14px',
+                borderBottom: i < labels.length - 1 ? `1px solid ${border}` : 'none',
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: 10,
+                alignItems: 'center',
+                fontSize: 13,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+                <div style={{ marginTop: 6, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      height: '100%',
+                      background: dot.bg,
+                      transition: 'width 0.25s ease',
+                    }}
+                  />
+                </div>
+              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: dot.bg,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {dot.label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {job?.status === 'done' && (
+        <p style={{ margin: 0, padding: '10px 14px', fontSize: 12, color: '#64748b', background: '#f8fafc' }}>
+          Per-file outcomes are also listed in <code>processing_report.txt</code> inside the ZIP.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function OnboardingStart() {
@@ -118,8 +186,29 @@ export default function OnboardingStart() {
     providerName: '',
     providerNpi: '',
   });
+  const [singleStep, setSingleStep] = useState(0);
+  const [bulkStep, setBulkStep] = useState(0);
+  const profileSnapshotRef = useRef(null);
+  const [codingAccordionOpen, setCodingAccordionOpen] = useState(false);
   const intelDebounceRef = useRef(null);
-  const pasteExtractTimerRef = useRef(null);
+  const firstGapRef = useRef(null);
+
+  const advanceSingle = (next) => {
+    setSingleStep(next);
+  };
+
+  const mergeProfileSnapshotIntoIntake = useCallback(() => {
+    const p = profileSnapshotRef.current;
+    if (!p) return;
+    setIntake((s) => ({
+      ...s,
+      ...(p.providerName && !s.providerName?.trim() ? { providerName: p.providerName } : {}),
+      ...(p.providerNpi && !s.providerNpi?.trim() ? { providerNpi: p.providerNpi } : {}),
+      ...(p.providerAddress && !s.providerAddress?.trim() ? { providerAddress: p.providerAddress } : {}),
+      ...(p.providerPhone && !s.providerPhone?.trim() ? { providerPhone: p.providerPhone } : {}),
+      ...(p.providerFax && !s.providerFax?.trim() ? { providerFax: p.providerFax } : {}),
+    }));
+  }, []);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -133,6 +222,13 @@ export default function OnboardingStart() {
         const addr = (data?.provider_address || '').trim();
         const ph = (data?.provider_phone || '').trim();
         const fx = (data?.provider_fax || '').trim();
+        profileSnapshotRef.current = {
+          providerName: pn,
+          providerNpi: npi,
+          providerAddress: addr,
+          providerPhone: ph,
+          providerFax: fx,
+        };
         setIntake((s) => ({
           ...s,
           ...(pn && !s.providerName?.trim() ? { providerName: pn } : {}),
@@ -274,50 +370,22 @@ export default function OnboardingStart() {
   }, [mode, buildIntelPayload]);
 
   useEffect(() => {
-    if (mode !== 'paste') return undefined;
-    const t = pasteText.trim();
-    if (pasteExtractTimerRef.current) clearTimeout(pasteExtractTimerRef.current);
-    if (t.length < 20) {
-      return undefined;
-    }
-    pasteExtractTimerRef.current = setTimeout(async () => {
-      setExtracting(true);
-      setErr('');
+    if (singleStep !== 1) return;
+    const t = window.setTimeout(() => {
       try {
-        const { data } = await api.post('/api/parse/denial-text', { text: t });
-        if (data.success === false && data.error) {
-          throw new Error(data.message || data.error);
-        }
-        applyExtractionData(data);
-        setExtractedMeta({
-          kind: 'text',
-          confidence: data.confidence || 'medium',
-          claim_number: data.claim_number,
-          payer_name: data.payer_name,
-          warning: data.warning,
-        });
-      } catch (ex) {
-        const msg =
-          ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction incomplete';
-        setExtractedMeta({
-          kind: 'text_error',
-          message: `${msg} You can still generate your appeal without editing fields.`,
-        });
-      } finally {
-        setExtracting(false);
+        firstGapRef.current?.focus?.();
+      } catch {
+        /* ignore */
       }
-    }, 450);
-    return () => {
-      if (pasteExtractTimerRef.current) clearTimeout(pasteExtractTimerRef.current);
-    };
-  }, [pasteText, mode, applyExtractionData]);
+    }, 100);
+    return () => clearTimeout(t);
+  }, [singleStep]);
 
   const runPreview = useCallback(async () => {
     const payload = serializeIntakeForBackend(intake);
     const payer = (intake.payer || '').trim() || 'Unknown payer';
     const claimNum = (intake.claimNumber || '').trim();
-    const pasteSupplement =
-      mode === 'paste' && pasteText.trim() ? pasteText.trim().slice(0, 15000) : '';
+    const pasteSupplement = mode === 'paste' && pasteText.trim() ? pasteText.trim().slice(0, 15000) : '';
     const pasteBlock = [payload.paste_details, pasteSupplement].filter(Boolean).join('\n\n');
     try {
       if (mode === 'upload' || mode === 'csv') {
@@ -397,6 +465,9 @@ export default function OnboardingStart() {
     setIntelligence(null);
     setPasteText('');
     setFieldErrors({ patientName: '', providerName: '', providerNpi: '' });
+    setSingleStep(0);
+    setBulkStep(0);
+    setCodingAccordionOpen(false);
   };
 
   const applyCsvRow = useCallback(
@@ -432,6 +503,7 @@ export default function OnboardingStart() {
       if (rows.length) {
         setIntake(rowToStructuredIntake(rows[0]));
         setSelectedCsvRow(0);
+        setBulkStep(1);
       }
     } catch (ex) {
       setErr(ex.message || 'Could not read file. Try CSV or re-export from Excel.');
@@ -455,6 +527,7 @@ export default function OnboardingStart() {
         message: 'We could not auto-extract from this file type. You can still generate an appeal — fields below are optional.',
       });
       setFieldConfidence({});
+      mergeProfileSnapshotIntoIntake();
       return;
     }
 
@@ -467,6 +540,7 @@ export default function OnboardingStart() {
         throw new Error(data.message || data.error);
       }
       applyExtractionData(data);
+      mergeProfileSnapshotIntoIntake();
       setExtractedMeta({
         kind: 'pdf',
         confidence: data.confidence || 'medium',
@@ -475,8 +549,7 @@ export default function OnboardingStart() {
         warning: data.warning,
       });
     } catch (ex) {
-      const msg =
-        ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction failed';
+      const msg = ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction failed';
       setErr(msg);
       setExtractedMeta({ kind: 'error', message: msg });
       setFieldConfidence({});
@@ -485,7 +558,36 @@ export default function OnboardingStart() {
     }
   };
 
-  /** Strict required fields only when user neither uploaded nor pasted (no such entry on this screen). */
+  const runPasteExtract = async () => {
+    const t = pasteText.trim();
+    setExtracting(true);
+    setErr('');
+    try {
+      const { data } = await api.post('/api/parse/denial-text', { text: t });
+      if (data.success === false && data.error) {
+        throw new Error(data.message || data.error);
+      }
+      applyExtractionData(data);
+      mergeProfileSnapshotIntoIntake();
+      setExtractedMeta({
+        kind: 'text',
+        confidence: data.confidence || 'medium',
+        claim_number: data.claim_number,
+        payer_name: data.payer_name,
+        warning: data.warning,
+      });
+    } catch (ex) {
+      const msg =
+        ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction incomplete';
+      setExtractedMeta({
+        kind: 'text_error',
+        message: `${msg} You can still generate your appeal without editing fields.`,
+      });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const validate = () => {
     const usedUploadOrPaste =
       mode === 'upload' || mode === 'paste' || mode === 'csv' || !!file || !!(pasteText && pasteText.trim());
@@ -499,7 +601,7 @@ export default function OnboardingStart() {
   };
 
   const submit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     setErr('');
     const fe = {
       patientName: !(intake.patientName || '').trim() ? 'Patient name is required.' : '',
@@ -631,288 +733,35 @@ export default function OnboardingStart() {
     }
   };
 
-  const extractedReady =
-    !extracting && (extractedMeta?.kind === 'pdf' || extractedMeta?.kind === 'text');
+  const extractedReady = !extracting && (extractedMeta?.kind === 'pdf' || extractedMeta?.kind === 'text');
 
-  if (!mode) {
-    return (
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '28px 20px 40px', fontFamily: '"Inter", system-ui, sans-serif' }}>
-        <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 800, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
-          Upload a denial → get a submission-ready appeal in seconds
-        </h1>
-        <p style={{ fontSize: 17, color: '#475569', margin: '0 0 28px', lineHeight: 1.5 }}>
-          Works with payer letters, EOBs, and bulk claim exports
-        </p>
+  const step2Fields = useMemo(() => {
+    const order = [
+      { key: 'claimNumber', label: 'Claim number', type: 'text', fc: 'claimNumber' },
+      { key: 'dateOfService', label: 'Date of service', type: 'date', fc: 'dateOfService' },
+      { key: 'payer', label: 'Payer', type: 'payer', fc: 'payer' },
+      { key: 'patientName', label: 'Patient name', type: 'text', fc: null },
+    ];
+    const firstGapKey =
+      order.find((f) => (f.fc ? fieldConfidence[f.fc] === 'low' : !(intake[f.key] || '').trim()))?.key ||
+      null;
+    return { order, firstGapKey };
+  }, [fieldConfidence, intake]);
 
-        <div style={{ display: 'grid', gap: 14 }}>
-          <button
-            type="button"
-            onClick={() => {
-              setIntake(emptyIntake());
-              setFieldConfidence({});
-              setMode('upload');
-            }}
-            style={{
-              position: 'relative',
-              textAlign: 'left',
-              border: '2px solid #2563eb',
-              borderRadius: 12,
-              padding: '22px 20px',
-              cursor: 'pointer',
-              background: softBlue,
-              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.12)',
-              minHeight: 108,
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                top: 12,
-                right: 14,
-                fontSize: 11,
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: '#1d4ed8',
-                background: '#fff',
-                padding: '4px 10px',
-                borderRadius: 999,
-                border: '1px solid #93c5fd',
-              }}
-            >
-              Recommended
-            </span>
-            <strong style={{ fontSize: 19, color: navy, display: 'block', marginBottom: 8 }}>Upload Denial Letter or EOB</strong>
-            <div style={{ fontSize: 15, color: '#475569', lineHeight: 1.45 }}>
-              We extract claim details, denial codes, and generate your appeal automatically
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIntake(emptyIntake());
-              setFieldConfidence({});
-              setMode('paste');
-            }}
-            style={{
-              textAlign: 'left',
-              border: `1px solid ${border}`,
-              borderRadius: 10,
-              padding: '18px 16px',
-              cursor: 'pointer',
-              background: '#fff',
-            }}
-          >
-            <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>Paste Denial / EOB Text</strong>
-            <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45 }}>
-              Paste directly from your billing system or payer portal
-            </div>
-          </button>
-
-          <label
-            style={{
-              display: 'block',
-              border: `1px solid ${border}`,
-              borderRadius: 10,
-              padding: '18px 16px',
-              cursor: extracting ? 'wait' : 'pointer',
-              background: '#fff',
-            }}
-          >
-            <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>Upload Denial File (CSV or Excel)</strong>
-            <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45, marginBottom: 10 }}>
-              Process multiple denied claims at once
-            </div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, lineHeight: 1.4 }}>
-              Supports claim_number, payer, date_of_service, CPT, ICD-10, denial codes, billed and paid amounts
-            </div>
-            <input
-              type="file"
-              accept=".csv,.txt,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-              disabled={extracting}
-              style={{ marginTop: 4, fontSize: 14 }}
-              onChange={handleCsvOrExcel}
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIntake(emptyIntake());
-              setFieldConfidence({});
-              setBulkPdfFiles([]);
-              setBulkJob(null);
-              setBulkDoneJobId(null);
-              setMode('bulkPdf');
-            }}
-            style={{
-              textAlign: 'left',
-              border: `1px solid ${border}`,
-              borderRadius: 10,
-              padding: '18px 16px',
-              cursor: 'pointer',
-              background: '#fff',
-            }}
-          >
-            <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>
-              Upload Multiple Denial Letters
-            </strong>
-            <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45 }}>
-              Select or drag up to 100 PDFs — we extract each, generate appeals, and package PDFs in one ZIP
-            </div>
-          </button>
-        </div>
-
-        {extracting && (
-          <p style={{ marginTop: 16, color: accent, fontWeight: 600, fontSize: 15 }}>Reading file…</p>
-        )}
-
-        <WorkflowSteps />
-      </div>
-    );
-  }
-
-  if (mode === 'bulkPdf') {
-    return (
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '28px 20px 48px', fontFamily: '"Inter", system-ui, sans-serif' }}>
-        <button
-          type="button"
-          onClick={resetIntake}
-          style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: accent, fontSize: 15, fontWeight: 600 }}
-        >
-          ← Back
-        </button>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Bulk PDF denials</h1>
-        <p style={{ fontSize: 15, color: '#475569', marginBottom: 18 }}>
-          Log in required. Each successful appeal uses your plan credits. Failed extractions are skipped and listed in{' '}
-          <code style={{ fontSize: 13 }}>processing_report.txt</code> inside the ZIP.
-        </p>
-
-        {!token && (
-          <p style={{ color: '#b45309', fontWeight: 600, marginBottom: 14 }}>
-            Sign in to run bulk PDF processing and download your appeals ZIP.
-          </p>
-        )}
-
-        <div
-          onDragEnter={(e) => {
-            e.preventDefault();
-            setBulkDrag(true);
-          }}
-          onDragOver={(e) => e.preventDefault()}
-          onDragLeave={() => setBulkDrag(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setBulkDrag(false);
-            addBulkPdfFiles(e.dataTransfer.files);
-          }}
-          style={{
-            border: `2px dashed ${bulkDrag ? accent : border}`,
-            borderRadius: 12,
-            padding: 28,
-            textAlign: 'center',
-            background: bulkDrag ? softBlue : '#f8fafc',
-            marginBottom: 16,
-          }}
-        >
-          <p style={{ margin: '0 0 10px', fontWeight: 700, color: navy }}>Drag & drop PDF denial letters here</p>
-          <input
-            type="file"
-            accept=".pdf,application/pdf"
-            multiple
-            style={{ fontSize: 14 }}
-            onChange={(e) => addBulkPdfFiles(e.target.files)}
-          />
-        </div>
-
-        {bulkPdfFiles.length > 0 && (
-          <p style={{ fontSize: 14, color: '#64748b', marginBottom: 10 }}>
-            {bulkPdfFiles.length} PDF{bulkPdfFiles.length === 1 ? '' : 's'} selected (max 100)
-          </p>
-        )}
-
-        {bulkProcessing && (
-          <div style={{ marginBottom: 16, padding: 16, background: softBlue, borderRadius: 10, border: `1px solid ${border}` }}>
-            <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>
-              Processing {bulkJob?.total ?? bulkPdfFiles.length} denials…
-            </div>
-            {bulkJob && bulkJob.total > 0 && (
-              <>
-                <div style={{ height: 10, background: '#e2e8f0', borderRadius: 5, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${Math.min(100, Math.round(((bulkJob.current || 0) / bulkJob.total) * 100))}%`,
-                      height: '100%',
-                      background: accent,
-                      transition: 'width 0.25s ease',
-                    }}
-                  />
-                </div>
-                <div style={{ fontSize: 13, marginTop: 8, color: '#475569' }}>
-                  {bulkJob.current ?? 0} / {bulkJob.total} files
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {!bulkProcessing && bulkDoneJobId && bulkJob?.status === 'done' && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 16,
-              background: '#f0fdf4',
-              border: '1px solid #86efac',
-              borderRadius: 10,
-            }}
-          >
-            <p style={{ margin: '0 0 12px', fontWeight: 800, color: '#14532d', fontSize: 17 }}>
-              {bulkJob.ok_count ?? 0} Appeals Generated
-            </p>
-            <button
-              type="button"
-              onClick={() => downloadBatchZip(bulkDoneJobId)}
-              style={{
-                padding: '12px 20px',
-                fontWeight: 800,
-                fontSize: 15,
-                background: navy,
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                cursor: 'pointer',
-              }}
-            >
-              Download All Appeals
-            </button>
-          </div>
-        )}
-
-        {batchMsg && <p style={{ fontSize: 14, color: '#475569', marginBottom: 10 }}>{batchMsg}</p>}
-        {err && <p style={{ color: '#b91c1c', fontWeight: 600, marginBottom: 10 }}>{err}</p>}
-
-        <button
-          type="button"
-          disabled={!token || !bulkPdfFiles.length || bulkProcessing}
-          onClick={runPdfBulkAppeals}
-          style={{
-            width: '100%',
-            padding: 16,
-            background: !token || !bulkPdfFiles.length || bulkProcessing ? '#94a3b8' : navy,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 10,
-            fontWeight: 800,
-            fontSize: 16,
-            cursor: !token || !bulkPdfFiles.length || bulkProcessing ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {bulkProcessing ? 'Processing…' : 'Generate all appeals (ZIP)'}
-        </button>
-      </div>
-    );
-  }
+  const showStep3Carc = !(intake.carcCodes || []).length || fieldConfidence.carcCodes === 'low';
+  const showStep3Rarc = !(intake.rarcCodes || []).length || fieldConfidence.rarcCodes === 'low';
+  const showStep3Cpt = !(intake.cptCodes || []).length || fieldConfidence.cptCodes === 'low';
+  const showStep3Mod = !(intake.modifiers || '').trim() || fieldConfidence.modifiers === 'low';
+  const showStep3Icd = !(intake.icdCodes || []).length || fieldConfidence.icdCodes === 'low';
+  const showStep3Billed =
+    !(intake.billedAmount || '').trim() || fieldConfidence.billedAmount === 'low';
+  const showStep3Paid = !(intake.paidAmount || '').trim() || fieldConfidence.paidAmount === 'low';
+  const showStep3ProviderName = !(intake.providerName || '').trim();
+  const showStep3ProviderNpi = !(intake.providerNpi || '').trim();
+  const showStep3Addr = !(intake.providerAddress || '').trim();
+  const showStep3Phone = !(intake.providerPhone || '').trim();
+  const showStep3Fax = !(intake.providerFax || '').trim();
+  const showStep3Patient = !(intake.patientName || '').trim();
 
   const inputBase = {
     width: '100%',
@@ -923,599 +772,1132 @@ export default function OnboardingStart() {
     fontSize: 15,
   };
 
-  return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 20px 48px', fontFamily: '"Inter", system-ui, sans-serif' }}>
-      <button
-        type="button"
-        onClick={resetIntake}
-        style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: accent, fontSize: 15, fontWeight: 600 }}
+  const ctaButton = (disabled, loadingLabel, label) => ({
+    width: '100%',
+    padding: 16,
+    background: disabled ? '#94a3b8' : primaryCta,
+    color: '#fff',
+    border: 'none',
+    borderRadius: 10,
+    fontWeight: 800,
+    fontSize: 16,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    marginTop: 8,
+    transition: 'background 0.15s ease',
+  });
+
+  const handleStepperBack = (idx) => {
+    setSingleStep(idx);
+  };
+
+  const onSingleStep1Next = async () => {
+    setErr('');
+    if (mode === 'upload') {
+      if (!file) {
+        setErr('Choose or drop a denial letter or EOB file first.');
+        return;
+      }
+      await runPdfExtract(file);
+      advanceSingle(1);
+      return;
+    }
+    if (mode === 'paste') {
+      if (pasteText.trim().length < 20) {
+        setErr('Paste a bit more denial text so we can extract details.');
+        return;
+      }
+      await runPasteExtract();
+      advanceSingle(1);
+    }
+  };
+
+  if (!mode) {
+    return (
+      <div
+        style={{
+          background: pageBg,
+          minHeight: 'calc(100vh - 60px)',
+          fontFamily: '"Inter", system-ui, sans-serif',
+        }}
       >
-        ← Back
-      </button>
-
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Claim intake</h1>
-      <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 16px' }}>
-        Structured fields power accurate appeals—defaults save time on repeat claims.
-      </p>
-
-      {(mode === 'upload' || mode === 'paste') && (
-        <p style={{ fontSize: 15, color: '#334155', margin: '0 0 16px', lineHeight: 1.5, fontWeight: 600 }}>
-          {extractedReady
-            ? 'We extracted your claim details. Review if needed — or generate your appeal now.'
-            : 'Upload or paste your denial. We extract claim details automatically when possible — you can generate without filling every field.'}
-        </p>
-      )}
-
-      {extractedReady && extractedMeta?.warning && (
-        <div
-          style={{
-            border: '1px solid #fde68a',
-            background: '#fffbeb',
-            borderRadius: 10,
-            padding: 12,
-            marginBottom: 14,
-            fontSize: 14,
-            color: '#92400e',
-            fontWeight: 600,
-          }}
-        >
-          {extractedMeta.warning}
-        </div>
-      )}
-
-      {mode === 'upload' && (
-        <div style={{ marginBottom: 20 }}>
-          <p style={{ fontWeight: 700, fontSize: 13, color: navy, margin: '0 0 8px' }}>
-            Denial letter or EOB (PDF, PNG, JPG)
-          </p>
-          <DenialDocumentDropZone
-            accept=".pdf,.png,.jpg,.jpeg"
-            onFile={(f) => runPdfExtract(f)}
-            disabled={extracting}
-            inputId="onboarding-denial-letter-file"
-            onPasteText={(text) => {
-              setMode('paste');
-              setPasteText(text);
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 20px 48px' }}>
+          <h1
+            style={{
+              fontSize: 'clamp(24px, 4vw, 32px)',
+              fontWeight: 800,
+              color: navy,
+              margin: '0 0 12px',
+              lineHeight: 1.2,
             }}
           >
-            <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-              <strong style={{ color: navy, fontSize: 15 }}>Drag, drop, or paste your denial here</strong>
-              <p style={{ margin: '8px 0 4px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
-                Paste text, screenshot, or PDF — we&apos;ll extract it automatically
-              </p>
-              <p style={{ margin: '10px 0 6px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
-                Release to upload — or click to choose from your device
-              </p>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>PDF, PNG, or JPG · max 10MB on server</span>
-            </div>
-          </DenialDocumentDropZone>
-        </div>
-      )}
+            Start an appeal
+          </h1>
+          <p style={{ fontSize: 17, color: '#475569', margin: '0 0 28px', lineHeight: 1.5 }}>
+            Choose a single claim or a bulk workflow — same engine, different throughput.
+          </p>
 
-      {mode === 'paste' && (
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: navy, marginBottom: 8 }}>
-            Paste denial letter or EOB text
-          </label>
-          <textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            placeholder="Paste from your payer portal or billing system…"
-            rows={10}
+          <div
             style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: 12,
-              borderRadius: 8,
-              fontSize: 14,
-              border: `1px solid ${border}`,
-              fontFamily: 'inherit',
-              lineHeight: 1.45,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: 24,
+              alignItems: 'stretch',
             }}
-          />
-        </div>
-      )}
-
-      {extracting && (mode === 'upload' || mode === 'paste') && (
-        <p style={{ marginTop: 0, marginBottom: 18, color: accent, fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <style>{`@keyframes dapSpin { to { transform: rotate(360deg); } }`}</style>
-          <span
-            style={{
-              display: 'inline-block',
-              width: 18,
-              height: 18,
-              border: '2px solid #bfdbfe',
-              borderTopColor: accent,
-              borderRadius: '50%',
-              animation: 'dapSpin 0.8s linear infinite',
-            }}
-          />
-          Extracting claim details…
-        </p>
-      )}
-
-      {(extractedMeta?.kind === 'pdf' || extractedMeta?.kind === 'text') && !extracting && (
-        <div
-          style={{
-            border: '1px solid #bae6fd',
-            background: '#f0f9ff',
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 16,
-            fontSize: 14,
-            color: '#0c4a6e',
-          }}
-        >
-          <strong>Extracted preview:</strong> {extractedMeta.payer_name || '—'} · Claim {extractedMeta.claim_number || '—'} ·
-          Confidence: {extractedMeta.confidence || '—'}
-        </div>
-      )}
-
-      {extractedMeta && extractedMeta.kind === 'image' && (
-        <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 14, color: '#92400e' }}>
-          {extractedMeta.message}
-        </div>
-      )}
-
-      {extractedMeta && extractedMeta.kind === 'error' && (
-        <div style={{ border: '1px solid #fecaca', background: '#fef2f2', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 14, color: '#991b1b' }}>
-          {extractedMeta.message} — you can still generate an appeal; fields below are optional.
-        </div>
-      )}
-
-      {extractedMeta && extractedMeta.kind === 'text_error' && (
-        <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 14, color: '#92400e' }}>
-          {extractedMeta.message}
-        </div>
-      )}
-
-      {mode === 'csv' && csvRows.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          {csvFile && (
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 8px' }}>
-              File: <strong>{csvFile.name}</strong>
-            </p>
-          )}
-          <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>
-            {csvRows.length} claim{csvRows.length === 1 ? '' : 's'} loaded — every row can be processed into appeals (ZIP)
-          </div>
-          {token && bulkProcessing && (
-            <div style={{ marginBottom: 14, padding: 14, background: softBlue, borderRadius: 10, border: `1px solid ${border}` }}>
-              <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>
-                Processing {bulkJob?.total ?? csvRows.length} denials…
-              </div>
-              {bulkJob && bulkJob.total > 0 && (
-                <>
-                  <div style={{ height: 10, background: '#e2e8f0', borderRadius: 5, overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        width: `${Math.min(100, Math.round(((bulkJob.current || 0) / bulkJob.total) * 100))}%`,
-                        height: '100%',
-                        background: accent,
-                        transition: 'width 0.25s ease',
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: 13, marginTop: 8, color: '#475569' }}>
-                    {bulkJob.current ?? 0} / {bulkJob.total} rows
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-          {!bulkProcessing && bulkDoneJobId && bulkJob?.status === 'done' && (
+          >
             <div
               style={{
-                marginBottom: 14,
-                padding: 14,
-                background: '#f0fdf4',
-                border: '1px solid #86efac',
-                borderRadius: 10,
+                background: cardBg,
+                borderRadius: 14,
+                padding: 22,
+                border: `1px solid ${border}`,
+                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.06)',
               }}
             >
-              <p style={{ margin: '0 0 10px', fontWeight: 800, color: '#14532d' }}>
-                {bulkJob.ok_count ?? 0} Appeals Generated
-              </p>
-              <button
-                type="button"
-                onClick={() => downloadBatchZip(bulkDoneJobId)}
+              <p
                 style={{
-                  padding: '10px 18px',
+                  margin: '0 0 16px',
+                  fontSize: 12,
                   fontWeight: 800,
-                  background: navy,
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
+                  color: '#64748b',
+                  letterSpacing: '0.06em',
                 }}
               >
-                Download All Appeals
-              </button>
+                SINGLE CLAIM
+              </p>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIntake(emptyIntake());
+                    setFieldConfidence({});
+                    setSingleStep(0);
+                    setMode('upload');
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    border: `2px solid ${primaryCta}`,
+                    borderRadius: 12,
+                    padding: '20px 18px',
+                    cursor: 'pointer',
+                    background: softBlue,
+                    minHeight: 100,
+                  }}
+                >
+                  <strong style={{ fontSize: 18, color: navy, display: 'block', marginBottom: 8 }}>
+                    Upload denial letter or EOB
+                  </strong>
+                  <div style={{ fontSize: 14, color: '#475569', lineHeight: 1.45 }}>
+                    PDF, PNG, or JPG — we extract claim details before you confirm
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIntake(emptyIntake());
+                    setFieldConfidence({});
+                    setSingleStep(0);
+                    setMode('paste');
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    border: `1px solid ${border}`,
+                    borderRadius: 12,
+                    padding: '18px 16px',
+                    cursor: 'pointer',
+                    background: cardBg,
+                  }}
+                >
+                  <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>
+                    Paste denial / EOB text
+                  </strong>
+                  <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45 }}>
+                    From your billing system or payer portal
+                  </div>
+                </button>
+              </div>
             </div>
+
+            <div
+              style={{
+                background: cardBg,
+                borderRadius: 14,
+                padding: 22,
+                border: `1px solid ${border}`,
+                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.06)',
+              }}
+            >
+              <p
+                style={{
+                  margin: '0 0 16px',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: '#64748b',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                BULK PROCESSING
+              </p>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    border: `1px solid ${border}`,
+                    borderRadius: 12,
+                    padding: '18px 16px',
+                    cursor: extracting ? 'wait' : 'pointer',
+                    background: cardBg,
+                  }}
+                >
+                  <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>
+                    Upload CSV or Excel
+                  </strong>
+                  <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45, marginBottom: 10 }}>
+                    Multiple denied claims in one spreadsheet
+                  </div>
+                  <input
+                    type="file"
+                    accept=".csv,.txt,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    disabled={extracting}
+                    style={{ marginTop: 4, fontSize: 14 }}
+                    onChange={handleCsvOrExcel}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIntake(emptyIntake());
+                    setFieldConfidence({});
+                    setBulkPdfFiles([]);
+                    setBulkJob(null);
+                    setBulkDoneJobId(null);
+                    setBulkStep(0);
+                    setMode('bulkPdf');
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    border: `1px solid ${border}`,
+                    borderRadius: 12,
+                    padding: '18px 16px',
+                    cursor: 'pointer',
+                    background: cardBg,
+                  }}
+                >
+                  <strong style={{ fontSize: 17, color: navy, display: 'block', marginBottom: 6 }}>
+                    Upload multiple denial PDFs
+                  </strong>
+                  <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.45 }}>
+                    Up to 100 files — extraction and appeals packaged in one ZIP
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {extracting && (
+            <p style={{ marginTop: 20, color: navy, fontWeight: 600, fontSize: 15 }}>Reading file…</p>
           )}
-          <div style={{ overflowX: 'auto', maxHeight: 200, border: `1px solid ${border}`, borderRadius: 8, background: '#fff' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>#</th>
-                  <th style={{ padding: 8 }}>Claim</th>
-                  <th style={{ padding: 8 }}>Payer</th>
-                  <th style={{ padding: 8 }}>Amount</th>
-                  <th style={{ padding: 8 }}>Denial</th>
-                </tr>
-              </thead>
-              <tbody>
-                {csvRows.map((row, i) => (
-                  <tr
-                    key={i}
-                    onClick={() => applyCsvRow(i)}
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'bulkPdf') {
+    const labels = bulkPdfFiles.map((f) => f.name);
+    return (
+      <div
+        style={{
+          background: pageBg,
+          minHeight: 'calc(100vh - 60px)',
+          fontFamily: '"Inter", system-ui, sans-serif',
+        }}
+      >
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 20px 48px' }}>
+          <IntakeStepper
+            steps={BULK_STEPS}
+            activeIndex={bulkStep}
+            onStepClick={(i) => {
+              if (i < bulkStep) setBulkStep(i);
+            }}
+          />
+          <button
+            type="button"
+            onClick={resetIntake}
+            style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
+          >
+            ← Back
+          </button>
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Bulk PDF denials</h1>
+            <p style={{ fontSize: 15, color: '#475569', marginBottom: 18 }}>
+              Log in required. Each successful appeal uses your plan credits. Failed extractions are skipped and listed in{' '}
+              <code style={{ fontSize: 13 }}>processing_report.txt</code> inside the ZIP.
+            </p>
+
+            {!token && (
+              <p style={{ color: '#c2410c', fontWeight: 600, marginBottom: 14, fontSize: 14 }}>
+                Sign in to run bulk PDF processing and download your appeals ZIP.
+              </p>
+            )}
+
+            {bulkStep === 0 && (
+              <>
+                <div
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    setBulkDrag(true);
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDragLeave={() => setBulkDrag(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setBulkDrag(false);
+                    addBulkPdfFiles(e.dataTransfer.files);
+                  }}
+                  style={{
+                    border: `2px dashed ${bulkDrag ? primaryCta : border}`,
+                    borderRadius: 12,
+                    padding: 28,
+                    textAlign: 'center',
+                    background: bulkDrag ? softBlue : pageBg,
+                    marginBottom: 16,
+                  }}
+                >
+                  <p style={{ margin: '0 0 10px', fontWeight: 700, color: navy }}>Drag & drop PDF denial letters here</p>
+                  <input type="file" accept=".pdf,application/pdf" multiple style={{ fontSize: 14 }} onChange={(e) => addBulkPdfFiles(e.target.files)} />
+                </div>
+                {bulkPdfFiles.length > 0 && (
+                  <p style={{ fontSize: 14, color: '#64748b', marginBottom: 10 }}>
+                    {bulkPdfFiles.length} PDF{bulkPdfFiles.length === 1 ? '' : 's'} selected (max 100)
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={!bulkPdfFiles.length}
+                  onClick={() => setBulkStep(1)}
+                  style={{
+                    ...ctaButton(!bulkPdfFiles.length, false, ''),
+                    marginTop: 0,
+                    background: !bulkPdfFiles.length ? '#94a3b8' : navy,
+                  }}
+                >
+                  Continue to processing queue
+                </button>
+              </>
+            )}
+
+            {bulkStep === 1 && (
+              <>
+                <BulkQueueRows labels={labels} job={bulkJob} jobKind="pdf" />
+                {!bulkProcessing && bulkDoneJobId && bulkJob?.status === 'done' && (
+                  <div
                     style={{
-                      cursor: 'pointer',
-                      background: selectedCsvRow === i ? softBlue : '#fff',
-                      borderBottom: '1px solid #f1f5f9',
+                      marginTop: 16,
+                      padding: 16,
+                      background: '#f0fdf4',
+                      border: `1px solid ${extractedBorder}`,
+                      borderRadius: 10,
                     }}
                   >
-                    <td style={{ padding: 8 }}>{i + 1}</td>
-                    <td style={{ padding: 8 }}>{row.claim_number || '—'}</td>
-                    <td style={{ padding: 8 }}>{row.payer || '—'}</td>
-                    <td style={{ padding: 8 }}>{row.billed_amount || '—'}</td>
-                    <td style={{ padding: 8, maxWidth: 180 }}>{(row.denial_reason || '').slice(0, 80)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    <p style={{ margin: '0 0 12px', fontWeight: 800, color: '#14532d', fontSize: 17 }}>
+                      {bulkJob.ok_count ?? 0} appeals generated
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => downloadBatchZip(bulkDoneJobId)}
+                      style={{
+                        padding: '12px 20px',
+                        fontWeight: 800,
+                        fontSize: 15,
+                        background: primaryCta,
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = primaryCtaHover;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = primaryCta;
+                      }}
+                    >
+                      Download ZIP
+                    </button>
+                  </div>
+                )}
+                {batchMsg && <p style={{ fontSize: 14, color: '#475569', marginTop: 12 }}>{batchMsg}</p>}
+                {err && <p style={{ color: '#c2410c', fontWeight: 600, marginTop: 12, fontSize: 14 }}>{err}</p>}
+                {bulkProcessing && (
+                  <p style={{ marginTop: 12, fontSize: 14, color: '#475569' }}>
+                    Overall progress: {bulkJob?.current ?? 0} / {bulkJob?.total ?? labels.length} files
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={!token || !bulkPdfFiles.length || bulkProcessing}
+                  onClick={runPdfBulkAppeals}
+                  style={{
+                    width: '100%',
+                    padding: 16,
+                    marginTop: 16,
+                    background: !token || !bulkPdfFiles.length || bulkProcessing ? '#94a3b8' : primaryCta,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    fontSize: 16,
+                    cursor: !token || !bulkPdfFiles.length || bulkProcessing ? 'not-allowed' : 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!token || !bulkPdfFiles.length || bulkProcessing) return;
+                    e.target.style.background = primaryCtaHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!token || !bulkPdfFiles.length || bulkProcessing) return;
+                    e.target.style.background = primaryCta;
+                  }}
+                >
+                  {bulkProcessing ? 'Processing…' : 'Generate all appeals (ZIP)'}
+                </button>
+              </>
+            )}
           </div>
-          {token && (
-            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              <button
-                type="button"
-                onClick={runCsvBulkAppeals}
-                disabled={loading || bulkProcessing}
-                style={{
-                  padding: '12px 18px',
-                  fontWeight: 800,
-                  background: loading || bulkProcessing ? '#94a3b8' : navy,
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: loading || bulkProcessing ? 'wait' : 'pointer',
-                }}
-              >
-                {bulkProcessing ? 'Processing…' : `Generate all ${csvRows.length} appeals (ZIP)`}
-              </button>
-              <button
-                type="button"
-                onClick={importAllToQueue}
-                disabled={loading || bulkProcessing}
-                style={{
-                  padding: '12px 18px',
-                  fontWeight: 700,
-                  background: '#fff',
-                  border: `2px solid ${accent}`,
-                  color: accent,
-                  borderRadius: 8,
-                  cursor: loading || bulkProcessing ? 'wait' : 'pointer',
-                }}
-              >
-                Import all to denial queue
-              </button>
-            </div>
-          )}
-          {!token && (
-            <p style={{ fontSize: 13, marginTop: 10, color: '#b45309', fontWeight: 600 }}>
-              Sign in to generate all appeals as PDFs in one ZIP (up to {csvRows.length} rows).
-            </p>
-          )}
-          {batchMsg && <p style={{ fontSize: 13, marginTop: 8, color: '#64748b' }}>{batchMsg}</p>}
         </div>
-      )}
+      </div>
+    );
+  }
 
-      <form onSubmit={submit}>
-        <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <legend style={{ fontWeight: 800, color: navy, padding: '0 8px' }}>Claim information</legend>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Claim number</span>
-            <input
-              value={intake.claimNumber}
-              onChange={(e) => setIntake((s) => ({ ...s, claimNumber: e.target.value }))}
-              title={fieldConfidence.claimNumber === 'low' ? VERIFY_TOOLTIP : undefined}
-              style={{
-                ...inputBase,
-                border: fieldBorder(fieldConfidence, 'claimNumber'),
-                backgroundColor: fieldBg(fieldConfidence, 'claimNumber'),
+  if (mode === 'csv') {
+    const rowLabels = csvRows.map((row, i) => row.claim_number || `Row ${i + 1}`);
+    return (
+      <div style={{ background: pageBg, minHeight: 'calc(100vh - 60px)', fontFamily: '"Inter", system-ui, sans-serif' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px 48px' }}>
+          <IntakeStepper
+            steps={BULK_STEPS}
+            activeIndex={bulkStep}
+            onStepClick={(i) => {
+              if (i < bulkStep) setBulkStep(i);
+            }}
+          />
+          <button
+            type="button"
+            onClick={resetIntake}
+            style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
+          >
+            ← Back
+          </button>
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Bulk spreadsheet intake</h1>
+            {bulkStep === 0 && (
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <strong style={{ fontSize: 15, color: navy }}>Upload CSV or Excel</strong>
+                <input
+                  type="file"
+                  accept=".csv,.txt,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  disabled={extracting}
+                  style={{ display: 'block', marginTop: 8, fontSize: 14 }}
+                  onChange={handleCsvOrExcel}
+                />
+              </label>
+            )}
+            {bulkStep === 1 && csvRows.length > 0 && (
+              <>
+                {csvFile && (
+                  <p style={{ fontSize: 13, color: '#64748b', margin: '12px 0 8px' }}>
+                    File: <strong>{csvFile.name}</strong>
+                  </p>
+                )}
+                <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>
+                  {csvRows.length} claim{csvRows.length === 1 ? '' : 's'} loaded
+                </div>
+                <BulkQueueRows labels={rowLabels} job={bulkJob} jobKind="csv" />
+                <div style={{ overflowX: 'auto', maxHeight: 200, border: `1px solid ${border}`, borderRadius: 8, background: cardBg, marginTop: 12 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                        <th style={{ padding: 8 }}>#</th>
+                        <th style={{ padding: 8 }}>Claim</th>
+                        <th style={{ padding: 8 }}>Payer</th>
+                        <th style={{ padding: 8 }}>Amount</th>
+                        <th style={{ padding: 8 }}>Denial</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvRows.map((row, i) => (
+                        <tr
+                          key={i}
+                          onClick={() => applyCsvRow(i)}
+                          style={{
+                            cursor: 'pointer',
+                            background: selectedCsvRow === i ? softBlue : cardBg,
+                            borderBottom: '1px solid #f1f5f9',
+                          }}
+                        >
+                          <td style={{ padding: 8 }}>{i + 1}</td>
+                          <td style={{ padding: 8 }}>{row.claim_number || '—'}</td>
+                          <td style={{ padding: 8 }}>{row.payer || '—'}</td>
+                          <td style={{ padding: 8 }}>{row.billed_amount || '—'}</td>
+                          <td style={{ padding: 8, maxWidth: 180 }}>{(row.denial_reason || '').slice(0, 80)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {token && (
+                  <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={runCsvBulkAppeals}
+                      disabled={loading || bulkProcessing}
+                      style={{
+                        padding: '12px 18px',
+                        fontWeight: 800,
+                        background: loading || bulkProcessing ? '#94a3b8' : primaryCta,
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        cursor: loading || bulkProcessing ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {bulkProcessing ? 'Processing…' : `Generate all ${csvRows.length} appeals (ZIP)`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={importAllToQueue}
+                      disabled={loading || bulkProcessing}
+                      style={{
+                        padding: '12px 18px',
+                        fontWeight: 700,
+                        background: cardBg,
+                        border: `2px solid ${navy}`,
+                        color: navy,
+                        borderRadius: 8,
+                        cursor: loading || bulkProcessing ? 'wait' : 'pointer',
+                      }}
+                    >
+                      Import all to denial queue
+                    </button>
+                  </div>
+                )}
+                {!token && (
+                  <p style={{ fontSize: 13, marginTop: 10, color: '#c2410c', fontWeight: 600 }}>
+                    Sign in to generate all appeals as PDFs in one ZIP (up to {csvRows.length} rows).
+                  </p>
+                )}
+                {!bulkProcessing && bulkDoneJobId && bulkJob?.status === 'done' && (
+                  <div style={{ marginTop: 14 }}>
+                    <button
+                      type="button"
+                      onClick={() => downloadBatchZip(bulkDoneJobId)}
+                      style={{
+                        padding: '12px 18px',
+                        fontWeight: 800,
+                        background: primaryCta,
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Download ZIP
+                    </button>
+                  </div>
+                )}
+                {batchMsg && <p style={{ fontSize: 13, marginTop: 8, color: '#64748b' }}>{batchMsg}</p>}
+                {err && <p style={{ color: '#c2410c', fontWeight: 600, marginTop: 8 }}>{err}</p>}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: pageBg, minHeight: 'calc(100vh - 60px)', fontFamily: '"Inter", system-ui, sans-serif' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 20px 48px' }}>
+        <IntakeStepper
+          steps={SINGLE_STEPS}
+          activeIndex={singleStep}
+          onStepClick={(i) => i < singleStep && handleStepperBack(i)}
+        />
+        <button
+          type="button"
+          onClick={resetIntake}
+          style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
+        >
+          ← Back
+        </button>
+
+        {singleStep === 0 && (
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 1 — Upload</h1>
+            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 18 }}>
+              Add your denial once. We&apos;ll extract details on the next step.
+            </p>
+            {mode === 'upload' && (
+              <div style={{ marginBottom: 8 }}>
+                <DenialDocumentDropZone
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onFile={(f) => {
+                    setFile(f);
+                    setExtractedMeta(null);
+                    setErr('');
+                  }}
+                  disabled={extracting}
+                  inputId="onboarding-denial-letter-file"
+                  onPasteText={(text) => {
+                    setMode('paste');
+                    setPasteText(text);
+                    setFile(null);
+                  }}
+                >
+                  <div style={{ textAlign: 'center', padding: '8px 4px' }}>
+                    <strong style={{ color: navy, fontSize: 15 }}>Drag, drop, or paste your denial here</strong>
+                    <p style={{ margin: '8px 0 4px', color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
+                      Paste text, screenshot, or PDF — we&apos;ll extract on Continue
+                    </p>
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>PDF, PNG, or JPG · max 10MB on server</span>
+                  </div>
+                </DenialDocumentDropZone>
+              </div>
+            )}
+            {mode === 'paste' && (
+              <div>
+                <label style={{ display: 'block', fontWeight: 700, fontSize: 13, color: navy, marginBottom: 8 }}>
+                  Paste denial letter or EOB text
+                </label>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste from your payer portal or billing system…"
+                  rows={10}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: 12,
+                    borderRadius: 8,
+                    fontSize: 14,
+                    border: `1px solid ${border}`,
+                    fontFamily: 'inherit',
+                    lineHeight: 1.45,
+                  }}
+                />
+              </div>
+            )}
+            {extracting && (
+              <p style={{ marginTop: 14, color: navy, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <style>{`@keyframes dapSpin { to { transform: rotate(360deg); } }`}</style>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 18,
+                    height: 18,
+                    border: '2px solid #bbf7d0',
+                    borderTopColor: primaryCta,
+                    borderRadius: '50%',
+                    animation: 'dapSpin 0.8s linear infinite',
+                  }}
+                />
+                Extracting claim details…
+              </p>
+            )}
+            {err && <p style={{ color: '#c2410c', fontWeight: 600, marginTop: 12, fontSize: 14 }}>{err}</p>}
+            <button
+              type="button"
+              disabled={extracting}
+              onClick={onSingleStep1Next}
+              style={ctaButton(extracting, false, '')}
+              onMouseEnter={(e) => {
+                if (extracting) return;
+                e.target.style.background = primaryCtaHover;
               }}
-            />
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Date of service</span>
-            <input
-              type="date"
-              value={intake.dateOfService}
-              onChange={(e) => setIntake((s) => ({ ...s, dateOfService: e.target.value }))}
-              title={fieldConfidence.dateOfService === 'low' ? VERIFY_TOOLTIP : undefined}
-              style={{
-                ...inputBase,
-                border: fieldBorder(fieldConfidence, 'dateOfService'),
-                backgroundColor: fieldBg(fieldConfidence, 'dateOfService'),
+              onMouseLeave={(e) => {
+                if (extracting) return;
+                e.target.style.background = primaryCta;
               }}
-            />
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Payer</span>
-            <input
-              list="payer-suggestions"
-              value={intake.payer}
-              onChange={(e) => setIntake((s) => ({ ...s, payer: e.target.value }))}
-              placeholder="Start typing…"
-              title={fieldConfidence.payer === 'low' ? VERIFY_TOOLTIP : undefined}
-              style={{
-                ...inputBase,
-                border: fieldBorder(fieldConfidence, 'payer'),
-                backgroundColor: fieldBg(fieldConfidence, 'payer'),
-              }}
-            />
+            >
+              {extracting ? 'Please wait…' : 'Next — extract & review'}
+            </button>
+          </div>
+        )}
+
+        {singleStep === 1 && (
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 2 — Review extraction</h1>
+            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
+              Confirmed fields are highlighted in green. Gaps use an orange edge — edit anything inline.
+            </p>
+            {extractedReady && extractedMeta?.warning && (
+              <div
+                style={{
+                  border: '1px solid #fde047',
+                  background: '#fef9c3',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 14,
+                  fontSize: 14,
+                  color: '#854d0e',
+                  fontWeight: 600,
+                }}
+              >
+                {extractedMeta.warning}
+              </div>
+            )}
+            {extractedMeta && extractedMeta.kind === 'image' && (
+              <div
+                style={{
+                  border: `1px solid ${orangeBorder}`,
+                  background: orangeBg,
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  color: '#9a3412',
+                }}
+              >
+                {extractedMeta.message}
+              </div>
+            )}
+            {extractedMeta && extractedMeta.kind === 'error' && (
+              <div
+                style={{
+                  border: `1px solid ${orangeBorder}`,
+                  background: orangeBg,
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  color: '#9a3412',
+                }}
+              >
+                {extractedMeta.message} — continue and fill details in the next steps.
+              </div>
+            )}
+            {extractedMeta && extractedMeta.kind === 'text_error' && (
+              <div
+                style={{
+                  border: '1px solid #fde047',
+                  background: '#fef9c3',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  color: '#854d0e',
+                }}
+              >
+                {extractedMeta.message}
+              </div>
+            )}
+            {(extractedMeta?.kind === 'pdf' || extractedMeta?.kind === 'text') && !extracting && (
+              <div
+                style={{
+                  border: `1px solid ${extractedBorder}`,
+                  background: '#f0fdf4',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 16,
+                  fontSize: 14,
+                  color: '#14532d',
+                }}
+              >
+                <strong>Extracted preview:</strong> {extractedMeta.payer_name || '—'} · Claim {extractedMeta.claim_number || '—'} ·
+                Confidence: {extractedMeta.confidence || '—'}
+              </div>
+            )}
+            {step2Fields.order.map((f) => {
+              const fcKey = f.fc;
+              const hasVal = !!(intake[f.key] || '').toString().trim();
+              const confirmed = fcKey ? fieldConfidence[fcKey] !== 'low' && hasVal : hasVal;
+              const needsAttention = fcKey
+                ? fieldConfidence[fcKey] === 'low' || !hasVal
+                : !hasVal;
+              const borderLeft = confirmed ? `3px solid ${extractedBorder}` : needsAttention ? `3px solid ${orangeBorder}` : `3px solid ${border}`;
+              const isFirstGap = f.key === step2Fields.firstGapKey;
+              return (
+                <label key={f.key} style={{ display: 'block', marginBottom: 14 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: navy, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {f.label}
+                    {confirmed ? (
+                      <span style={{ color: primaryCta, fontSize: 12 }} aria-hidden="true">
+                        ✓
+                      </span>
+                    ) : null}
+                  </span>
+                  {f.type === 'payer' ? (
+                    <input
+                      ref={isFirstGap ? firstGapRef : undefined}
+                      list="payer-suggestions"
+                      value={intake.payer}
+                      onChange={(e) => setIntake((s) => ({ ...s, payer: e.target.value }))}
+                      placeholder="Start typing…"
+                      title={fieldConfidence.payer === 'low' ? VERIFY_TOOLTIP : undefined}
+                      style={{
+                        ...inputBase,
+                        border: needsAttention ? `1px solid ${orangeBorder}` : `1px solid ${border}`,
+                        borderLeft,
+                        backgroundColor: needsAttention ? orangeBg : cardBg,
+                      }}
+                    />
+                  ) : (
+                    <input
+                      ref={isFirstGap ? firstGapRef : undefined}
+                      type={f.type === 'date' ? 'date' : 'text'}
+                      value={intake[f.key]}
+                      onChange={(e) => setIntake((s) => ({ ...s, [f.key]: e.target.value }))}
+                      title={fcKey && fieldConfidence[fcKey] === 'low' ? VERIFY_TOOLTIP : undefined}
+                      style={{
+                        ...inputBase,
+                        border: needsAttention ? `1px solid ${orangeBorder}` : `1px solid ${border}`,
+                        borderLeft,
+                        backgroundColor: needsAttention ? orangeBg : cardBg,
+                      }}
+                    />
+                  )}
+                </label>
+              );
+            })}
             <datalist id="payer-suggestions">
               {PAYER_SUGGESTIONS.map((p) => (
                 <option key={p} value={p} />
               ))}
             </datalist>
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
-              Patient name <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
-            </span>
-            <input
-              value={intake.patientName}
-              onChange={(e) => {
-                setFieldErrors((f) => ({ ...f, patientName: '' }));
-                setIntake((s) => ({ ...s, patientName: e.target.value }));
+            <button
+              type="button"
+              onClick={() => advanceSingle(2)}
+              style={ctaButton(false, false, '')}
+              onMouseEnter={(e) => {
+                e.target.style.background = primaryCtaHover;
               }}
-              placeholder="Jane Doe"
-              style={{
-                ...inputBase,
-                border: fieldErrors.patientName ? '1px solid #dc2626' : `1px solid ${border}`,
-              }}
-            />
-            {fieldErrors.patientName ? (
-              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.patientName}</div>
-            ) : null}
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
-              Provider or practice name <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
-            </span>
-            <input
-              value={intake.providerName}
-              onChange={(e) => {
-                setFieldErrors((f) => ({ ...f, providerName: '' }));
-                setIntake((s) => ({ ...s, providerName: e.target.value }));
-              }}
-              placeholder="e.g. Riverside Medical Group"
-              style={{
-                ...inputBase,
-                border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}`,
-              }}
-            />
-            {fieldErrors.providerName ? (
-              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerName}</div>
-            ) : null}
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
-              Provider NPI <span style={{ color: '#dc2626' }} aria-hidden="true">*</span>
-            </span>
-            <input
-              value={intake.providerNpi}
-              onChange={(e) => {
-                setFieldErrors((f) => ({ ...f, providerNpi: '' }));
-                setIntake((s) => ({ ...s, providerNpi: e.target.value }));
-              }}
-              placeholder="10-digit NPI"
-              style={{
-                ...inputBase,
-                border: fieldErrors.providerNpi ? '1px solid #dc2626' : `1px solid ${border}`,
-              }}
-            />
-            {fieldErrors.providerNpi ? (
-              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerNpi}</div>
-            ) : null}
-          </label>
-          <label style={{ display: 'block' }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Plan type</span>
-            <select
-              value={intake.planType}
-              onChange={(e) => setIntake((s) => ({ ...s, planType: e.target.value }))}
-              style={{ ...inputBase, border: `1px solid ${border}` }}
-            >
-              <option value="Commercial">Commercial</option>
-              <option value="Medicare">Medicare</option>
-              <option value="Medicaid">Medicaid</option>
-            </select>
-          </label>
-        </fieldset>
-
-        <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <legend style={{ fontWeight: 800, color: navy, padding: '0 8px' }}>Denial information</legend>
-          <CodeMultiInput
-            id="carc-codes"
-            label="CARC code(s)"
-            values={intake.carcCodes}
-            onChange={(v) => setIntake((s) => ({ ...s, carcCodes: v }))}
-            placeholder="e.g. 50 — Enter"
-            lowConfidence={fieldConfidence.carcCodes === 'low'}
-          />
-          <CodeMultiInput
-            id="rarc-codes"
-            label="RARC / remark code(s)"
-            values={intake.rarcCodes}
-            onChange={(v) => setIntake((s) => ({ ...s, rarcCodes: v }))}
-            placeholder="e.g. N115 — Enter"
-            lowConfidence={fieldConfidence.rarcCodes === 'low'}
-          />
-          {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
-            <div
-              style={{
-                background: '#f8fafc',
-                borderRadius: 8,
-                padding: 12,
-                marginBottom: 12,
-                fontSize: 14,
-                border: '1px solid #e2e8f0',
+              onMouseLeave={(e) => {
+                e.target.style.background = primaryCta;
               }}
             >
-              <div style={{ fontWeight: 800, color: navy, marginBottom: 6 }}>Detected Denial Type: {categoryInfo.category}</div>
-              <div style={{ color: '#475569' }}>Explanation: {categoryInfo.explanation}</div>
-            </div>
-          )}
-          {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
-            <div
-              style={{
-                background: '#fefce8',
-                border: '1px solid #fde047',
-                borderRadius: 8,
-                padding: 12,
-                marginBottom: 4,
-              }}
-            >
-              <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>Appeal Strategy Detected:</div>
-              <ul style={{ margin: 0, paddingLeft: 20, color: '#422006' }}>
-                {strategies.map((st) => (
-                  <li key={st} style={{ marginBottom: 4 }}>
-                    {st}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </fieldset>
-
-        <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <legend style={{ fontWeight: 800, color: navy, padding: '0 8px' }}>Billing information</legend>
-          <CodeMultiInput
-            id="cpt-codes"
-            label="CPT / HCPCS"
-            values={intake.cptCodes}
-            onChange={(v) => setIntake((s) => ({ ...s, cptCodes: v }))}
-            placeholder="Code — Enter"
-            lowConfidence={fieldConfidence.cptCodes === 'low'}
-          />
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Modifiers</span>
-            <input
-              value={intake.modifiers}
-              onChange={(e) => setIntake((s) => ({ ...s, modifiers: e.target.value }))}
-              placeholder="-25, -59, -24"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
-            />
-          </label>
-          <CodeMultiInput
-            id="icd-codes"
-            label="ICD-10 code(s)"
-            values={intake.icdCodes}
-            onChange={(v) => setIntake((s) => ({ ...s, icdCodes: v }))}
-            placeholder="ICD-10 — Enter"
-            lowConfidence={fieldConfidence.icdCodes === 'low'}
-            highlightCodes={intelligence?.coding?.weakIcdCodes || []}
-          />
-          <CodingIntelligencePanel
-            analysis={intelligence}
-            loading={intelligenceLoading}
-            onApplyModifier={appendModifierToIntake}
-          />
-        </fieldset>
-
-        <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <legend style={{ fontWeight: 800, color: navy, padding: '0 8px' }}>Financials</legend>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Billed amount ($)</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={intake.billedAmount}
-              onChange={(e) => setIntake((s) => ({ ...s, billedAmount: e.target.value }))}
-              title={fieldConfidence.billedAmount === 'low' ? VERIFY_TOOLTIP : undefined}
-              style={{
-                ...inputBase,
-                border: fieldBorder(fieldConfidence, 'billedAmount'),
-                backgroundColor: fieldBg(fieldConfidence, 'billedAmount'),
-              }}
-            />
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Paid amount ($)</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={intake.paidAmount}
-              onChange={(e) => setIntake((s) => ({ ...s, paidAmount: e.target.value }))}
-              title={fieldConfidence.paidAmount === 'low' ? VERIFY_TOOLTIP : undefined}
-              style={{
-                ...inputBase,
-                border: fieldBorder(fieldConfidence, 'paidAmount'),
-                backgroundColor: fieldBg(fieldConfidence, 'paidAmount'),
-              }}
-            />
-          </label>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#047857' }}>
-            Estimated Recovery Opportunity: ${recoveryAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Looks good — next
+            </button>
           </div>
-        </fieldset>
+        )}
 
-        <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <legend style={{ fontWeight: 800, color: navy, padding: '0 8px' }}>Clinical snapshot</legend>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Treatment provided</span>
-            <input
-              value={intake.treatmentProvided}
-              onChange={(e) => setIntake((s) => ({ ...s, treatmentProvided: e.target.value }))}
-              placeholder="Brief (e.g. PT session, infusion)"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
-            />
-          </label>
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Medical necessity</span>
-            <input
-              value={intake.medicalNecessity}
-              onChange={(e) => setIntake((s) => ({ ...s, medicalNecessity: e.target.value }))}
-              placeholder="Why care was appropriate"
-              style={{ ...inputBase, border: `1px solid ${border}` }}
-            />
-          </label>
-          <label style={{ display: 'block' }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Special circumstances (optional)</span>
-            <input
-              value={intake.specialCircumstances}
-              onChange={(e) => setIntake((s) => ({ ...s, specialCircumstances: e.target.value }))}
-              placeholder="Auth delays, member transition, etc."
-              style={{ ...inputBase, border: `1px solid ${border}` }}
-            />
-          </label>
-        </fieldset>
+        {singleStep === 2 && (
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 3 — Confirm details</h1>
+            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
+              Only fields that still need you are shown. Provider profile values are filled automatically when saved on your account.
+            </p>
+            <div style={{ display: 'grid', gap: 14 }}>
+              {showStep3Patient && (
+                <label style={{ display: 'block' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+                    Patient name <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
+                  </span>
+                  <input
+                    value={intake.patientName}
+                    onChange={(e) => {
+                      setFieldErrors((fe) => ({ ...fe, patientName: '' }));
+                      setIntake((s) => ({ ...s, patientName: e.target.value }));
+                    }}
+                    placeholder="Jane Doe"
+                    style={{ ...inputBase, border: fieldErrors.patientName ? '1px solid #dc2626' : `1px solid ${border}` }}
+                  />
+                  {fieldErrors.patientName ? (
+                    <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.patientName}</div>
+                  ) : null}
+                </label>
+              )}
+              {showStep3Carc && (
+                <CodeMultiInput
+                  id="carc-codes"
+                  label="CARC code(s)"
+                  values={intake.carcCodes}
+                  onChange={(v) => setIntake((s) => ({ ...s, carcCodes: v }))}
+                  placeholder="e.g. 50 — Enter"
+                  lowConfidence={fieldConfidence.carcCodes === 'low'}
+                />
+              )}
+              {showStep3Rarc && (
+                <CodeMultiInput
+                  id="rarc-codes"
+                  label="RARC / remark code(s)"
+                  values={intake.rarcCodes}
+                  onChange={(v) => setIntake((s) => ({ ...s, rarcCodes: v }))}
+                  placeholder="e.g. N115 — Enter"
+                  lowConfidence={fieldConfidence.rarcCodes === 'low'}
+                />
+              )}
+              {showStep3Cpt && (
+                <CodeMultiInput
+                  id="cpt-codes"
+                  label="CPT / HCPCS"
+                  values={intake.cptCodes}
+                  onChange={(v) => setIntake((s) => ({ ...s, cptCodes: v }))}
+                  placeholder="Code — Enter"
+                  lowConfidence={fieldConfidence.cptCodes === 'low'}
+                />
+              )}
+              {showStep3Mod && (
+                <label style={{ display: 'block' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Modifiers</span>
+                  <input
+                    value={intake.modifiers}
+                    onChange={(e) => setIntake((s) => ({ ...s, modifiers: e.target.value }))}
+                    placeholder="-25, -59, -24"
+                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                  />
+                </label>
+              )}
+              {showStep3Icd && (
+                <CodeMultiInput
+                  id="icd-codes"
+                  label="ICD-10 code(s)"
+                  values={intake.icdCodes}
+                  onChange={(v) => setIntake((s) => ({ ...s, icdCodes: v }))}
+                  placeholder="ICD-10 — Enter"
+                  lowConfidence={fieldConfidence.icdCodes === 'low'}
+                  highlightCodes={intelligence?.coding?.weakIcdCodes || []}
+                />
+              )}
+              {showStep3Billed && (
+                <label style={{ display: 'block' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Billed amount ($)</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={intake.billedAmount}
+                    onChange={(e) => setIntake((s) => ({ ...s, billedAmount: e.target.value }))}
+                    title={fieldConfidence.billedAmount === 'low' ? VERIFY_TOOLTIP : undefined}
+                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                  />
+                </label>
+              )}
+              {showStep3Paid && (
+                <label style={{ display: 'block' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Paid amount ($)</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={intake.paidAmount}
+                    onChange={(e) => setIntake((s) => ({ ...s, paidAmount: e.target.value }))}
+                    title={fieldConfidence.paidAmount === 'low' ? VERIFY_TOOLTIP : undefined}
+                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                  />
+                </label>
+              )}
+              {(showStep3ProviderName || showStep3ProviderNpi || showStep3Addr || showStep3Phone || showStep3Fax) && (
+                <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 14, margin: 0 }}>
+                  <legend style={{ fontWeight: 800, color: navy, padding: '0 8px', fontSize: 13 }}>Provider (from profile or enter missing)</legend>
+                  {showStep3ProviderName && (
+                    <label style={{ display: 'block', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name *</span>
+                      <input
+                        value={intake.providerName}
+                        onChange={(e) => {
+                          setFieldErrors((fe) => ({ ...fe, providerName: '' }));
+                          setIntake((s) => ({ ...s, providerName: e.target.value }));
+                        }}
+                        style={{ ...inputBase, border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}` }}
+                      />
+                      {fieldErrors.providerName ? (
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerName}</div>
+                      ) : null}
+                    </label>
+                  )}
+                  {showStep3ProviderNpi && (
+                    <label style={{ display: 'block', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider NPI *</span>
+                      <input
+                        value={intake.providerNpi}
+                        onChange={(e) => {
+                          setFieldErrors((fe) => ({ ...fe, providerNpi: '' }));
+                          setIntake((s) => ({ ...s, providerNpi: e.target.value }));
+                        }}
+                        style={{ ...inputBase, border: fieldErrors.providerNpi ? '1px solid #dc2626' : `1px solid ${border}` }}
+                      />
+                      {fieldErrors.providerNpi ? (
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerNpi}</div>
+                      ) : null}
+                    </label>
+                  )}
+                  {showStep3Addr && (
+                    <label style={{ display: 'block', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider address</span>
+                      <input
+                        value={intake.providerAddress || ''}
+                        onChange={(e) => setIntake((s) => ({ ...s, providerAddress: e.target.value }))}
+                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                      />
+                    </label>
+                  )}
+                  {showStep3Phone && (
+                    <label style={{ display: 'block', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider phone</span>
+                      <input
+                        value={intake.providerPhone || ''}
+                        onChange={(e) => setIntake((s) => ({ ...s, providerPhone: e.target.value }))}
+                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                      />
+                    </label>
+                  )}
+                  {showStep3Fax && (
+                    <label style={{ display: 'block' }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider fax</span>
+                      <input
+                        value={intake.providerFax || ''}
+                        onChange={(e) => setIntake((s) => ({ ...s, providerFax: e.target.value }))}
+                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                      />
+                    </label>
+                  )}
+                </fieldset>
+              )}
+            </div>
 
-        {err && <p style={{ color: '#b91c1c', fontSize: 14, fontWeight: 600 }}>{err}</p>}
-        <button
-          type="submit"
-          disabled={loading || extracting}
-          style={{
-            width: '100%',
-            padding: 16,
-            background: loading || extracting ? '#94a3b8' : navy,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 10,
-            fontWeight: 800,
-            fontSize: 16,
-            cursor: loading || extracting ? 'not-allowed' : 'pointer',
-            marginTop: 8,
-          }}
-        >
-          {loading ? 'Generating…' : extracting ? 'Please wait…' : 'Generate Submission-Ready Appeal'}
-        </button>
-      </form>
+            <details
+              open={codingAccordionOpen}
+              onToggle={(e) => setCodingAccordionOpen(e.target.open)}
+              style={{ marginTop: 18, border: `1px solid ${border}`, borderRadius: 10, padding: '4px 12px', background: pageBg }}
+            >
+              <summary style={{ cursor: 'pointer', fontWeight: 800, color: navy, padding: '10px 4px', listStyle: 'none' }}>
+                Coding insights (optional)
+              </summary>
+              <div style={{ paddingBottom: 12 }}>
+                {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
+                  <div
+                    style={{
+                      background: pageBg,
+                      borderRadius: 8,
+                      padding: 12,
+                      marginBottom: 12,
+                      fontSize: 14,
+                      border: `1px solid ${border}`,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: navy, marginBottom: 6 }}>Detected denial type: {categoryInfo.category}</div>
+                    <div style={{ color: '#475569' }}>{categoryInfo.explanation}</div>
+                  </div>
+                )}
+                {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
+                  <div
+                    style={{
+                      background: '#fef9c3',
+                      border: `1px solid ${disclaimerBorder}`,
+                      borderRadius: 8,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: navy, marginBottom: 8 }}>Appeal strategy hints</div>
+                    <ul style={{ margin: 0, paddingLeft: 20, color: '#422006' }}>
+                      {strategies.map((st) => (
+                        <li key={st} style={{ marginBottom: 4 }}>
+                          {st}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <CodingIntelligencePanel analysis={intelligence} loading={intelligenceLoading} onApplyModifier={appendModifierToIntake} />
+              </div>
+            </details>
 
-      <WorkflowSteps />
+            {err && <p style={{ color: '#c2410c', fontSize: 14, fontWeight: 600, marginTop: 12 }}>{err}</p>}
+            <button
+              type="button"
+              onClick={() => advanceSingle(3)}
+              style={{ ...ctaButton(false, false, ''), marginTop: 16 }}
+              onMouseEnter={(e) => {
+                e.target.style.background = primaryCtaHover;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = primaryCta;
+              }}
+            >
+              Next — review & generate
+            </button>
+          </div>
+        )}
+
+        {singleStep === 3 && (
+          <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}`, textAlign: 'center' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 16 }}>Step 4 — Generate</h1>
+            <div
+              style={{
+                textAlign: 'left',
+                background: pageBg,
+                borderRadius: 10,
+                padding: 16,
+                marginBottom: 20,
+                fontSize: 14,
+                color: '#334155',
+                lineHeight: 1.5,
+                border: `1px solid ${border}`,
+              }}
+            >
+              <div style={{ fontWeight: 800, marginBottom: 8, color: navy }}>Claim summary</div>
+              <div>
+                <strong>Claim #:</strong> {intake.claimNumber || '—'}
+              </div>
+              <div>
+                <strong>Date of service:</strong> {intake.dateOfService || '—'}
+              </div>
+              <div>
+                <strong>Payer:</strong> {intake.payer || '—'}
+              </div>
+              <div>
+                <strong>Patient:</strong> {intake.patientName || '—'}
+              </div>
+              <div>
+                <strong>Provider:</strong> {intake.providerName || '—'} (NPI {intake.providerNpi || '—'})
+              </div>
+              <div>
+                <strong>CARC / RARC:</strong> {(intake.carcCodes || []).join(', ') || '—'} / {(intake.rarcCodes || []).join(', ') || '—'}
+              </div>
+              <div>
+                <strong>CPT / ICD:</strong> {(intake.cptCodes || []).join(', ') || '—'} / {(intake.icdCodes || []).join(', ') || '—'}
+              </div>
+              <div>
+                <strong>Billed / paid:</strong> ${intake.billedAmount || '0'} / ${intake.paidAmount || '0'}
+              </div>
+              <div style={{ marginTop: 8, fontWeight: 700, color: '#15803d' }}>
+                Est. recovery: ${recoveryAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            {fieldErrors.patientName ? (
+              <p style={{ color: '#c2410c', fontSize: 14, marginBottom: 12 }}>{fieldErrors.patientName}</p>
+            ) : null}
+            <button
+              type="button"
+              disabled={loading || extracting}
+              onClick={submit}
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                margin: '0 auto',
+                display: 'block',
+                padding: '18px 24px',
+                background: loading || extracting ? '#94a3b8' : primaryCta,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 12,
+                fontWeight: 800,
+                fontSize: 17,
+                cursor: loading || extracting ? 'not-allowed' : 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                if (loading || extracting) return;
+                e.target.style.background = primaryCtaHover;
+              }}
+              onMouseLeave={(e) => {
+                if (loading || extracting) return;
+                e.target.style.background = primaryCta;
+              }}
+            >
+              {loading ? 'Generating…' : 'Generate submission-ready appeal'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

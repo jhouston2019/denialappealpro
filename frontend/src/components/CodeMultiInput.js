@@ -37,6 +37,7 @@ export default function CodeMultiInput({
   const warnSet = new Set((highlightCodes || []).map(normalizeCodeKey));
 
   const verifyTitle = lowConfidence ? 'Please verify this field' : undefined;
+  const confirmedExtracted = values.length > 0 && !lowConfidence && !values.some((v) => warnSet.has(normalizeCodeKey(v)));
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -54,10 +55,11 @@ export default function CodeMultiInput({
           padding: '8px 10px',
           border:
             lowConfidence || (values.some((v) => warnSet.has(normalizeCodeKey(v))) && warnSet.size > 0)
-              ? '2px solid #f59e0b'
+              ? '2px solid #fb923c'
               : border,
+          borderLeft: confirmedExtracted ? '3px solid #bbf7d0' : undefined,
           borderRadius: 8,
-          background: lowConfidence ? '#fffbeb' : '#fff',
+          background: lowConfidence ? '#fff7ed' : '#fff',
           minHeight: 44,
         }}
       >

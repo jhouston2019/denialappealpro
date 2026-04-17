@@ -247,10 +247,10 @@ export default function DenialDocumentDropZone({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       style={{
-        border: `2px dashed ${dragOver ? '#2563eb' : '#cbd5e1'}`,
+        border: `2px dashed ${dragOver ? '#22c55e' : '#cbd5e1'}`,
         borderRadius: 12,
         padding: 20,
-        background: dragOver ? '#eff6ff' : '#f8fafc',
+        background: dragOver ? '#f0fdf4' : '#ffffff',
         transition: 'border-color 0.15s ease, background 0.15s ease',
         boxSizing: 'border-box',
         ...outerStyle,

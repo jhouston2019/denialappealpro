@@ -37,7 +37,7 @@ const PageLoader = () => (
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#f5f5f5'
+    background: '#f8fafc'
   }}>
     <div style={{ textAlign: 'center' }}>
       <div style={{
@@ -250,16 +250,16 @@ const Navbar = ({ transparent }) => {
               padding: '7px 18px',
               fontSize: '14px',
               fontWeight: '600',
-              color: '#0f172a',
-              background: 'white',
+              color: '#fff',
+              background: '#22c55e',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
             }}
-            onMouseEnter={e => { e.target.style.background = '#e2e8f0'; }}
-            onMouseLeave={e => { e.target.style.background = 'white'; }}
+            onMouseEnter={e => { e.target.style.background = '#16a34a'; }}
+            onMouseLeave={e => { e.target.style.background = '#22c55e'; }}
           >
             New Appeal →
           </button>
@@ -345,8 +345,8 @@ const Navbar = ({ transparent }) => {
               padding: '10px 18px',
               fontSize: '15px',
               fontWeight: '600',
-              color: '#0f172a',
-              background: 'white',
+              color: '#fff',
+              background: '#22c55e',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',

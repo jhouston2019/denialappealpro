@@ -21,6 +21,18 @@ function isPdfFile(file) {
   return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
 }
 
+function formatFileSize(bytes) {
+  if (bytes == null || Number.isNaN(bytes)) return '';
+  const n = Number(bytes);
+  if (n === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(sizes.length - 1, Math.floor(Math.log(n) / Math.log(k)));
+  const val = n / k ** i;
+  const dec = i > 0 ? 1 : 0;
+  return `${parseFloat(val.toFixed(dec))} ${sizes[i]}`;
+}
+
 /**
  * Drop zone + file input for denial letter / EOB uploads.
  * Highlights while a file is dragged over the zone.
@@ -44,6 +56,11 @@ export default function DenialDocumentDropZone({
   onUploadingChange,
   /** When set, plain-text clipboard paste is routed here (e.g. switch to paste mode). */
   onPasteText,
+  /** When set, show file-received confirmation (green border, ✓, name, size, remove). */
+  confirmedFile = null,
+  onRemoveFile,
+  /** Pulsing border while parent runs extraction */
+  extracting = false,
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -128,7 +145,7 @@ export default function DenialDocumentDropZone({
     if (pasteFeedbackTimerRef.current) clearTimeout(pasteFeedbackTimerRef.current);
   }, []);
 
-  const busy = disabled || uploading;
+  const busy = disabled || uploading || extracting;
 
   useEffect(() => {
     if (busy) return undefined;
@@ -204,7 +221,7 @@ export default function DenialDocumentDropZone({
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (disabled || uploading) return;
+    if (disabled || uploading || extracting) return;
     depth.current += 1;
     setDragOver(true);
   };
@@ -228,7 +245,7 @@ export default function DenialDocumentDropZone({
     e.preventDefault();
     e.stopPropagation();
     resetDepth();
-    if (disabled || uploading) return;
+    if (disabled || uploading || extracting) return;
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     if (!fileMatchesAccept(file, accept)) return;
@@ -240,6 +257,11 @@ export default function DenialDocumentDropZone({
     if (file) handleChosenFile(file);
   };
 
+  const confirmed = confirmedFile && confirmedFile.name;
+  const baseBorder = confirmed
+    ? '2px solid #22c55e'
+    : `2px dashed ${dragOver ? '#22c55e' : '#cbd5e1'}`;
+
   return (
     <div
       onDragEnter={handleDragEnter}
@@ -247,15 +269,22 @@ export default function DenialDocumentDropZone({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       style={{
-        border: `2px dashed ${dragOver ? '#22c55e' : '#cbd5e1'}`,
+        border: baseBorder,
         borderRadius: 12,
         padding: 20,
-        background: dragOver ? '#f0fdf4' : '#ffffff',
-        transition: 'border-color 0.15s ease, background 0.15s ease',
+        background: confirmed || dragOver ? '#f0fdf4' : '#ffffff',
+        transition: 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease',
         boxSizing: 'border-box',
+        animation: extracting ? 'dapZonePulse 1.2s ease-in-out infinite' : undefined,
         ...outerStyle,
       }}
     >
+      <style>{`
+        @keyframes dapZonePulse {
+          0%, 100% { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25); }
+          50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.45); }
+        }
+      `}</style>
       <input
         id={inputId}
         type="file"
@@ -264,17 +293,66 @@ export default function DenialDocumentDropZone({
         onChange={handleInputChange}
         style={{ display: 'none' }}
       />
-      <label
-        htmlFor={inputId}
-        style={{
-          display: 'block',
-          cursor: busy ? 'not-allowed' : 'pointer',
-          opacity: busy ? 0.65 : 1,
-          margin: 0,
-        }}
-      >
-        {children}
-      </label>
+      {confirmed ? (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '8px 4px',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 28,
+              lineHeight: 1,
+              color: '#22c55e',
+              marginBottom: 10,
+            }}
+            aria-hidden="true"
+          >
+            ✓
+          </div>
+          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 15, wordBreak: 'break-word' }}>
+            {confirmedFile.name} · {formatFileSize(confirmedFile.size)}
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemoveFile?.();
+            }}
+            style={{
+              marginTop: 14,
+              background: 'none',
+              border: 'none',
+              cursor: busy ? 'not-allowed' : 'pointer',
+              color: '#64748b',
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'underline',
+              padding: '8px 12px',
+            }}
+          >
+            × Remove
+          </button>
+          <p style={{ margin: '12px 0 0', fontSize: 12, color: '#94a3b8' }}>
+            Drop another file or use Remove to start over
+          </p>
+        </div>
+      ) : (
+        <label
+          htmlFor={inputId}
+          style={{
+            display: 'block',
+            cursor: busy ? 'not-allowed' : 'pointer',
+            opacity: busy ? 0.65 : 1,
+            margin: 0,
+          }}
+        >
+          {children}
+        </label>
+      )}
       {pasteDetected && (
         <div
           style={{

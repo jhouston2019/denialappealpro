@@ -46,6 +46,9 @@ const disclaimerBorder = '#fde047';
 
 const VERIFY_TOOLTIP = 'Please verify this field';
 
+const STEP1_EXTRACTION_FAILED_MSG =
+  'Extraction failed — please check your file and try again.';
+
 const backBtnStyle = {
   marginBottom: 16,
   background: 'none',
@@ -588,6 +591,9 @@ export default function OnboardingStart() {
     }
   };
 
+  /**
+   * @returns {Promise<boolean>} true if caller should advance to Step 2
+   */
   const runPdfExtract = async (f) => {
     setFile(f);
     setExtractedMeta(null);
@@ -602,7 +608,7 @@ export default function OnboardingStart() {
       });
       setFieldConfidence({});
       mergeProfileSnapshotIntoIntake();
-      return;
+      return true;
     }
 
     setExtracting(true);
@@ -622,16 +628,20 @@ export default function OnboardingStart() {
         payer_name: data.payer_name,
         warning: data.warning,
       });
+      return true;
     } catch (ex) {
-      const msg = ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction failed';
-      setErr(msg);
-      setExtractedMeta({ kind: 'error', message: msg });
+      setErr(STEP1_EXTRACTION_FAILED_MSG);
+      setExtractedMeta(null);
       setFieldConfidence({});
+      return false;
     } finally {
       setExtracting(false);
     }
   };
 
+  /**
+   * @returns {Promise<boolean>} true if caller should advance to Step 2
+   */
   const runPasteExtract = async () => {
     const t = pasteText.trim();
     setExtracting(true);
@@ -650,13 +660,12 @@ export default function OnboardingStart() {
         payer_name: data.payer_name,
         warning: data.warning,
       });
-    } catch (ex) {
-      const msg =
-        ex.response?.data?.message || ex.response?.data?.error || ex.message || 'Extraction incomplete';
-      setExtractedMeta({
-        kind: 'text_error',
-        message: `${msg} You can still generate your appeal without editing fields.`,
-      });
+      return true;
+    } catch {
+      setErr(STEP1_EXTRACTION_FAILED_MSG);
+      setExtractedMeta(null);
+      setFieldConfidence({});
+      return false;
     } finally {
       setExtracting(false);
     }
@@ -871,8 +880,8 @@ export default function OnboardingStart() {
         setErr('Choose or drop a denial letter or EOB file first.');
         return;
       }
-      await runPdfExtract(file);
-      advanceSingle(1);
+      const ok = await runPdfExtract(file);
+      if (ok) advanceSingle(1);
       return;
     }
     if (mode === 'paste') {
@@ -880,10 +889,17 @@ export default function OnboardingStart() {
         setErr('Paste a bit more denial text so we can extract details.');
         return;
       }
-      await runPasteExtract();
-      advanceSingle(1);
+      const ok = await runPasteExtract();
+      if (ok) advanceSingle(1);
     }
   };
+
+  const pasteTextStats = useMemo(() => {
+    const t = pasteText.trim();
+    const words = t ? t.split(/\s+/).filter(Boolean).length : 0;
+    const chars = t.length;
+    return { words, chars, ready: chars > 20 };
+  }, [pasteText]);
 
   if (!mode) {
     return (
@@ -1420,7 +1436,15 @@ export default function OnboardingStart() {
             {mode === 'upload' && (
               <div style={{ marginBottom: 8 }}>
                 <DenialDocumentDropZone
+                  key={file ? `dz-${file.name}-${file.size}` : 'dz-empty'}
                   accept=".pdf,.png,.jpg,.jpeg"
+                  confirmedFile={file}
+                  extracting={extracting && singleStep === 0}
+                  onRemoveFile={() => {
+                    setFile(null);
+                    setExtractedMeta(null);
+                    setErr('');
+                  }}
                   onFile={(f) => {
                     setFile(f);
                     setExtractedMeta(null);
@@ -1432,6 +1456,7 @@ export default function OnboardingStart() {
                     setMode('paste');
                     setPasteText(text);
                     setFile(null);
+                    setErr('');
                   }}
                 >
                   <div style={{ textAlign: 'center', padding: '8px 4px' }}>
@@ -1451,7 +1476,11 @@ export default function OnboardingStart() {
                 </label>
                 <textarea
                   value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
+                  onChange={(e) => {
+                    setPasteText(e.target.value);
+                    if (err) setErr('');
+                  }}
+                  disabled={extracting}
                   placeholder="Paste from your payer portal or billing system…"
                   rows={10}
                   style={{
@@ -1460,46 +1489,138 @@ export default function OnboardingStart() {
                     padding: 12,
                     borderRadius: 8,
                     fontSize: 14,
-                    border: `1px solid ${border}`,
+                    border: pasteTextStats.ready ? '2px solid #22c55e' : `1px solid ${border}`,
                     fontFamily: 'inherit',
                     lineHeight: 1.45,
+                    transition: 'border-color 0.2s ease',
+                    outline: 'none',
+                    minHeight: 160,
                   }}
                 />
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    fontSize: 13,
+                    color: pasteTextStats.ready ? '#15803d' : TEXT_MUTED_ON_SLATE,
+                    fontWeight: pasteTextStats.ready ? 600 : 400,
+                  }}
+                >
+                  {pasteTextStats.words} word{pasteTextStats.words === 1 ? '' : 's'}
+                  {pasteTextStats.ready ? ' — ready to extract' : ' — add more text (20+ characters)'}
+                  <span style={{ color: TEXT_MUTED_ON_SLATE, fontWeight: 400 }}>
+                    {' '}
+                    · {pasteTextStats.chars} character{pasteTextStats.chars === 1 ? '' : 's'}
+                  </span>
+                </p>
+                {extracting && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      borderRadius: 10,
+                      padding: 12,
+                      border: '2px solid rgba(34, 197, 94, 0.45)',
+                      animation: 'dapZonePulsePaste 1.2s ease-in-out infinite',
+                    }}
+                  >
+                    <style>{`
+                      @keyframes dapZonePulsePaste {
+                        0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.2); }
+                        50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25); }
+                      }
+                    `}</style>
+                    <span style={{ fontSize: 13, color: '#15803d', fontWeight: 600 }}>Extracting claim details…</span>
+                  </div>
+                )}
               </div>
             )}
-            {extracting && (
-              <p style={{ marginTop: 14, color: navy, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <style>{`@keyframes dapSpin { to { transform: rotate(360deg); } }`}</style>
-                <span
+            {err && (
+              <div style={{ marginTop: 14 }}>
+                <p
                   style={{
-                    display: 'inline-block',
-                    width: 18,
-                    height: 18,
-                    border: '2px solid #bbf7d0',
-                    borderTopColor: primaryCta,
-                    borderRadius: '50%',
-                    animation: 'dapSpin 0.8s linear infinite',
+                    color: err === STEP1_EXTRACTION_FAILED_MSG ? '#ef4444' : '#c2410c',
+                    fontWeight: 600,
+                    margin: 0,
+                    fontSize: 14,
+                    lineHeight: 1.45,
                   }}
-                />
-                Extracting claim details…
-              </p>
+                >
+                  {err}
+                </p>
+                {err === STEP1_EXTRACTION_FAILED_MSG && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErr('');
+                      setExtractedMeta(null);
+                    }}
+                    style={{
+                      marginTop: 10,
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: primaryCta,
+                      fontWeight: 700,
+                      fontSize: 14,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Try again
+                  </button>
+                )}
+              </div>
             )}
-            {err && <p style={{ color: '#c2410c', fontWeight: 600, marginTop: 12, fontSize: 14 }}>{err}</p>}
+            <style>{`@keyframes dapBtnSpin { to { transform: rotate(360deg); } }`}</style>
             <button
               type="button"
               disabled={extracting}
               onClick={onSingleStep1Next}
-              style={ctaButton(extracting, false, '')}
+              style={{
+                width: '100%',
+                padding: 16,
+                background: extracting ? primaryCta : primaryCta,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                fontWeight: 800,
+                fontSize: 16,
+                cursor: extracting ? 'wait' : 'pointer',
+                marginTop: 8,
+                transition: 'opacity 0.15s ease, background 0.15s ease',
+                opacity: extracting ? 0.92 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+              }}
               onMouseEnter={(e) => {
                 if (extracting) return;
-                e.target.style.background = primaryCtaHover;
+                e.currentTarget.style.background = primaryCtaHover;
               }}
               onMouseLeave={(e) => {
                 if (extracting) return;
-                e.target.style.background = primaryCta;
+                e.currentTarget.style.background = primaryCta;
               }}
             >
-              {extracting ? 'Please wait…' : 'Next — extract & review'}
+              {extracting ? (
+                <>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 18,
+                      height: 18,
+                      border: '2px solid rgba(255,255,255,0.45)',
+                      borderTopColor: '#fff',
+                      borderRadius: '50%',
+                      animation: 'dapBtnSpin 0.75s linear infinite',
+                      flexShrink: 0,
+                    }}
+                  />
+                  Extracting claim details…
+                </>
+              ) : (
+                'Next — extract & review'
+              )}
             </button>
           </div>
         )}

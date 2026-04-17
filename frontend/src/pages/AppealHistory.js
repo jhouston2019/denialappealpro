@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE } from '../theme/appShell';
 
 function AppealHistory() {
   const navigate = useNavigate();
@@ -24,13 +25,21 @@ function AppealHistory() {
 
   if (loading) {
     return (
-      <div className="history-container" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+      <div
+        style={{
+          textAlign: 'center',
+          padding: '4rem 2rem',
+          background: PAGE_BG_SLATE,
+          minHeight: 'calc(100vh - 60px)',
+          color: TEXT_ON_SLATE,
+        }}
+      >
         <div style={{
           display: 'inline-block',
           width: '50px',
           height: '50px',
-          border: '4px solid #f3f3f3',
-          borderTop: '4px solid #1e3a8a',
+          border: '4px solid rgba(148, 163, 184, 0.35)',
+          borderTop: '4px solid #22c55e',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite',
           marginBottom: '1rem'
@@ -41,12 +50,13 @@ function AppealHistory() {
             100% { transform: rotate(360deg); }
           }
         `}</style>
-        <p style={{ fontSize: '18px', color: '#666' }}>Loading appeal history...</p>
+        <p style={{ fontSize: '18px', color: TEXT_ON_SLATE }}>Loading appeal history...</p>
       </div>
     );
   }
 
   return (
+    <div style={{ background: PAGE_BG_SLATE, minHeight: 'calc(100vh - 60px)', padding: '2rem 1rem' }}>
     <div className="history-container">
       <h2>Appeal History</h2>
       {appeals.length === 0 ? (
@@ -74,6 +84,7 @@ function AppealHistory() {
           ))}
         </ul>
       )}
+    </div>
     </div>
   );
 }

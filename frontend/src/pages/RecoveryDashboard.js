@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
 import RecoveryClaimsTable from '../components/RecoveryClaimsTable';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 const QUEUE_LIMIT = 25;
 
@@ -75,18 +76,28 @@ export default function RecoveryDashboard() {
       : undefined;
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1200, margin: '0 auto', padding: '20px 16px 40px' }}>
+    <div
+      style={{
+        fontFamily: 'system-ui, sans-serif',
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '20px 16px 40px',
+        background: PAGE_BG_SLATE,
+        minHeight: 'calc(100vh - 60px)',
+        color: TEXT_ON_SLATE,
+      }}
+    >
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 24, color: '#0f172a' }}>Recovery dashboard</h1>
-        <p style={{ margin: '8px 0 0', fontSize: 15, color: '#475569', maxWidth: 640 }}>
+        <h1 style={{ margin: 0, fontSize: 24, color: TEXT_ON_SLATE }}>Recovery dashboard</h1>
+        <p style={{ margin: '8px 0 0', fontSize: 15, color: TEXT_MUTED_ON_SLATE, maxWidth: 640 }}>
           A simple tool to recover the most money, starting with the highest-value claims.
         </p>
-        <p style={{ margin: '10px 0 0', fontSize: 13, color: '#64748b' }}>
-          <Link to="/start" style={{ color: '#1d4ed8', fontWeight: 600 }}>
+        <p style={{ margin: '10px 0 0', fontSize: 13, color: TEXT_MUTED_ON_SLATE }}>
+          <Link to="/start" style={{ color: '#86efac', fontWeight: 600 }}>
             Upload new denial
           </Link>
           {' · '}
-          <Link to="/queue" style={{ color: '#1d4ed8', fontWeight: 600 }}>
+          <Link to="/queue" style={{ color: '#86efac', fontWeight: 600 }}>
             Batch queue
           </Link>
         </p>

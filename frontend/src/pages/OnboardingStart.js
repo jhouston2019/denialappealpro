@@ -1,6 +1,16 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
+import {
+  PAGE_BG_SLATE,
+  TEXT_ON_SLATE,
+  TEXT_MUTED_ON_SLATE,
+  BORDER_MUTED,
+  PRIMARY_GREEN,
+  PRIMARY_GREEN_HOVER,
+  DISABLED_SLATE,
+  CARD_WHITE,
+} from '../theme/appShell';
 import { useAuth } from '../context/AuthContext';
 import CodeMultiInput from '../components/CodeMultiInput';
 import CodingIntelligencePanel from '../components/CodingIntelligencePanel';
@@ -25,16 +35,26 @@ import {
 const navy = '#0f172a';
 const border = '#e2e8f0';
 const softBlue = '#eff6ff';
-const pageBg = '#f8fafc';
-const cardBg = '#ffffff';
-const primaryCta = '#22c55e';
-const primaryCtaHover = '#16a34a';
+const pageBg = PAGE_BG_SLATE;
+const cardBg = CARD_WHITE;
+const primaryCta = PRIMARY_GREEN;
+const primaryCtaHover = PRIMARY_GREEN_HOVER;
 const extractedBorder = '#bbf7d0';
 const orangeBorder = '#fb923c';
 const orangeBg = '#fff7ed';
 const disclaimerBorder = '#fde047';
 
 const VERIFY_TOOLTIP = 'Please verify this field';
+
+const backBtnStyle = {
+  marginBottom: 16,
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: TEXT_ON_SLATE,
+  fontSize: 15,
+  fontWeight: 600,
+};
 
 const SINGLE_STEPS = [
   { key: 'upload', label: 'Upload' },
@@ -189,6 +209,7 @@ export default function OnboardingStart() {
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
   const profileSnapshotRef = useRef(null);
+  const [providerProfileEmpty, setProviderProfileEmpty] = useState(false);
   const [codingAccordionOpen, setCodingAccordionOpen] = useState(false);
   const intelDebounceRef = useRef(null);
   const firstGapRef = useRef(null);
@@ -211,7 +232,10 @@ export default function OnboardingStart() {
   }, []);
 
   useEffect(() => {
-    if (!token) return undefined;
+    if (!token) {
+      setProviderProfileEmpty(false);
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -229,6 +253,7 @@ export default function OnboardingStart() {
           providerPhone: ph,
           providerFax: fx,
         };
+        setProviderProfileEmpty(!pn && !npi && !addr && !ph && !fx);
         setIntake((s) => ({
           ...s,
           ...(pn && !s.providerName?.trim() ? { providerName: pn } : {}),
@@ -238,6 +263,7 @@ export default function OnboardingStart() {
           ...(fx && !s.providerFax?.trim() ? { providerFax: fx } : {}),
         }));
       } catch {
+        if (token) setProviderProfileEmpty(true);
         /* not logged in or profile unavailable */
       }
     })();
@@ -368,6 +394,37 @@ export default function OnboardingStart() {
       if (intelDebounceRef.current) clearTimeout(intelDebounceRef.current);
     };
   }, [mode, buildIntelPayload]);
+
+  /** Refresh profile when user reaches Step 3 so Settings saves apply mid-flow. */
+  useEffect(() => {
+    if (singleStep !== 2 || !token) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/api/user/profile');
+        if (cancelled) return;
+        const pn = (data?.provider_name || '').trim();
+        const npi = (data?.provider_npi || '').trim();
+        const addr = (data?.provider_address || '').trim();
+        const ph = (data?.provider_phone || '').trim();
+        const fx = (data?.provider_fax || '').trim();
+        profileSnapshotRef.current = {
+          providerName: pn,
+          providerNpi: npi,
+          providerAddress: addr,
+          providerPhone: ph,
+          providerFax: fx,
+        };
+        setProviderProfileEmpty(!pn && !npi && !addr && !ph && !fx);
+        mergeProfileSnapshotIntoIntake();
+      } catch {
+        if (!cancelled) setProviderProfileEmpty(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [singleStep, token, mergeProfileSnapshotIntoIntake]);
 
   useEffect(() => {
     if (singleStep !== 1) return;
@@ -605,12 +662,12 @@ export default function OnboardingStart() {
     setErr('');
     const fe = {
       patientName: !(intake.patientName || '').trim() ? 'Patient name is required.' : '',
-      providerName: !(intake.providerName || '').trim() ? 'Provider or practice name is required.' : '',
+      providerName: '',
       providerNpi: !(intake.providerNpi || '').trim() ? 'Provider NPI is required.' : '',
     };
     setFieldErrors(fe);
     const v = validate();
-    if (fe.patientName || fe.providerName || fe.providerNpi || v) {
+    if (fe.patientName || fe.providerNpi || v) {
       if (v) setErr(v);
       return;
     }
@@ -775,7 +832,7 @@ export default function OnboardingStart() {
   const ctaButton = (disabled, loadingLabel, label) => ({
     width: '100%',
     padding: 16,
-    background: disabled ? '#94a3b8' : primaryCta,
+    background: disabled ? DISABLED_SLATE : primaryCta,
     color: '#fff',
     border: 'none',
     borderRadius: 10,
@@ -825,14 +882,14 @@ export default function OnboardingStart() {
             style={{
               fontSize: 'clamp(24px, 4vw, 32px)',
               fontWeight: 800,
-              color: navy,
+              color: TEXT_ON_SLATE,
               margin: '0 0 12px',
               lineHeight: 1.2,
             }}
           >
             Start an appeal
           </h1>
-          <p style={{ fontSize: 17, color: '#475569', margin: '0 0 28px', lineHeight: 1.5 }}>
+          <p style={{ fontSize: 17, color: TEXT_MUTED_ON_SLATE, margin: '0 0 28px', lineHeight: 1.5 }}>
             Choose a single claim or a bulk workflow — same engine, different throughput.
           </p>
 
@@ -875,12 +932,15 @@ export default function OnboardingStart() {
                   }}
                   style={{
                     textAlign: 'left',
-                    border: `2px solid ${primaryCta}`,
+                    border: `1px solid ${border}`,
+                    borderLeft: `5px solid ${primaryCta}`,
+                    borderTop: `3px solid ${primaryCta}`,
                     borderRadius: 12,
                     padding: '20px 18px',
                     cursor: 'pointer',
                     background: softBlue,
                     minHeight: 100,
+                    boxShadow: '0 2px 12px rgba(34, 197, 94, 0.12)',
                   }}
                 >
                   <strong style={{ fontSize: 18, color: navy, display: 'block', marginBottom: 8 }}>
@@ -922,8 +982,8 @@ export default function OnboardingStart() {
                 background: cardBg,
                 borderRadius: 14,
                 padding: 22,
-                border: `1px solid ${border}`,
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.06)',
+                border: `1px solid ${BORDER_MUTED}`,
+                boxShadow: '0 2px 12px rgba(15, 23, 42, 0.08)',
               }}
             >
               <p
@@ -941,7 +1001,7 @@ export default function OnboardingStart() {
                 <label
                   style={{
                     display: 'block',
-                    border: `1px solid ${border}`,
+                    border: `1px solid ${BORDER_MUTED}`,
                     borderRadius: 12,
                     padding: '18px 16px',
                     cursor: extracting ? 'wait' : 'pointer',
@@ -975,7 +1035,7 @@ export default function OnboardingStart() {
                   }}
                   style={{
                     textAlign: 'left',
-                    border: `1px solid ${border}`,
+                    border: `1px solid ${BORDER_MUTED}`,
                     borderRadius: 12,
                     padding: '18px 16px',
                     cursor: 'pointer',
@@ -994,7 +1054,7 @@ export default function OnboardingStart() {
           </div>
 
           {extracting && (
-            <p style={{ marginTop: 20, color: navy, fontWeight: 600, fontSize: 15 }}>Reading file…</p>
+            <p style={{ marginTop: 20, color: TEXT_ON_SLATE, fontWeight: 600, fontSize: 15 }}>Reading file…</p>
           )}
         </div>
       </div>
@@ -1019,11 +1079,7 @@ export default function OnboardingStart() {
               if (i < bulkStep) setBulkStep(i);
             }}
           />
-          <button
-            type="button"
-            onClick={resetIntake}
-            style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
-          >
+          <button type="button" onClick={resetIntake} style={backBtnStyle}>
             ← Back
           </button>
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
@@ -1058,7 +1114,7 @@ export default function OnboardingStart() {
                     borderRadius: 12,
                     padding: 28,
                     textAlign: 'center',
-                    background: bulkDrag ? softBlue : pageBg,
+                    background: bulkDrag ? softBlue : '#f1f5f9',
                     marginBottom: 16,
                   }}
                 >
@@ -1075,9 +1131,26 @@ export default function OnboardingStart() {
                   disabled={!bulkPdfFiles.length}
                   onClick={() => setBulkStep(1)}
                   style={{
-                    ...ctaButton(!bulkPdfFiles.length, false, ''),
+                    width: '100%',
+                    padding: 16,
                     marginTop: 0,
-                    background: !bulkPdfFiles.length ? '#94a3b8' : navy,
+                    border: 'none',
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    fontSize: 16,
+                    cursor: !bulkPdfFiles.length ? 'not-allowed' : 'pointer',
+                    background: !bulkPdfFiles.length ? DISABLED_SLATE : primaryCta,
+                    color: '#fff',
+                    transition: 'background 0.2s ease, opacity 0.2s ease',
+                    opacity: !bulkPdfFiles.length ? 0.85 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!bulkPdfFiles.length) return;
+                    e.currentTarget.style.background = primaryCtaHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!bulkPdfFiles.length) return;
+                    e.currentTarget.style.background = primaryCta;
                   }}
                 >
                   Continue to processing queue
@@ -1179,11 +1252,7 @@ export default function OnboardingStart() {
               if (i < bulkStep) setBulkStep(i);
             }}
           />
-          <button
-            type="button"
-            onClick={resetIntake}
-            style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
-          >
+          <button type="button" onClick={resetIntake} style={backBtnStyle}>
             ← Back
           </button>
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
@@ -1321,11 +1390,7 @@ export default function OnboardingStart() {
           activeIndex={singleStep}
           onStepClick={(i) => i < singleStep && handleStepperBack(i)}
         />
-        <button
-          type="button"
-          onClick={resetIntake}
-          style={{ marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', color: navy, fontSize: 15, fontWeight: 600 }}
-        >
+        <button type="button" onClick={resetIntake} style={backBtnStyle}>
           ← Back
         </button>
 
@@ -1584,6 +1649,15 @@ export default function OnboardingStart() {
             <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
               Only fields that still need you are shown. Provider profile values are filled automatically when saved on your account.
             </p>
+            {token && providerProfileEmpty && (
+              <p style={{ fontSize: 13, color: '#64748b', marginBottom: 14, lineHeight: 1.45 }}>
+                Save your provider details in{' '}
+                <Link to="/profile" style={{ color: primaryCta, fontWeight: 700 }}>
+                  Settings
+                </Link>{' '}
+                to auto-fill these fields.
+              </p>
+            )}
             <div style={{ display: 'grid', gap: 14 }}>
               {showStep3Patient && (
                 <label style={{ display: 'block' }}>
@@ -1689,18 +1763,12 @@ export default function OnboardingStart() {
                   <legend style={{ fontWeight: 800, color: navy, padding: '0 8px', fontSize: 13 }}>Provider (from profile or enter missing)</legend>
                   {showStep3ProviderName && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name *</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider or practice name (optional)</span>
                       <input
                         value={intake.providerName}
-                        onChange={(e) => {
-                          setFieldErrors((fe) => ({ ...fe, providerName: '' }));
-                          setIntake((s) => ({ ...s, providerName: e.target.value }));
-                        }}
-                        style={{ ...inputBase, border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}` }}
+                        onChange={(e) => setIntake((s) => ({ ...s, providerName: e.target.value }))}
+                        style={{ ...inputBase, border: `1px solid ${border}` }}
                       />
-                      {fieldErrors.providerName ? (
-                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerName}</div>
-                      ) : null}
                     </label>
                   )}
                   {showStep3ProviderNpi && (
@@ -1756,7 +1824,7 @@ export default function OnboardingStart() {
             <details
               open={codingAccordionOpen}
               onToggle={(e) => setCodingAccordionOpen(e.target.open)}
-              style={{ marginTop: 18, border: `1px solid ${border}`, borderRadius: 10, padding: '4px 12px', background: pageBg }}
+              style={{ marginTop: 18, border: `1px solid ${border}`, borderRadius: 10, padding: '4px 12px', background: '#f1f5f9' }}
             >
               <summary style={{ cursor: 'pointer', fontWeight: 800, color: navy, padding: '10px 4px', listStyle: 'none' }}>
                 Coding insights (optional)
@@ -1765,7 +1833,7 @@ export default function OnboardingStart() {
                 {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
                   <div
                     style={{
-                      background: pageBg,
+                      background: '#f8fafc',
                       borderRadius: 8,
                       padding: 12,
                       marginBottom: 12,
@@ -1824,7 +1892,7 @@ export default function OnboardingStart() {
             <div
               style={{
                 textAlign: 'left',
-                background: pageBg,
+                background: '#f1f5f9',
                 borderRadius: 10,
                 padding: 16,
                 marginBottom: 20,

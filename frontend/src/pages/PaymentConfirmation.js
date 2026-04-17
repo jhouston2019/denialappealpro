@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import api from '../api/axios';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE } from '../theme/appShell';
 
 // Validate Stripe key and load Stripe
 const stripePublishableKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
@@ -69,6 +70,7 @@ function PaymentConfirmation() {
 
   if (!appeal) {
     return (
+      <div style={{ background: PAGE_BG_SLATE, minHeight: 'calc(100vh - 60px)' }}>
       <div className="payment-container" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
         <div style={{
           display: 'inline-block',
@@ -86,12 +88,14 @@ function PaymentConfirmation() {
             100% { transform: rotate(360deg); }
           }
         `}</style>
-        <p style={{ fontSize: '18px', color: '#666' }}>Loading payment details...</p>
+        <p style={{ fontSize: '18px', color: TEXT_ON_SLATE }}>Loading payment details...</p>
+      </div>
       </div>
     );
   }
 
   return (
+    <div style={{ background: PAGE_BG_SLATE, minHeight: 'calc(100vh - 60px)' }}>
     <div className="payment-container">
       <h2>Payment Required</h2>
       
@@ -128,6 +132,7 @@ function PaymentConfirmation() {
           Cancel
         </button>
       </div>
+    </div>
     </div>
   );
 }

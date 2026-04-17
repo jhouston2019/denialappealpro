@@ -5,6 +5,7 @@ import { useUser } from '../context/UserContext';
 import UsageTracker from '../components/UsageTracker';
 import UpgradeModal from '../components/UpgradeModal';
 import UpgradeCTA from '../components/UpgradeCTA';
+import { PAGE_BG_SLATE } from '../theme/appShell';
 
 function AppealDownload() {
   const { appealId } = useParams();
@@ -87,6 +88,7 @@ function AppealDownload() {
   }
 
   return (
+    <div style={{ background: PAGE_BG_SLATE, minHeight: 'calc(100vh - 60px)' }}>
     <div className="download-container">
       {/* Usage Tracker - Show if user email is available */}
       {userEmail && (
@@ -158,6 +160,7 @@ function AppealDownload() {
           <UpgradeCTA usageStats={upgradeData} />
         </div>
       )}
+    </div>
     </div>
   );
 }

@@ -1,14 +1,11 @@
 import React from 'react';
 
-const navy = '#0f172a';
 const green = '#22c55e';
-const border = '#e2e8f0';
+const navy = '#0f172a';
+const mutedOutline = '#64748b';
 
 /**
- * Horizontal stepper: completed = checkmark, active = filled navy + number, inactive = outline.
- * @param {{ key: string, label: string }[]} steps
- * @param {number} activeIndex 0-based
- * @param {(index: number) => void} [onStepClick] only invoked for index < activeIndex (go back)
+ * Stepper on dark page background: completed = green + check, active = white circle + dark number, inactive = muted outline.
  */
 export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky = true }) {
   return (
@@ -27,9 +24,9 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
         marginLeft: -20,
         marginRight: -20,
         padding: '14px 20px 16px',
-        background: '#f8fafc',
-        borderBottom: `1px solid ${border}`,
-        boxShadow: sticky ? '0 4px 12px rgba(15, 23, 42, 0.06)' : undefined,
+        background: 'transparent',
+        borderBottom: '1px solid rgba(148, 163, 184, 0.25)',
+        boxShadow: sticky ? '0 8px 24px rgba(15, 23, 42, 0.25)' : undefined,
       }}
     >
       <div
@@ -53,7 +50,7 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
               ✓
             </span>
           ) : isActive ? (
-            <span style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{i + 1}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: navy }}>{i + 1}</span>
           ) : (
             <span style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>{i + 1}</span>
           );
@@ -75,7 +72,7 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
                 padding: '4px 2px',
                 cursor: clickable ? 'pointer' : 'default',
                 textAlign: 'left',
-                opacity: isActive || isComplete ? 1 : 0.85,
+                opacity: isActive || isComplete ? 1 : 0.9,
               }}
             >
               <span
@@ -87,10 +84,12 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: isComplete || isActive ? navy : 'transparent',
-                  border: isComplete || isActive ? `2px solid ${navy}` : `2px solid ${border}`,
                   boxSizing: 'border-box',
-                  ...(isComplete ? { background: green, borderColor: green } : {}),
+                  ...(isComplete
+                    ? { background: green, border: `2px solid ${green}` }
+                    : isActive
+                      ? { background: '#ffffff', border: '2px solid #ffffff' }
+                      : { background: 'transparent', border: `2px solid ${mutedOutline}` }),
                 }}
               >
                 {circleInner}
@@ -99,8 +98,8 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
                 style={{
                   fontSize: 13,
                   fontWeight: isActive ? 800 : 600,
-                  color: isActive ? navy : isComplete ? '#15803d' : '#64748b',
                   lineHeight: 1.3,
+                  color: isActive ? '#ffffff' : isComplete ? '#e2e8f0' : '#94a3b8',
                 }}
               >
                 {s.label}

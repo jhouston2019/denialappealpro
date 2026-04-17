@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { PAGE_BG_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 const box = {
   maxWidth: '400px',
@@ -55,10 +56,10 @@ export default function Login() {
   };
 
   return (
-    <div style={{ padding: '16px', background: '#f5f5f5', minHeight: '70vh' }}>
+    <div style={{ padding: '16px', background: PAGE_BG_SLATE, minHeight: 'calc(100vh - 60px)' }}>
       <div style={box}>
         <h1 style={{ margin: '0 0 8px', fontSize: '20px' }}>Denial Queue</h1>
-        <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#444' }}>
+        <p style={{ margin: '0 0 16px', fontSize: '14px', color: TEXT_MUTED_ON_SLATE }}>
           {mode === 'login' ? 'Sign in to load your saved claims.' : 'Create an account to persist your queue.'}
         </p>
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>

@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import api from '../api/axios';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 const stripePk = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = stripePk && !stripePk.includes('your_') ? loadStripe(stripePk) : null;
 
 const TESTING_PAYWALL_DISABLED = true; // TESTING: paywall disabled
 
-const pageBg = '#f8fafc';
+const pageBg = PAGE_BG_SLATE;
 const navy = '#0f172a';
 const cardBg = '#ffffff';
 const primaryGreen = '#22c55e';
@@ -173,14 +174,14 @@ export default function OnboardingPreview() {
 
   if (loading) {
     return (
-      <div style={{ padding: 48, background: pageBg, minHeight: '50vh', fontFamily: '"Inter", system-ui, sans-serif', color: '#64748b' }}>
+      <div style={{ padding: 48, background: pageBg, minHeight: '50vh', fontFamily: '"Inter", system-ui, sans-serif', color: TEXT_MUTED_ON_SLATE }}>
         Loading…
       </div>
     );
   }
   if (err && !data) {
     return (
-      <div style={{ padding: 48, background: pageBg, minHeight: '50vh', fontFamily: '"Inter", system-ui, sans-serif', color: '#c2410c' }}>
+      <div style={{ padding: 48, background: pageBg, minHeight: '50vh', fontFamily: '"Inter", system-ui, sans-serif', color: '#fb923c' }}>
         {err}
       </div>
     );
@@ -284,10 +285,10 @@ export default function OnboardingPreview() {
     fontWeight: 600,
     fontSize: 14,
     borderRadius: 8,
-    border: `2px solid ${border}`,
+    border: '2px solid rgba(226, 232, 240, 0.35)',
     cursor: 'pointer',
-    background: cardBg,
-    color: '#475569',
+    background: 'transparent',
+    color: TEXT_ON_SLATE,
     transition: 'border-color 0.15s ease, background 0.15s ease',
   };
 
@@ -301,14 +302,14 @@ export default function OnboardingPreview() {
       }}
     >
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <Link to="/start" style={{ color: navy, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
+        <Link to="/start" style={{ color: TEXT_ON_SLATE, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
           ← Edit details
         </Link>
-        <h1 style={{ fontSize: 'clamp(22px, 4vw, 28px)', marginTop: 20, marginBottom: 8, color: navy, fontWeight: 800 }}>
+        <h1 style={{ fontSize: 'clamp(22px, 4vw, 28px)', marginTop: 20, marginBottom: 8, color: TEXT_ON_SLATE, fontWeight: 800 }}>
           Your appeal preview
         </h1>
-        <p style={{ fontSize: 17, fontWeight: 700, color: '#15803d', marginBottom: 24 }}>{data.revenue_message}</p>
-        <h2 style={{ fontSize: 15, fontWeight: 800, color: navy, marginBottom: 12 }}>
+        <p style={{ fontSize: 17, fontWeight: 700, color: '#4ade80', marginBottom: 24 }}>{data.revenue_message}</p>
+        <h2 style={{ fontSize: 15, fontWeight: 800, color: TEXT_MUTED_ON_SLATE, marginBottom: 12 }}>
           {TESTING_PAYWALL_DISABLED || data.account_linked ? 'Structured appeal (full)' : 'Structured appeal (excerpt)'}
         </h2>
         {letterBlock}
@@ -392,11 +393,11 @@ export default function OnboardingPreview() {
           style={{
             marginTop: 40,
             paddingTop: 32,
-            borderTop: `2px solid ${border}`,
+            borderTop: '2px solid rgba(148, 163, 184, 0.35)',
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 800, color: navy, marginBottom: 6 }}>Choose a plan</h2>
-          <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>Unlock downloads and ongoing appeals with a one-time purchase or subscription.</p>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: TEXT_ON_SLATE, marginBottom: 6 }}>Choose a plan</h2>
+          <p style={{ fontSize: 14, color: TEXT_MUTED_ON_SLATE, marginBottom: 16 }}>Unlock downloads and ongoing appeals with a one-time purchase or subscription.</p>
           <div style={{ display: 'grid', gap: 14 }}>
             <button
               type="button"

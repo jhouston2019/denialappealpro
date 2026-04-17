@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE, CARD_WHITE } from '../theme/appShell';
 
 const navy = '#0f172a';
 const border = '#e2e8f0';
@@ -74,8 +75,17 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 24, maxWidth: 560, margin: '0 auto' }}>
-        <p style={{ color: '#64748b', fontFamily: 'system-ui, sans-serif' }}>Loading profile…</p>
+      <div
+        style={{
+          padding: 24,
+          maxWidth: 560,
+          margin: '0 auto',
+          background: PAGE_BG_SLATE,
+          minHeight: 'calc(100vh - 60px)',
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
+        <p style={{ color: TEXT_MUTED_ON_SLATE }}>Loading profile…</p>
       </div>
     );
   }
@@ -84,16 +94,25 @@ export default function ProfilePage() {
     <div
       style={{
         padding: '24px 16px',
-        maxWidth: 560,
-        margin: '0 auto',
+        background: PAGE_BG_SLATE,
+        minHeight: 'calc(100vh - 60px)',
         fontFamily: '"Inter", system-ui, sans-serif',
       }}
     >
-      <h1 style={{ fontSize: 24, color: navy, margin: '0 0 8px' }}>Practice profile</h1>
-      <p style={{ color: '#64748b', margin: '0 0 24px', fontSize: 14, lineHeight: 1.5 }}>
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <h1 style={{ fontSize: 24, color: TEXT_ON_SLATE, margin: '0 0 8px' }}>Practice profile</h1>
+      <p style={{ color: TEXT_MUTED_ON_SLATE, margin: '0 0 24px', fontSize: 14, lineHeight: 1.5 }}>
         Save your practice details once; we will use them when starting new appeals.
       </p>
-      <form onSubmit={submit}>
+      <form
+        onSubmit={submit}
+        style={{
+          background: CARD_WHITE,
+          padding: 24,
+          borderRadius: 14,
+          border: `1px solid ${border}`,
+        }}
+      >
         <div style={fieldWrap}>
           <label style={labelStyle}>Practice name</label>
           <input
@@ -177,6 +196,7 @@ export default function ProfilePage() {
           {saving ? 'Saving…' : 'Save profile'}
         </button>
       </form>
+      </div>
     </div>
   );
 }

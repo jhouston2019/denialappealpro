@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import RecoveryClaimsTable from '../components/RecoveryClaimsTable';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 export default function DenialQueue({ variant = 'queue' }) {
   const navigate = useNavigate();
@@ -271,12 +272,22 @@ export default function DenialQueue({ variant = 'queue' }) {
   const sessionPct = Math.min(100, Math.round((claimsTowardGoal / sessionGoal) * 100));
 
   return (
-    <div style={{ padding: '16px 20px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+    <div
+      style={{
+        padding: '16px 20px',
+        maxWidth: '1200px',
+        margin: '0 auto',
+        fontFamily: 'system-ui, sans-serif',
+        background: PAGE_BG_SLATE,
+        minHeight: 'calc(100vh - 60px)',
+        color: TEXT_ON_SLATE,
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '22px' }}>{isDashboard ? 'Dashboard' : 'Denial Queue'}</h1>
+          <h1 style={{ margin: 0, fontSize: '22px', color: TEXT_ON_SLATE }}>{isDashboard ? 'Dashboard' : 'Denial Queue'}</h1>
           {isDashboard && (
-            <p style={{ margin: '6px 0 0', fontSize: 14, color: '#444' }}>
+            <p style={{ margin: '6px 0 0', fontSize: 14, color: TEXT_MUTED_ON_SLATE }}>
               Denial queue — your processed claims and intake pipeline
             </p>
           )}

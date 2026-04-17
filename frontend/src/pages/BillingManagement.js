@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import api from '../api/axios';
 import { openCustomerPortal, getSubscriptionInfo, formatPlanName, getPlanDetails } from '../utils/stripe';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 function BillingManagement() {
   const navigate = useNavigate();
@@ -214,6 +215,9 @@ const styles = {
     maxWidth: '900px',
     margin: '0 auto',
     padding: '40px 20px',
+    background: PAGE_BG_SLATE,
+    minHeight: 'calc(100vh - 60px)',
+    color: TEXT_ON_SLATE,
   },
   header: {
     textAlign: 'center',
@@ -222,11 +226,11 @@ const styles = {
   title: {
     fontSize: '36px',
     marginBottom: '10px',
-    color: '#2c3e50',
+    color: TEXT_ON_SLATE,
   },
   subtitle: {
     fontSize: '18px',
-    color: '#666',
+    color: TEXT_MUTED_ON_SLATE,
   },
   card: {
     background: 'white',
@@ -303,13 +307,13 @@ const styles = {
   helperText: {
     textAlign: 'center',
     fontSize: '14px',
-    color: '#666',
+    color: TEXT_MUTED_ON_SLATE,
     marginTop: '10px',
   },
   noSubscription: {
     textAlign: 'center',
     fontSize: '16px',
-    color: '#666',
+    color: TEXT_MUTED_ON_SLATE,
     marginBottom: '20px',
   },
   usageBar: {
@@ -342,7 +346,7 @@ const styles = {
   },
   usageLabel: {
     fontSize: '14px',
-    color: '#666',
+    color: '#475569',
     marginTop: '5px',
   },
   overageBox: {
@@ -403,7 +407,7 @@ const styles = {
   },
   statLabel: {
     fontSize: '16px',
-    color: '#666',
+    color: '#475569',
     marginTop: '10px',
   },
   actions: {
@@ -414,13 +418,13 @@ const styles = {
   loading: {
     textAlign: 'center',
     fontSize: '18px',
-    color: '#666',
+    color: TEXT_MUTED_ON_SLATE,
     padding: '40px',
   },
   error: {
     textAlign: 'center',
     fontSize: '18px',
-    color: '#ef4444',
+    color: '#fb923c',
     padding: '40px',
     marginBottom: '20px',
   },

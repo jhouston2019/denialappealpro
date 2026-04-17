@@ -152,9 +152,14 @@
 
 .history-container {
   background: white;
+  color: #1e293b;
   padding: 2rem;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.history-container h2 {
+  color: #0f172a;
 }
 
 .history-list {
@@ -173,9 +178,11 @@
 .payment-container {
   text-align: center;
   padding: 3rem 2rem;
+  color: #e2e8f0;
 }
 
 .download-container {
   text-align: center;
   padding: 3rem 2rem;
+  color: #e2e8f0;
 }

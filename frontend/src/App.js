@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppealProvider } from './context/AppealContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
+import { PAGE_BG_SLATE, TEXT_ON_SLATE } from './theme/appShell';
 // Force rebuild: 2026-02-11-v3
 
 // Lazy load pages for code splitting
@@ -37,15 +38,15 @@ const PageLoader = () => (
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#f8fafc'
+    background: PAGE_BG_SLATE
   }}>
     <div style={{ textAlign: 'center' }}>
       <div style={{
         display: 'inline-block',
         width: '50px',
         height: '50px',
-        border: '4px solid #f3f3f3',
-        borderTop: '4px solid #1e3a8a',
+        border: '4px solid rgba(148, 163, 184, 0.35)',
+        borderTop: '4px solid #22c55e',
         borderRadius: '50%',
         animation: 'spin 1s linear infinite',
         marginBottom: '1rem'
@@ -56,7 +57,7 @@ const PageLoader = () => (
           100% { transform: rotate(360deg); }
         }
       `}</style>
-      <p style={{ fontSize: '18px', color: '#666' }}>Loading...</p>
+      <p style={{ fontSize: '18px', color: TEXT_ON_SLATE }}>Loading...</p>
     </div>
   </div>
 );

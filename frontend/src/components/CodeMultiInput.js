@@ -34,34 +34,39 @@ export default function CodeMultiInput({
     setDraft('');
   };
 
-  const border = '1px solid #e2e8f0';
+  const borderDefault = '1.5px solid #cbd5e1';
   const warnSet = new Set((highlightCodes || []).map(normalizeCodeKey));
+  const hasTagWarn = vals.some((v) => warnSet.has(normalizeCodeKey(v))) && warnSet.size > 0;
 
   const verifyTitle = lowConfidence ? 'Please verify this field' : undefined;
   const confirmedExtracted = vals.length > 0 && !lowConfidence && !vals.some((v) => warnSet.has(normalizeCodeKey(v)));
 
+  const containerBorder =
+    lowConfidence || hasTagWarn ? '2px solid #f97316' : confirmedExtracted ? '2px solid #22c55e' : borderDefault;
+
   return (
     <div style={{ marginBottom: 14 }}>
-      <label htmlFor={id} style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', display: 'block', marginBottom: 6 }}>
+      <label
+        htmlFor={id}
+        style={{ fontWeight: 600, fontSize: 14, color: '#1e293b', display: 'block', marginBottom: 6 }}
+      >
         {label}
         {required ? ' *' : ''}
       </label>
       <div
+        className="dap-flow-code-input"
         title={verifyTitle}
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           gap: 6,
           alignItems: 'center',
-          padding: '8px 10px',
-          border:
-            lowConfidence || (vals.some((v) => warnSet.has(normalizeCodeKey(v))) && warnSet.size > 0)
-              ? '2px solid #fb923c'
-              : border,
-          borderLeft: confirmedExtracted ? '3px solid #bbf7d0' : undefined,
+          padding: '12px 14px',
+          border: containerBorder,
           borderRadius: 8,
           background: lowConfidence ? '#fff7ed' : '#fff',
-          minHeight: 44,
+          minHeight: 48,
+          boxSizing: 'border-box',
         }}
       >
         {vals.map((v) => (
@@ -70,11 +75,11 @@ export default function CodeMultiInput({
             type="button"
             onClick={() => onChange(vals.filter((x) => x !== v))}
             style={{
-              border: warnSet.has(normalizeCodeKey(v)) ? '2px solid #f59e0b' : '1px solid #cbd5e1',
+              border: warnSet.has(normalizeCodeKey(v)) ? '2px solid #f97316' : '1.5px solid #cbd5e1',
               background: warnSet.has(normalizeCodeKey(v)) ? '#fffbeb' : '#f1f5f9',
               borderRadius: 6,
               padding: '4px 8px',
-              fontSize: 13,
+              fontSize: 14,
               cursor: 'pointer',
             }}
           >
@@ -92,7 +97,7 @@ export default function CodeMultiInput({
             }
           }}
           placeholder={placeholder}
-          style={{ flex: '1 1 120px', border: 'none', outline: 'none', fontSize: 15, minWidth: 100 }}
+          style={{ flex: '1 1 120px', border: 'none', outline: 'none', fontSize: 16, minWidth: 100, minHeight: 24 }}
         />
       </div>
     </div>

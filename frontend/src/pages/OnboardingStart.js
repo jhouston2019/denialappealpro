@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import {
@@ -236,6 +236,38 @@ export default function OnboardingStart() {
   const [step4GenerateError, setStep4GenerateError] = useState('');
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
+  /** Step 3: show provider/patient fields — snapped only when entering Step 3, not from live intake (avoids unmount while typing). */
+  const [step3ProviderFieldMount, setStep3ProviderFieldMount] = useState({
+    name: true,
+    npi: true,
+    address: true,
+    phone: true,
+    fax: true,
+  });
+  const [step3PatientFieldMount, setStep3PatientFieldMount] = useState(true);
+  const intakeRef = useRef(intake);
+  const prevSingleStepForStep3SnapRef = useRef(0);
+  intakeRef.current = intake;
+
+  useLayoutEffect(() => {
+    if (singleStep !== 2) {
+      prevSingleStepForStep3SnapRef.current = singleStep;
+      return;
+    }
+    if (prevSingleStepForStep3SnapRef.current !== 2) {
+      const cur = intakeRef.current;
+      setStep3ProviderFieldMount({
+        name: !(cur.providerName || '').trim(),
+        npi: !isValidNpi10Digits(cur.providerNpi),
+        address: !(cur.providerAddress || '').trim(),
+        phone: !(cur.providerPhone || '').trim(),
+        fax: !(cur.providerFax || '').trim(),
+      });
+      setStep3PatientFieldMount(!(cur.patientName || '').trim());
+    }
+    prevSingleStepForStep3SnapRef.current = singleStep;
+  }, [singleStep]);
+
   const profileSnapshotRef = useRef(null);
   const [providerProfileEmpty, setProviderProfileEmpty] = useState(false);
   const [codingAccordionOpen, setCodingAccordionOpen] = useState(false);
@@ -589,6 +621,9 @@ export default function OnboardingStart() {
     setPasteText('');
     setFieldErrors({ patientName: '', providerName: '', providerNpi: '' });
     setStep4GenerateError('');
+    setStep3ProviderFieldMount({ name: true, npi: true, address: true, phone: true, fax: true });
+    setStep3PatientFieldMount(true);
+    prevSingleStepForStep3SnapRef.current = 0;
     setSingleStep(0);
     setBulkStep(0);
     setCodingAccordionOpen(false);
@@ -907,20 +942,38 @@ export default function OnboardingStart() {
   const showStep3Billed =
     !(intake.billedAmount || '').trim() || fieldConfidence.billedAmount === 'low';
   const showStep3Paid = !(intake.paidAmount || '').trim() || fieldConfidence.paidAmount === 'low';
-  const showStep3ProviderName = !(intake.providerName || '').trim();
-  const showStep3ProviderNpi = !isValidNpi10Digits(intake.providerNpi);
-  const showStep3Addr = !(intake.providerAddress || '').trim();
-  const showStep3Phone = !(intake.providerPhone || '').trim();
-  const showStep3Fax = !(intake.providerFax || '').trim();
-  const showStep3Patient = !(intake.patientName || '').trim();
+  const showStep3ProviderFieldset = useMemo(
+    () => Object.values(step3ProviderFieldMount).some(Boolean),
+    [step3ProviderFieldMount]
+  );
+
+  const inputBorderDefault = '1.5px solid #cbd5e1';
+  const inputBorderGap = '2px solid #f97316';
+  const inputBorderConfirmed = '2px solid #22c55e';
+  const inputBorderError = '2px solid #dc2626';
+  const flowFieldLabelStyle = {
+    fontWeight: 600,
+    fontSize: 14,
+    color: '#1e293b',
+    display: 'block',
+    marginBottom: 6,
+  };
+  const flowFieldLabelOptionalStyle = {
+    ...flowFieldLabelStyle,
+    color: '#64748b',
+  };
 
   const inputBase = {
     width: '100%',
     boxSizing: 'border-box',
-    marginTop: 6,
-    padding: 10,
+    minHeight: 48,
+    padding: '12px 14px',
     borderRadius: 8,
-    fontSize: 15,
+    fontSize: 16,
+    outline: 'none',
+    border: inputBorderDefault,
+    fontFamily: 'inherit',
+    lineHeight: 1.25,
   };
 
   const ctaButton = (disabled, loadingLabel, label) => ({
@@ -1486,6 +1539,22 @@ export default function OnboardingStart() {
   return (
     <div style={{ background: pageBg, minHeight: 'calc(100vh - 60px)', fontFamily: '"Inter", system-ui, sans-serif' }}>
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 20px 48px' }}>
+        <style>{`
+          .dap-flow-input:focus {
+            outline: none !important;
+            border: 2px solid #22c55e !important;
+          }
+          .dap-flow-code-input:focus-within {
+            outline: none !important;
+            border: 2px solid #22c55e !important;
+          }
+          .dap-flow-coding-details > summary {
+            list-style: none;
+          }
+          .dap-flow-coding-details > summary::-webkit-details-marker {
+            display: none;
+          }
+        `}</style>
         <IntakeStepper
           steps={SINGLE_STEPS}
           activeIndex={singleStep}
@@ -1783,11 +1852,19 @@ export default function OnboardingStart() {
               const needsAttention = fcKey
                 ? fieldConfidence[fcKey] === 'low' || !hasVal
                 : !hasVal;
-              const borderLeft = confirmed ? `3px solid ${extractedBorder}` : needsAttention ? `3px solid ${orangeBorder}` : `3px solid ${border}`;
+              const fieldBorder = needsAttention ? inputBorderGap : confirmed ? inputBorderConfirmed : inputBorderDefault;
               const isFirstGap = f.key === step2Fields.firstGapKey;
               return (
                 <label key={f.key} style={{ display: 'block', marginBottom: 14 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: navy, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    style={{
+                      ...flowFieldLabelStyle,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginBottom: 6,
+                    }}
+                  >
                     {f.label}
                     {confirmed ? (
                       <span style={{ color: primaryCta, fontSize: 12 }} aria-hidden="true">
@@ -1797,6 +1874,7 @@ export default function OnboardingStart() {
                   </span>
                   {f.type === 'payer' ? (
                     <input
+                      className="dap-flow-input"
                       ref={isFirstGap ? firstGapRef : undefined}
                       list="payer-suggestions"
                       value={intake.payer}
@@ -1805,13 +1883,13 @@ export default function OnboardingStart() {
                       title={fieldConfidence.payer === 'low' ? VERIFY_TOOLTIP : undefined}
                       style={{
                         ...inputBase,
-                        border: needsAttention ? `1px solid ${orangeBorder}` : `1px solid ${border}`,
-                        borderLeft,
+                        border: fieldBorder,
                         backgroundColor: needsAttention ? orangeBg : cardBg,
                       }}
                     />
                   ) : (
                     <input
+                      className="dap-flow-input"
                       ref={isFirstGap ? firstGapRef : undefined}
                       type={f.type === 'date' ? 'date' : 'text'}
                       value={intake[f.key]}
@@ -1819,8 +1897,7 @@ export default function OnboardingStart() {
                       title={fcKey && fieldConfidence[fcKey] === 'low' ? VERIFY_TOOLTIP : undefined}
                       style={{
                         ...inputBase,
-                        border: needsAttention ? `1px solid ${orangeBorder}` : `1px solid ${border}`,
-                        borderLeft,
+                        border: fieldBorder,
                         backgroundColor: needsAttention ? orangeBg : cardBg,
                       }}
                     />
@@ -1865,19 +1942,23 @@ export default function OnboardingStart() {
               </p>
             )}
             <div style={{ display: 'grid', gap: 14 }}>
-              {showStep3Patient && (
+              {step3PatientFieldMount && (
                 <label style={{ display: 'block' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+                  <span style={flowFieldLabelStyle}>
                     Patient name <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
                   </span>
                   <input
+                    className="dap-flow-input"
                     value={intake.patientName}
                     onChange={(e) => {
                       setFieldErrors((fe) => ({ ...fe, patientName: '' }));
                       setIntake((s) => ({ ...s, patientName: e.target.value }));
                     }}
                     placeholder="Jane Doe"
-                    style={{ ...inputBase, border: fieldErrors.patientName ? '1px solid #dc2626' : `1px solid ${border}` }}
+                    style={{
+                      ...inputBase,
+                      border: fieldErrors.patientName ? inputBorderError : inputBorderDefault,
+                    }}
                   />
                   {fieldErrors.patientName ? (
                     <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.patientName}</div>
@@ -1916,12 +1997,18 @@ export default function OnboardingStart() {
               )}
               {showStep3Mod && (
                 <label style={{ display: 'block' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Modifiers</span>
+                  <span style={flowFieldLabelStyle}>Modifiers</span>
                   <input
+                    className="dap-flow-input"
                     value={intake.modifiers}
                     onChange={(e) => setIntake((s) => ({ ...s, modifiers: e.target.value }))}
                     placeholder="-25, -59, -24"
-                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                    title={fieldConfidence.modifiers === 'low' ? VERIFY_TOOLTIP : undefined}
+                    style={{
+                      ...inputBase,
+                      border: fieldConfidence.modifiers === 'low' ? inputBorderGap : inputBorderDefault,
+                      backgroundColor: fieldConfidence.modifiers === 'low' ? orangeBg : undefined,
+                    }}
                   />
                 </label>
               )}
@@ -1938,41 +2025,62 @@ export default function OnboardingStart() {
               )}
               {showStep3Billed && (
                 <label style={{ display: 'block' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Billed amount ($)</span>
+                  <span style={flowFieldLabelStyle}>Billed amount ($)</span>
                   <input
+                    className="dap-flow-input"
                     type="number"
                     step="0.01"
                     min="0"
                     value={intake.billedAmount}
                     onChange={(e) => setIntake((s) => ({ ...s, billedAmount: e.target.value }))}
                     title={fieldConfidence.billedAmount === 'low' ? VERIFY_TOOLTIP : undefined}
-                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                    style={{
+                      ...inputBase,
+                      border: fieldConfidence.billedAmount === 'low' ? inputBorderGap : inputBorderDefault,
+                      backgroundColor: fieldConfidence.billedAmount === 'low' ? orangeBg : undefined,
+                    }}
                   />
                 </label>
               )}
               {showStep3Paid && (
                 <label style={{ display: 'block' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Paid amount ($)</span>
+                  <span style={flowFieldLabelStyle}>Paid amount ($)</span>
                   <input
+                    className="dap-flow-input"
                     type="number"
                     step="0.01"
                     min="0"
                     value={intake.paidAmount}
                     onChange={(e) => setIntake((s) => ({ ...s, paidAmount: e.target.value }))}
                     title={fieldConfidence.paidAmount === 'low' ? VERIFY_TOOLTIP : undefined}
-                    style={{ ...inputBase, border: `1px solid ${border}` }}
+                    style={{
+                      ...inputBase,
+                      border: fieldConfidence.paidAmount === 'low' ? inputBorderGap : inputBorderDefault,
+                      backgroundColor: fieldConfidence.paidAmount === 'low' ? orangeBg : undefined,
+                    }}
                   />
                 </label>
               )}
-              {(showStep3ProviderName || showStep3ProviderNpi || showStep3Addr || showStep3Phone || showStep3Fax) && (
-                <fieldset style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 14, margin: 0 }}>
-                  <legend style={{ fontWeight: 800, color: navy, padding: '0 8px', fontSize: 13 }}>Provider (from profile or enter missing)</legend>
-                  {showStep3ProviderName && (
+              {showStep3ProviderFieldset && (
+                <fieldset
+                  style={{
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: 8,
+                    padding: 16,
+                    margin: 0,
+                    background: '#f8fafc',
+                  }}
+                >
+                  <legend style={{ fontWeight: 600, color: '#64748b', padding: '0 8px', fontSize: 14 }}>
+                    Provider (from profile or enter missing)
+                  </legend>
+                  {step3ProviderFieldMount.name && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>
+                      <span style={flowFieldLabelStyle}>
                         Provider or practice name <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
                       </span>
                       <input
+                        className="dap-flow-input"
                         value={intake.providerName}
                         onChange={(e) => {
                           setFieldErrors((fe) => ({ ...fe, providerName: '' }));
@@ -1980,7 +2088,8 @@ export default function OnboardingStart() {
                         }}
                         style={{
                           ...inputBase,
-                          border: fieldErrors.providerName ? '1px solid #dc2626' : `1px solid ${border}`,
+                          border: fieldErrors.providerName ? inputBorderError : inputBorderDefault,
+                          backgroundColor: cardBg,
                         }}
                       />
                       {fieldErrors.providerName ? (
@@ -1988,10 +2097,13 @@ export default function OnboardingStart() {
                       ) : null}
                     </label>
                   )}
-                  {showStep3ProviderNpi && (
+                  {step3ProviderFieldMount.npi && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider NPI *</span>
+                      <span style={flowFieldLabelStyle}>
+                        Provider NPI <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
+                      </span>
                       <input
+                        className="dap-flow-input"
                         inputMode="numeric"
                         autoComplete="off"
                         value={intake.providerNpi}
@@ -2001,40 +2113,47 @@ export default function OnboardingStart() {
                           setIntake((s) => ({ ...s, providerNpi: digits }));
                         }}
                         placeholder="10-digit NPI"
-                        style={{ ...inputBase, border: fieldErrors.providerNpi ? '1px solid #dc2626' : `1px solid ${border}` }}
+                        style={{
+                          ...inputBase,
+                          border: fieldErrors.providerNpi ? inputBorderError : inputBorderDefault,
+                          backgroundColor: cardBg,
+                        }}
                       />
                       {fieldErrors.providerNpi ? (
                         <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{fieldErrors.providerNpi}</div>
                       ) : null}
                     </label>
                   )}
-                  {showStep3Addr && (
+                  {step3ProviderFieldMount.address && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider address</span>
+                      <span style={flowFieldLabelOptionalStyle}>Provider address</span>
                       <input
+                        className="dap-flow-input"
                         value={intake.providerAddress || ''}
                         onChange={(e) => setIntake((s) => ({ ...s, providerAddress: e.target.value }))}
-                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                        style={{ ...inputBase, backgroundColor: cardBg }}
                       />
                     </label>
                   )}
-                  {showStep3Phone && (
+                  {step3ProviderFieldMount.phone && (
                     <label style={{ display: 'block', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider phone</span>
+                      <span style={flowFieldLabelOptionalStyle}>Provider phone</span>
                       <input
+                        className="dap-flow-input"
                         value={intake.providerPhone || ''}
                         onChange={(e) => setIntake((s) => ({ ...s, providerPhone: e.target.value }))}
-                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                        style={{ ...inputBase, backgroundColor: cardBg }}
                       />
                     </label>
                   )}
-                  {showStep3Fax && (
+                  {step3ProviderFieldMount.fax && (
                     <label style={{ display: 'block' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>Provider fax</span>
+                      <span style={flowFieldLabelOptionalStyle}>Provider fax</span>
                       <input
+                        className="dap-flow-input"
                         value={intake.providerFax || ''}
                         onChange={(e) => setIntake((s) => ({ ...s, providerFax: e.target.value }))}
-                        style={{ ...inputBase, border: `1px solid ${border}` }}
+                        style={{ ...inputBase, backgroundColor: cardBg }}
                       />
                     </label>
                   )}
@@ -2043,14 +2162,34 @@ export default function OnboardingStart() {
             </div>
 
             <details
+              className="dap-flow-coding-details"
               open={codingAccordionOpen}
               onToggle={(e) => setCodingAccordionOpen(e.target.open)}
-              style={{ marginTop: 18, border: `1px solid ${border}`, borderRadius: 10, padding: '4px 12px', background: '#f1f5f9' }}
+              style={{
+                marginTop: 18,
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 8,
+                padding: 0,
+                background: '#f1f5f9',
+                overflow: 'hidden',
+              }}
             >
-              <summary style={{ cursor: 'pointer', fontWeight: 800, color: navy, padding: '10px 4px', listStyle: 'none' }}>
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  color: navy,
+                  minHeight: 48,
+                  padding: '0 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  fontSize: 15,
+                  boxSizing: 'border-box',
+                }}
+              >
                 Coding insights (optional)
               </summary>
-              <div style={{ paddingBottom: 12 }}>
+              <div style={{ padding: '0 14px 14px' }}>
                 {(intake.carcCodes.length > 0 || intake.rarcCodes.length > 0) && (
                   <div
                     style={{
@@ -2116,17 +2255,17 @@ export default function OnboardingStart() {
             <div
               style={{
                 textAlign: 'left',
-                background: '#f1f5f9',
-                borderRadius: 10,
+                background: '#f8fafc',
+                borderRadius: 8,
                 padding: 16,
                 marginBottom: 20,
-                fontSize: 14,
+                fontSize: 16,
                 color: '#334155',
                 lineHeight: 1.5,
-                border: `1px solid ${border}`,
+                border: inputBorderDefault,
               }}
             >
-              <div style={{ fontWeight: 800, marginBottom: 8, color: navy }}>Claim summary</div>
+              <div style={{ fontWeight: 700, marginBottom: 8, color: '#1e293b', fontSize: 15 }}>Claim summary</div>
               <div>
                 <strong>Claim #:</strong> {intake.claimNumber || '—'}
               </div>

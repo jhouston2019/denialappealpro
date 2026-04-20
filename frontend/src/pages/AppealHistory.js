@@ -75,7 +75,14 @@ function AppealHistory() {
                 <p>Payer: {appeal.payer_name}</p>
                 <p>Status: {appeal.status}</p>
                 {appeal.status === 'completed' && (
-                  <button className="btn btn-primary" onClick={() => navigate(`/download/${appeal.appeal_id}`)}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const base = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                      window.open(`${base}/api/appeals/${appeal.appeal_id}/download`, '_blank');
+                    }}
+                  >
                     Download
                   </button>
                 )}

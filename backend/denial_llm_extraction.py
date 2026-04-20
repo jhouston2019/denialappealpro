@@ -497,9 +497,32 @@ def extract_with_openai(raw_text: str) -> Tuple[Optional[Dict[str, Any]], Option
     return processed, None
 
 
+def _coerce_icd_code_list(val: Any) -> List[str]:
+    if val is None:
+        return []
+    if isinstance(val, list):
+        out: List[str] = []
+        for x in val:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if s:
+                out.append(s)
+        return out
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return []
+        return [p for p in re.split(r"[,;\s]+", s) if p.strip()]
+    return []
+
+
 def llm_result_to_merged_fields(llm: Dict[str, Any]) -> Dict[str, Any]:
     """Map LLM post-processed fields to pdf_parser-style names."""
     denial_codes = llm_carc_to_denial_code_strings(llm.get("carc_codes") or [])
+    icd_merged = _dedupe_preserve(
+        _coerce_icd_code_list(llm.get("icd10_codes")) + _coerce_icd_code_list(llm.get("icd_codes"))
+    )[:40]
     return {
         "payer_name": llm.get("payer_name"),
         "claim_number": llm.get("claim_number"),
@@ -507,7 +530,7 @@ def llm_result_to_merged_fields(llm: Dict[str, Any]) -> Dict[str, Any]:
         "service_date": llm.get("date_of_service"),
         "denial_date": None,
         "cpt_codes": llm.get("cpt_codes") or [],
-        "icd_codes": llm.get("icd10_codes") or [],
+        "icd_codes": icd_merged,
         "rarc_codes": llm.get("rarc_codes") or [],
         "denial_codes": denial_codes,
         "billed_amount": _to_float_or_none(llm.get("billed_amount")),
@@ -556,9 +579,11 @@ def merge_extraction_layers(
     out["cpt_codes"] = _dedupe_preserve(
         list(llm_fields.get("cpt_codes") or []) + list(out.get("cpt_codes") or [])
     )[:40]
-    out["icd_codes"] = _dedupe_preserve(
-        list(llm_fields.get("icd_codes") or []) + list(out.get("icd_codes") or [])
+    llm_icd = _dedupe_preserve(
+        _coerce_icd_code_list(llm_fields.get("icd_codes"))
+        + _coerce_icd_code_list(llm_fields.get("icd10_codes"))
     )[:40]
+    out["icd_codes"] = _dedupe_preserve(llm_icd + _coerce_icd_code_list(out.get("icd_codes")))[:40]
     out["rarc_codes"] = _dedupe_preserve(
         list(llm_fields.get("rarc_codes") or []) + list(out.get("rarc_codes") or [])
     )[:30]

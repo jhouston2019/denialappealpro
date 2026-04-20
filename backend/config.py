@@ -1,10 +1,24 @@
 import os
+from datetime import timedelta
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+    # Browser cookie session (customer auth)
+    SESSION_COOKIE_NAME = 'session'
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    _domain = (os.getenv('DOMAIN') or '').lower()
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', '').lower() in (
+        '1',
+        'true',
+        'yes',
+    ) or _domain.startswith('https://')
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
     
     # Database configuration - POSTGRESQL REQUIRED
     database_url = os.getenv('DATABASE_URL')

@@ -1,5 +1,5 @@
 """
-High-conversion onboarding: preview without login, paywall, then account + full PDF.
+Authenticated intake: preview + PDF (post-payment users only).
 """
 
 import os
@@ -7,21 +7,38 @@ import traceback
 import uuid
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from functools import wraps
 
-import stripe
 import io
 
-from flask import Blueprint, request, jsonify, current_app, send_file
+from flask import Blueprint, request, jsonify, current_app, send_file, g
 
 from appeal_pdf_builder import build_professional_pdf_bytes, build_appeal_pdf_filename
 from werkzeug.utils import secure_filename
 
 from models import db, Appeal, User
-from credit_manager import CreditManager, PricingManager
+from credit_manager import PricingManager
 from advanced_ai_generator import advanced_ai_generator
-from stripe_billing import StripeBilling
+from session_customer import validate_customer_session
 
-onboarding_bp = Blueprint('onboarding', __name__)
+intake_bp = Blueprint('intake', __name__)
+
+
+def _require_intake_auth(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        _, err = validate_customer_session()
+        if err is not None:
+            resp, code = err
+            return resp, code
+        u = User.query.get(g.current_user_id)
+        if not u:
+            return jsonify({'error': 'Unauthorized'}), 401
+        if u.is_paid is not True and getattr(u, 'payment_verification_status', None) != 'processing':
+            return jsonify({'error': 'Active subscription required'}), 403
+        return f(*args, **kwargs)
+
+    return wrapped
 
 PREVIEW_CHARS = 900
 ALLOWED_UPLOAD = {'pdf', 'jpg', 'jpeg', 'png'}
@@ -55,13 +72,12 @@ def _defaults_for_onboarding():
     }
 
 
-def register_onboarding_routes(app, limiter, generator):
-    stripe.api_key = app.config['STRIPE_SECRET_KEY']
-
-    @onboarding_bp.route('/onboarding/preview', methods=['POST'])
+def register_intake_routes(app, limiter, generator):
+    @intake_bp.route('/intake/preview', methods=['POST'])
     @limiter.limit('15 per hour')
+    @_require_intake_auth
     def create_preview():
-        """Create anonymous appeal + AI preview text (no PDF, no login). Always returns JSON."""
+        """Create appeal + AI preview for the authenticated user."""
 
         def _normalize_code_field(val, max_join_len=200):
             if val is None:
@@ -170,7 +186,10 @@ def register_onboarding_routes(app, limiter, generator):
                 date_of_service_raw = request.form.get('date_of_service')
                 cpt_direct = _normalize_code_field(request.form.get('cpt_codes'), 200)
                 icd_direct = _normalize_code_field(
-                    request.form.get('diagnosis_code') or request.form.get('icd_codes'), 200
+                    request.form.get('diagnosis_code')
+                    or request.form.get('icd10_codes')
+                    or request.form.get('icd_codes'),
+                    200,
                 )
                 dc_str = (request.form.get('denial_code') or '').strip()
                 if dc_str:
@@ -184,7 +203,10 @@ def register_onboarding_routes(app, limiter, generator):
                 date_of_service_raw = json_data.get('date_of_service')
                 cpt_direct = _normalize_code_field(json_data.get('cpt_codes'), 200)
                 icd_direct = _normalize_code_field(
-                    json_data.get('diagnosis_code') or json_data.get('icd_codes'), 200
+                    json_data.get('diagnosis_code')
+                    or json_data.get('icd10_codes')
+                    or json_data.get('icd_codes'),
+                    200,
                 )
                 denial_codes_payload = json_data.get('denial_codes', [])
                 if isinstance(denial_codes_payload, list):
@@ -210,6 +232,7 @@ def register_onboarding_routes(app, limiter, generator):
                 cpt_part = cpt_direct
             if icd_direct:
                 icd_part = icd_direct
+            # icd_part from diagnosis_code | icd10_codes | icd_codes (see multipart/json branches above)
 
             if not patient_name or not provider_name_in or not provider_npi_in:
                 return jsonify({'error': 'Patient name, provider name, and NPI are required'}), 400
@@ -240,7 +263,7 @@ def register_onboarding_routes(app, limiter, generator):
 
             appeal = Appeal(
                 appeal_id=appeal_id,
-                user_id=None,
+                user_id=g.current_user_id,
                 payer=payer[:200],
                 payer_name=payer[:200],
                 claim_number=claim_number,
@@ -326,10 +349,11 @@ def register_onboarding_routes(app, limiter, generator):
                 }
             ), 500
 
-    @onboarding_bp.route('/onboarding/appeal/<appeal_id>', methods=['GET'])
-    def get_onboarding_appeal(appeal_id):
-        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
-        if not a or a.user_id is not None:
+    @intake_bp.route('/intake/appeal/<appeal_id>', methods=['GET'])
+    @_require_intake_auth
+    def get_intake_appeal(appeal_id):
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
+        if not a:
             return jsonify({'error': 'Not found'}), 404
         text = a.generated_letter_text or ''
         excerpt = text[:PREVIEW_CHARS]
@@ -349,30 +373,20 @@ def register_onboarding_routes(app, limiter, generator):
             }
         ), 200
 
-    @onboarding_bp.route('/onboarding/appeal/<appeal_id>/full-text', methods=['GET'])
-    def onboarding_appeal_full_text(appeal_id):
-        """Full appeal body for Copy — only after account is linked (paid flow)."""
-        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
+    @intake_bp.route('/intake/appeal/<appeal_id>/full-text', methods=['GET'])
+    @_require_intake_auth
+    def intake_appeal_full_text(appeal_id):
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
         if not a:
             return jsonify({'error': 'Not found'}), 404
-        if not str(a.appeal_id or '').startswith('APP-ONB-'):
-            return jsonify({'error': 'Not found'}), 404
-        # TESTING: payment disabled
-        # if a.user_id is None:
-        #     return jsonify({'error': 'Unlock full appeal after checkout'}), 402
         return jsonify({'full_text': a.generated_letter_text or ''}), 200
 
-    @onboarding_bp.route('/onboarding/appeal/<appeal_id>/pdf', methods=['GET'])
-    def onboarding_appeal_pdf(appeal_id):
-        """Download carrier-ready PDF after account is linked."""
-        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
+    @intake_bp.route('/intake/appeal/<appeal_id>/pdf', methods=['GET'])
+    @_require_intake_auth
+    def intake_appeal_pdf(appeal_id):
+        a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
         if not a:
             return jsonify({'error': 'Not found'}), 404
-        if not str(a.appeal_id or '').startswith('APP-ONB-'):
-            return jsonify({'error': 'Not found'}), 404
-        # TESTING: payment disabled
-        # if a.user_id is None:
-        #     return jsonify({'error': 'Unlock full appeal after checkout'}), 402
         if not (a.generated_letter_text or '').strip():
             return jsonify({'error': 'No appeal text yet'}), 400
         pdf_bytes = build_professional_pdf_bytes(a)
@@ -384,211 +398,4 @@ def register_onboarding_routes(app, limiter, generator):
             download_name=fn,
         )
 
-    @onboarding_bp.route('/onboarding/checkout-retail', methods=['POST'])
-    @limiter.limit('20 per hour')
-    def checkout_retail():
-        data = request.json or {}
-        appeal_id = data.get('appeal_id')
-        if not appeal_id:
-            return jsonify({'error': 'appeal_id required'}), 400
-        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
-        if not a or a.user_id is not None:
-            return jsonify({'error': 'Invalid appeal'}), 400
-        if a.payment_status == 'paid':
-            return jsonify({'error': 'Already paid'}), 400
-        origin = request.headers.get('Origin', current_app.config.get('DOMAIN', 'http://localhost:3000'))
-        cents = int(round(float(PricingManager.RETAIL_PRICE) * 100))
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[
-                {
-                    'price_data': {
-                        'currency': 'usd',
-                        'product_data': {'name': f'Denial Appeal — Claim {a.claim_number}'},
-                        'unit_amount': cents,
-                    },
-                    'quantity': 1,
-                }
-            ],
-            mode='payment',
-            success_url=f"{origin}/onboarding/account?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{origin}/start/preview/{appeal_id}",
-            metadata={
-                'appeal_id': appeal_id,
-                'type': 'onboarding_retail',
-            },
-        )
-        return jsonify({'session_id': session.id}), 200
-
-    @onboarding_bp.route('/onboarding/checkout-plan', methods=['POST'])
-    @limiter.limit('20 per hour')
-    def checkout_plan():
-        data = request.json or {}
-        appeal_id = data.get('appeal_id')
-        plan = (data.get('plan') or '').lower()
-        email = (data.get('email') or '').strip().lower()
-        if not appeal_id or plan not in ('starter', 'core'):
-            return jsonify({'error': 'appeal_id and plan (starter or core) required'}), 400
-        if not email:
-            return jsonify({'error': 'Email required for subscription'}), 400
-        a = Appeal.query.filter_by(appeal_id=appeal_id).first()
-        if not a or a.user_id is not None:
-            return jsonify({'error': 'Invalid appeal'}), 400
-
-        user = CreditManager.get_or_create_user(email)
-        origin = request.headers.get('Origin', current_app.config.get('DOMAIN', 'http://localhost:3000'))
-        success_url = f"{origin}/onboarding/account?session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = f"{origin}/start/preview/{appeal_id}"
-
-        result = StripeBilling.create_checkout_session(
-            user_id=user.id,
-            plan=plan,
-            success_url=success_url,
-            cancel_url=cancel_url,
-            extra_metadata={'appeal_id': appeal_id},
-        )
-        return jsonify({'session_id': result['session_id'], 'url': result.get('url'), 'user_id': user.id}), 200
-
-    @onboarding_bp.route('/onboarding/verify-session', methods=['POST'])
-    def verify_session():
-        data = request.json or {}
-        session_id = data.get('session_id')
-        if not session_id:
-            return jsonify({'error': 'session_id required'}), 400
-        try:
-            s = stripe.checkout.Session.retrieve(session_id)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 400
-        meta = s.get('metadata') or {}
-        paid = s.get('payment_status') == 'paid' or s.get('status') == 'complete'
-        out = {
-            'paid': paid,
-            'mode': s.get('mode'),
-            'customer_email': (s.get('customer_details') or {}).get('email') or s.get('customer_email'),
-            'metadata': dict(meta),
-        }
-        return jsonify(out), 200
-
-    @onboarding_bp.route('/onboarding/finalize', methods=['POST'])
-    @limiter.limit('30 per hour')
-    def finalize_account():
-        """After $79 payment: create password, attach appeal, generate PDF."""
-        from user_auth import register_user, login_user
-
-        data = request.json or {}
-        session_id = data.get('session_id')
-        email = (data.get('email') or '').strip().lower()
-        password = data.get('password') or ''
-        if not session_id or not email or len(password) < 8:
-            return jsonify({'error': 'session_id, email, and password (8+ chars) required'}), 400
-        try:
-            s = stripe.checkout.Session.retrieve(session_id)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 400
-        if s.get('payment_status') != 'paid' and s.get('status') != 'complete':
-            return jsonify({'error': 'Payment not completed'}), 402
-        meta = s.get('metadata') or {}
-        if meta.get('type') != 'onboarding_retail':
-            return jsonify({'error': 'Invalid session type'}), 400
-        appeal_id = meta.get('appeal_id')
-        appeal = Appeal.query.filter_by(appeal_id=appeal_id).first() if appeal_id else None
-        if not appeal:
-            return jsonify({'error': 'Appeal not found'}), 404
-
-        secret = current_app.config['SECRET_KEY']
-        payload, err = register_user(secret, email, password)
-        if err:
-            if 'already exists' in err.lower():
-                login_payload, lerr = login_user(secret, email, password)
-                if lerr:
-                    return jsonify({'error': lerr}), 401
-                payload = login_payload
-            else:
-                return jsonify({'error': err}), 400
-
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            return jsonify({'error': 'Could not create user'}), 500
-
-        appeal.user_id = user.id
-        if appeal.payment_status == 'paid' and appeal.status == 'awaiting_account':
-            try:
-                pdf_path = generator.generate_appeal(appeal)
-                appeal.appeal_letter_path = pdf_path
-                appeal.status = 'completed'
-                appeal.completed_at = datetime.utcnow()
-                appeal.last_generated_at = datetime.utcnow()
-                appeal.queue_status = 'generated'
-                appeal.retail_token_used = True
-                db.session.commit()
-                CreditManager.increment_usage(user.id)
-            except Exception as e:
-                appeal.status = 'failed'
-                db.session.commit()
-                return jsonify({'error': f'PDF generation failed: {str(e)}'}), 500
-
-        token = payload['token']
-
-        return jsonify(
-            {
-                'success': True,
-                'token': token,
-                'user': {'id': user.id, 'email': user.email},
-                'appeal_id': appeal.appeal_id,
-            }
-        ), 200
-
-    @onboarding_bp.route('/onboarding/complete-subscription', methods=['POST'])
-    @limiter.limit('30 per hour')
-    def complete_subscription():
-        """After subscription checkout: set password and finalize PDF for onboarding appeal."""
-        from user_auth import create_user_token
-        from werkzeug.security import generate_password_hash
-
-        data = request.json or {}
-        session_id = data.get('session_id')
-        password = data.get('password') or ''
-        if not session_id or len(password) < 8:
-            return jsonify({'error': 'session_id and password (8+ chars) required'}), 400
-        try:
-            s = stripe.checkout.Session.retrieve(session_id)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 400
-        if s.get('status') != 'complete':
-            return jsonify({'error': 'Checkout not complete'}), 400
-        meta = s.get('metadata') or {}
-        if meta.get('type') != 'subscription':
-            return jsonify({'error': 'Not a subscription session'}), 400
-        uid = int(meta.get('user_id'))
-        user = User.query.get(uid)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-        if user.password_hash:
-            return jsonify({'error': 'Password already set — log in'}), 400
-        user.password_hash = generate_password_hash(password)
-        db.session.commit()
-
-        appeal_id = meta.get('appeal_id')
-        if appeal_id:
-            appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
-            if appeal and appeal.user_id == user.id and appeal.status != 'completed':
-                try:
-                    pdf_path = generator.generate_appeal(appeal)
-                    appeal.appeal_letter_path = pdf_path
-                    appeal.status = 'completed'
-                    appeal.completed_at = datetime.utcnow()
-                    appeal.last_generated_at = datetime.utcnow()
-                    appeal.queue_status = 'generated'
-                    appeal.payment_status = 'paid'
-                    appeal.retail_token_used = True
-                    db.session.commit()
-                    CreditManager.increment_usage(user.id)
-                except Exception as e:
-                    appeal.status = 'failed'
-                    db.session.commit()
-                    return jsonify({'error': f'PDF generation failed: {str(e)}'}), 500
-
-        token = create_user_token(current_app.config['SECRET_KEY'], user.id, user.email)
-        return jsonify({'success': True, 'token': token, 'user': {'id': user.id, 'email': user.email}}), 200
-
-    app.register_blueprint(onboarding_bp, url_prefix='/api')
+    app.register_blueprint(intake_bp, url_prefix='/api')

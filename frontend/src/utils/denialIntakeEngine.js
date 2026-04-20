@@ -217,6 +217,39 @@ export const PAYER_SUGGESTIONS = [
 ];
 
 /**
+ * ICD lists from /api/parse/* may use icd10_codes (canonical) and/or icd_codes (legacy).
+ * Accepts arrays or comma-separated strings; returns deduped uppercase codes for intake.icdCodes.
+ */
+export function normalizeIcdCodesFromExtract(data) {
+  if (!data || typeof data !== 'object') return [];
+  const buckets = [];
+  for (const key of ['icd10_codes', 'icd_codes']) {
+    const v = data[key];
+    if (v == null) continue;
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        const s = String(x).trim();
+        if (s) buckets.push(s);
+      }
+    } else if (typeof v === 'string' && v.trim()) {
+      for (const p of v.split(/[,;\s]+/)) {
+        const s = p.trim();
+        if (s) buckets.push(s);
+      }
+    }
+  }
+  const seen = new Set();
+  const out = [];
+  for (const p of buckets) {
+    const u = p.toUpperCase();
+    if (seen.has(u)) continue;
+    seen.add(u);
+    out.push(u);
+  }
+  return out;
+}
+
+/**
  * Build denial_reason narrative + supporting paste block for AI / backend.
  */
 export function serializeIntakeForBackend(intake) {
@@ -263,12 +296,16 @@ export function serializeIntakeForBackend(intake) {
     .filter(Boolean)
     .join('\n');
 
+  const icdPayload = icd.slice(0, 200);
+
   return {
     denial_reason,
     paste_details,
     denial_code: String(denial_code).slice(0, 50),
     cpt_codes: cptWithMods.slice(0, 200),
-    diagnosis_code: icd.slice(0, 200),
+    diagnosis_code: icdPayload,
+    /** Canonical snake_case for onboarding / generators (comma-joined string). */
+    icd10_codes: icdPayload,
     cpt_icd: [cptJoined, icd].filter(Boolean).join(', '),
   };
 }

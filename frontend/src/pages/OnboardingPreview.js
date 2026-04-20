@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { loadStripe } from '@stripe/stripe-js';
 import api from '../api/axios';
 import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
-
-const stripePk = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
-const stripePromise = stripePk && !stripePk.includes('your_') ? loadStripe(stripePk) : null;
-
-const TESTING_PAYWALL_DISABLED = true; // TESTING: paywall disabled
 
 const pageBg = PAGE_BG_SLATE;
 const navy = '#0f172a';
@@ -29,9 +23,7 @@ function escapeHtml(s) {
 export default function OnboardingPreview() {
   const { appealId } = useParams();
   const [data, setData] = useState(null);
-  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
-  const [payLoading, setPayLoading] = useState(false);
   const [err, setErr] = useState('');
   const [copyBusy, setCopyBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -40,7 +32,7 @@ export default function OnboardingPreview() {
 
   useEffect(() => {
     api
-      .get(`/api/onboarding/appeal/${appealId}`)
+      .get(`/api/intake/appeal/${appealId}`)
       .then(({ data: d }) => setData(d))
       .catch((err) => {
         console.error('Preview error:', err.response?.data || err);
@@ -51,68 +43,16 @@ export default function OnboardingPreview() {
 
   useEffect(() => {
     if (!appealId || !data) return;
-    if (!TESTING_PAYWALL_DISABLED && !data.account_linked) return;
     api
-      .get(`/api/onboarding/appeal/${appealId}/full-text`)
+      .get(`/api/intake/appeal/${appealId}/full-text`)
       .then(({ data: d }) => setFullLetter(d.full_text || ''))
       .catch(() => {});
   }, [appealId, data]);
 
-  const startRetail = async () => {
-    if (!stripePromise) {
-      setErr('Stripe is not configured');
-      return;
-    }
-    setPayLoading(true);
-    setErr('');
-    try {
-      const { data: res } = await api.post('/api/onboarding/checkout-retail', { appeal_id: appealId });
-      const stripe = await stripePromise;
-      const { error } = await stripe.redirectToCheckout({ sessionId: res.session_id });
-      if (error) setErr(error.message);
-    } catch (e) {
-      setErr(e.response?.data?.error || 'Checkout failed');
-    } finally {
-      setPayLoading(false);
-    }
-  };
-
-  const startPlan = async (plan) => {
-    if (!email.includes('@')) {
-      setErr('Enter your work email for the subscription plan');
-      return;
-    }
-    if (!stripePromise) {
-      setErr('Stripe is not configured');
-      return;
-    }
-    setPayLoading(true);
-    setErr('');
-    try {
-      const { data: res } = await api.post('/api/onboarding/checkout-plan', {
-        appeal_id: appealId,
-        plan,
-        email: email.trim(),
-      });
-      const stripe = await stripePromise;
-      const url = res.url;
-      if (url) {
-        window.location.href = url;
-        return;
-      }
-      const { error } = await stripe.redirectToCheckout({ sessionId: res.session_id });
-      if (error) setErr(error.message);
-    } catch (e) {
-      setErr(e.response?.data?.error || 'Checkout failed');
-    } finally {
-      setPayLoading(false);
-    }
-  };
-
   const resolveLetterText = async () => {
     let t = fullLetter;
     if (t == null) {
-      const { data: d } = await api.get(`/api/onboarding/appeal/${appealId}/full-text`);
+      const { data: d } = await api.get(`/api/intake/appeal/${appealId}/full-text`);
       t = d.full_text || '';
       setFullLetter(t);
     }
@@ -136,7 +76,7 @@ export default function OnboardingPreview() {
     setPdfBusy(true);
     setErr('');
     try {
-      const res = await api.get(`/api/onboarding/appeal/${appealId}/pdf`, { responseType: 'blob' });
+      const res = await api.get(`/api/intake/appeal/${appealId}/pdf`, { responseType: 'blob' });
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -189,49 +129,8 @@ export default function OnboardingPreview() {
   if (!data) return null;
 
   const excerpt = data.preview_excerpt || '';
-  const blur = (
-    <div
-      style={{
-        position: 'relative',
-        marginTop: 12,
-        minHeight: 120,
-        border: `1px solid ${border}`,
-        borderRadius: 12,
-        overflow: 'hidden',
-        background: '#f1f5f9',
-      }}
-    >
-      <div style={{ padding: 20, fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap', color: '#334155' }}>{excerpt}</div>
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '70%',
-          background: 'linear-gradient(transparent, rgba(255,255,255,0.92) 30%, #fff)',
-          backdropFilter: 'blur(6px)',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          fontSize: 13,
-          fontWeight: 700,
-          color: navy,
-        }}
-      >
-        Unlock full appeal letter
-      </div>
-    </div>
-  );
-  const unlockedForDisplay = TESTING_PAYWALL_DISABLED || data.account_linked;
   const letterBody = fullLetter != null ? fullLetter : excerpt;
-  const letterBlock = unlockedForDisplay ? (
+  const letterBlock = (
     <div
       style={{
         border: `1px solid ${border}`,
@@ -247,8 +146,6 @@ export default function OnboardingPreview() {
     >
       {letterBody}
     </div>
-  ) : (
-    blur
   );
 
   const disclaimerCopy = (
@@ -302,7 +199,7 @@ export default function OnboardingPreview() {
       }}
     >
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <Link to="/start" style={{ color: TEXT_ON_SLATE, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
+        <Link to="/upload" style={{ color: TEXT_ON_SLATE, fontWeight: 600, textDecoration: 'none', fontSize: 15 }}>
           ← Edit details
         </Link>
         <h1 style={{ fontSize: 'clamp(22px, 4vw, 28px)', marginTop: 20, marginBottom: 8, color: TEXT_ON_SLATE, fontWeight: 800 }}>
@@ -310,7 +207,7 @@ export default function OnboardingPreview() {
         </h1>
         <p style={{ fontSize: 17, fontWeight: 700, color: '#4ade80', marginBottom: 24 }}>{data.revenue_message}</p>
         <h2 style={{ fontSize: 15, fontWeight: 800, color: TEXT_MUTED_ON_SLATE, marginBottom: 12 }}>
-          {TESTING_PAYWALL_DISABLED || data.account_linked ? 'Structured appeal (full)' : 'Structured appeal (excerpt)'}
+          Structured appeal
         </h2>
         {letterBlock}
 
@@ -326,66 +223,64 @@ export default function OnboardingPreview() {
           {disclaimerCopy}
         </div>
 
-        {TESTING_PAYWALL_DISABLED || data.account_linked ? (
-          <div style={{ marginTop: 28 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              <button
-                type="button"
-                disabled={copyBusy}
-                onClick={copyAppeal}
-                style={{ ...btnPrimary, cursor: copyBusy ? 'wait' : 'pointer', opacity: copyBusy ? 0.85 : 1 }}
-                onMouseEnter={(e) => {
-                  if (!copyBusy) e.currentTarget.style.background = primaryGreenHover;
-                }}
-                onMouseLeave={(e) => {
-                  if (!copyBusy) e.currentTarget.style.background = primaryGreen;
-                }}
-              >
-                {copyBusy ? 'Copying…' : 'Copy letter'}
-              </button>
-              <button
-                type="button"
-                disabled={pdfBusy}
-                onClick={downloadPdf}
-                style={{ ...btnPrimary, cursor: pdfBusy ? 'wait' : 'pointer', opacity: pdfBusy ? 0.85 : 1 }}
-                onMouseEnter={(e) => {
-                  if (!pdfBusy) e.currentTarget.style.background = primaryGreenHover;
-                }}
-                onMouseLeave={(e) => {
-                  if (!pdfBusy) e.currentTarget.style.background = primaryGreen;
-                }}
-              >
-                {pdfBusy ? 'Preparing…' : 'Download PDF'}
-              </button>
-              <button
-                type="button"
-                disabled={docxBusy}
-                onClick={downloadDocx}
-                style={{ ...btnPrimary, cursor: docxBusy ? 'wait' : 'pointer', opacity: docxBusy ? 0.85 : 1 }}
-                onMouseEnter={(e) => {
-                  if (!docxBusy) e.currentTarget.style.background = primaryGreenHover;
-                }}
-                onMouseLeave={(e) => {
-                  if (!docxBusy) e.currentTarget.style.background = primaryGreen;
-                }}
-              >
-                {docxBusy ? 'Preparing…' : 'Download DOCX'}
-              </button>
-              <Link
-                to="/start"
-                style={{
-                  ...btnMuted,
-                  display: 'inline-block',
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                  boxSizing: 'border-box',
-                }}
-              >
-                Start over
-              </Link>
-            </div>
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <button
+              type="button"
+              disabled={copyBusy}
+              onClick={copyAppeal}
+              style={{ ...btnPrimary, cursor: copyBusy ? 'wait' : 'pointer', opacity: copyBusy ? 0.85 : 1 }}
+              onMouseEnter={(e) => {
+                if (!copyBusy) e.currentTarget.style.background = primaryGreenHover;
+              }}
+              onMouseLeave={(e) => {
+                if (!copyBusy) e.currentTarget.style.background = primaryGreen;
+              }}
+            >
+              {copyBusy ? 'Copying…' : 'Copy letter'}
+            </button>
+            <button
+              type="button"
+              disabled={pdfBusy}
+              onClick={downloadPdf}
+              style={{ ...btnPrimary, cursor: pdfBusy ? 'wait' : 'pointer', opacity: pdfBusy ? 0.85 : 1 }}
+              onMouseEnter={(e) => {
+                if (!pdfBusy) e.currentTarget.style.background = primaryGreenHover;
+              }}
+              onMouseLeave={(e) => {
+                if (!pdfBusy) e.currentTarget.style.background = primaryGreen;
+              }}
+            >
+              {pdfBusy ? 'Preparing…' : 'Download PDF'}
+            </button>
+            <button
+              type="button"
+              disabled={docxBusy}
+              onClick={downloadDocx}
+              style={{ ...btnPrimary, cursor: docxBusy ? 'wait' : 'pointer', opacity: docxBusy ? 0.85 : 1 }}
+              onMouseEnter={(e) => {
+                if (!docxBusy) e.currentTarget.style.background = primaryGreenHover;
+              }}
+              onMouseLeave={(e) => {
+                if (!docxBusy) e.currentTarget.style.background = primaryGreen;
+              }}
+            >
+              {docxBusy ? 'Preparing…' : 'Download DOCX'}
+            </button>
+            <Link
+              to="/upload"
+              style={{
+                ...btnMuted,
+                display: 'inline-block',
+                textDecoration: 'none',
+                textAlign: 'center',
+                boxSizing: 'border-box',
+              }}
+            >
+              Start over
+            </Link>
           </div>
-        ) : null}
+        </div>
 
         {err && <p style={{ color: '#c2410c', marginTop: 16, fontWeight: 600 }}>{err}</p>}
 
@@ -396,81 +291,21 @@ export default function OnboardingPreview() {
             borderTop: '2px solid rgba(148, 163, 184, 0.35)',
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 800, color: TEXT_ON_SLATE, marginBottom: 6 }}>Choose a plan</h2>
-          <p style={{ fontSize: 14, color: TEXT_MUTED_ON_SLATE, marginBottom: 16 }}>Unlock downloads and ongoing appeals with a one-time purchase or subscription.</p>
-          <div style={{ display: 'grid', gap: 14 }}>
-            <button
-              type="button"
-              disabled={payLoading}
-              onClick={startRetail}
-              style={{
-                padding: 16,
-                textAlign: 'left',
-                border: `1px solid ${border}`,
-                borderRadius: 10,
-                background: cardBg,
-                cursor: payLoading ? 'wait' : 'pointer',
-                boxShadow: '0 1px 2px rgba(15,23,42,0.05)',
-              }}
-            >
-              <strong style={{ color: navy }}>$79</strong> — single appeal
-              <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Pay once, unlock PDF + account</div>
-            </button>
-
-            <div style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 16, background: cardBg }}>
-              <label style={{ fontSize: 13, display: 'block', marginBottom: 10, fontWeight: 600, color: '#334155' }}>
-                Email (for subscription checkout)
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@practice.com"
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    marginTop: 6,
-                    padding: 10,
-                    borderRadius: 8,
-                    border: `1px solid ${border}`,
-                    fontSize: 15,
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                disabled={payLoading}
-                onClick={() => startPlan('starter')}
-                style={{
-                  width: '100%',
-                  padding: 14,
-                  marginBottom: 10,
-                  textAlign: 'left',
-                  border: `1px solid ${border}`,
-                  borderRadius: 8,
-                  background: cardBg,
-                  cursor: payLoading ? 'wait' : 'pointer',
-                }}
-              >
-                <strong style={{ color: navy }}>$199/mo</strong> — 15 appeals
-              </button>
-              <button
-                type="button"
-                disabled={payLoading}
-                onClick={() => startPlan('core')}
-                style={{
-                  width: '100%',
-                  padding: 14,
-                  textAlign: 'left',
-                  border: `2px solid ${primaryGreen}`,
-                  borderRadius: 8,
-                  background: '#f0fdf4',
-                  cursor: payLoading ? 'wait' : 'pointer',
-                }}
-              >
-                <strong style={{ color: navy }}>$399/mo</strong> — best value · 40 appeals
-              </button>
-            </div>
-          </div>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: TEXT_ON_SLATE, marginBottom: 6 }}>Need another plan?</h2>
+          <p style={{ fontSize: 14, color: TEXT_MUTED_ON_SLATE, marginBottom: 16 }}>
+            Change or upgrade your subscription on the pricing page.
+          </p>
+          <Link
+            to="/pricing"
+            style={{
+              ...btnPrimary,
+              display: 'inline-block',
+              textDecoration: 'none',
+              textAlign: 'center',
+            }}
+          >
+            View pricing
+          </Link>
         </div>
       </div>
     </div>

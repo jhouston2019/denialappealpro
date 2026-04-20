@@ -5,8 +5,10 @@ Customer auth + denial queue API (login persistence, batch intake, status workfl
 import csv
 import io
 import json
+import logging
 import os
 import re
+import time
 import shutil
 import tempfile
 import uuid
@@ -15,16 +17,26 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
-from flask import Blueprint, request, jsonify, g, current_app, send_file
+from flask import Blueprint, request, jsonify, g, current_app, send_file, session
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import defer, load_only
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from models import db, User, Appeal, ClaimStatusEvent, ReferralPartner
-from user_auth import register_user, login_user, verify_user_token
-from credit_manager import CreditManager
+from models import (
+    db,
+    User,
+    Appeal,
+    ClaimStatusEvent,
+    ReferralPartner,
+    ProcessedStripeSession,
+    PaymentTransaction,
+)
+import stripe
+
+from user_auth import register_user, login_user, _user_public
+from credit_manager import CreditManager, PricingManager
 from stripe_billing import StripeBilling
 from retention_service import dashboard_metrics as retention_dashboard_metrics
 from batch_appeals_worker import (
@@ -46,8 +58,10 @@ from appeal_bundle import (
 from appeal_pdf_builder import build_appeal_pdf_filename
 from fax_cover_sheet import build_fax_cover_filename, generate_fax_cover_pdf_bytes
 from claim_recovery import apply_pipeline_to_appeal, autoFixClaim, prepareResubmission, predictDenialScore
+from session_customer import bind_customer_session, validate_customer_session
 
 TRACKING_STATUSES = frozenset({'generated', 'submitted', 'pending', 'approved', 'denied'})
+portal_logger = logging.getLogger(__name__)
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -159,23 +173,24 @@ def _appeal_detail(a: Appeal):
     }
 
 
-def require_customer_auth(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        secret = current_app.config['SECRET_KEY']
-        auth = request.headers.get('Authorization', '')
-        if not auth.startswith('Bearer '):
-            return jsonify({'error': 'Unauthorized'}), 401
-        token = auth[7:].strip()
-        data = verify_user_token(secret, token)
-        if not data:
-            return jsonify({'error': 'Invalid or expired session'}), 401
-        g.current_user_id = data['uid']
-        g.current_user_email = data['email']
-        _touch_activity(g.current_user_id)
-        return f(*args, **kwargs)
+def require_customer_auth(require_paid=True):
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            _uid, err = validate_customer_session()
+            if err is not None:
+                resp, code = err
+                return resp, code
+            _touch_activity(g.current_user_id)
+            if require_paid:
+                u = User.query.get(g.current_user_id)
+                if not u or u.is_paid is not True:
+                    return jsonify({'error': 'Active subscription required'}), 403
+            return f(*args, **kwargs)
 
-    return wrapped
+        return wrapped
+
+    return decorator
 
 
 def _touch_activity(user_id: int) -> None:
@@ -244,7 +259,11 @@ def _parse_denial_codes_list(raw):
 
 def _build_pipeline_payload_from_ingest(data, defaults):
     cpt = str(data.get('cpt_codes') or data.get('cptCodes') or '').strip()
-    icd = str(data.get('icd_codes') or data.get('icdCodes') or '').strip()
+    icd_raw = data.get('icd10_codes') or data.get('icd_codes') or data.get('icdCodes') or ''
+    if isinstance(icd_raw, list):
+        icd = ','.join(str(x).strip() for x in icd_raw if str(x).strip())[:200]
+    else:
+        icd = str(icd_raw).strip()
     mods = str(data.get('modifiers') or '').strip()
     denial_codes = data.get('denial_codes') or data.get('denial_code') or ''
     carc = _parse_denial_codes_list(denial_codes)
@@ -255,6 +274,7 @@ def _build_pipeline_payload_from_ingest(data, defaults):
     return {
         'cpt_codes': cpt,
         'cptCodes': cpt,
+        'icd10_codes': icd,
         'icd_codes': icd,
         'icdCodes': icd,
         'diagnosis_code': icd,
@@ -317,6 +337,12 @@ def init_customer_portal(app, limiter, generator):
             )
             if err:
                 return jsonify({'error': err}), 400
+            u = User.query.get(payload['user']['id'])
+            if u:
+                bind_customer_session(u, portal_logger)
+                nc, nv = _new_denials_since_visit(u)
+                payload['new_denials_since_visit'] = nc
+                payload['new_denials_dollar_value'] = nv
             return jsonify(payload), 201
         except IntegrityError:
             db.session.rollback()
@@ -385,21 +411,184 @@ def init_customer_portal(app, limiter, generator):
         new_count, new_value = _new_denials_since_visit(user) if user else (0, 0.0)
         payload['new_denials_since_visit'] = new_count
         payload['new_denials_dollar_value'] = new_value
+        if user:
+            bind_customer_session(user, portal_logger)
         return jsonify(payload), 200
 
+    @customer_bp.route('/auth/logout', methods=['POST'])
+    @limit('60 per hour')
+    def auth_logout():
+        session.clear()
+        return jsonify({'success': True}), 200
+
+    @customer_bp.route('/auth/create-session-from-stripe', methods=['POST'])
+    @limit('30 per hour')
+    def auth_create_session_from_stripe():
+        """Bind server session from Stripe Checkout session_id. Does not grant is_paid (verify-payment only). Idempotent."""
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+        data = request.get_json(silent=True) or {}
+        checkout_session_id = (data.get('session_id') or '').strip()
+        if not checkout_session_id:
+            return jsonify({'error': 'session_id required'}), 400
+
+        row = ProcessedStripeSession.query.get(checkout_session_id)
+        if row:
+            user = User.query.get(row.user_id)
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            portal_logger.info(
+                'create-session-from-stripe idempotent replay session_id=%s user_id=%s',
+                checkout_session_id,
+                user.id,
+            )
+            bind_customer_session(user, portal_logger)
+            return jsonify({'success': True, 'user': _user_public(user)}), 200
+
+        try:
+            s = stripe.checkout.Session.retrieve(checkout_session_id)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+
+        cs_status = s.get('status')
+        if cs_status == 'expired':
+            return jsonify({'error': 'Checkout session expired'}), 400
+        exp = s.get('expires_at')
+        if exp and int(exp) < int(time.time()):
+            return jsonify({'error': 'Checkout session expired'}), 400
+
+        cust = s.get('customer')
+        if not cust:
+            portal_logger.warning('checkout session missing customer session_id=%s', checkout_session_id)
+            return jsonify({'error': 'Invalid checkout session'}), 400
+
+        mode = s.get('mode')
+        payment_status = (s.get('payment_status') or '').lower()
+        if mode == 'subscription':
+            if cs_status != 'complete':
+                return jsonify({'error': 'Payment not completed'}), 402
+            if payment_status not in ('paid', 'no_payment_required'):
+                return jsonify({'error': 'Payment not completed'}), 402
+        else:
+            if payment_status != 'paid' or cs_status != 'complete':
+                return jsonify({'error': 'Payment not completed'}), 402
+
+        meta = s.get('metadata') or {}
+        meta_uid_raw = meta.get('user_id')
+        user_by_cust = User.query.filter_by(stripe_customer_id=cust).first()
+        user_by_meta = None
+        if meta_uid_raw is not None:
+            try:
+                user_by_meta = User.query.get(int(meta_uid_raw))
+            except (ValueError, TypeError):
+                user_by_meta = None
+
+        if user_by_cust and user_by_meta and user_by_cust.id != user_by_meta.id:
+            portal_logger.warning(
+                'checkout user mismatch: stripe_customer vs metadata user session_id=%s',
+                checkout_session_id,
+            )
+            return jsonify({'error': 'Session user mismatch'}), 400
+
+        user = user_by_cust or user_by_meta
+
+        email = (s.get('customer_details') or {}).get('email') or s.get('customer_email')
+        email = (email or '').strip().lower()
+        if user is None and email:
+            user = User.query.filter_by(email=email).first()
+        if user is None and email:
+            user = User(email=email)
+            db.session.add(user)
+            db.session.flush()
+
+        if not user:
+            return jsonify({'error': 'Could not resolve user'}), 400
+
+        if user_by_cust and user.id != user_by_cust.id:
+            portal_logger.warning(
+                'checkout resolved user != stripe_customer mapping session_id=%s',
+                checkout_session_id,
+            )
+            return jsonify({'error': 'Session user mismatch'}), 400
+        if user_by_meta and user.id != user_by_meta.id:
+            portal_logger.warning(
+                'checkout resolved user != metadata user_id session_id=%s',
+                checkout_session_id,
+            )
+            return jsonify({'error': 'Session user mismatch'}), 400
+
+        if user.stripe_customer_id and user.stripe_customer_id != cust:
+            portal_logger.warning(
+                'checkout stripe_customer mismatch user_id=%s session_id=%s',
+                user.id,
+                checkout_session_id,
+            )
+            return jsonify({'error': 'Session user mismatch'}), 400
+        if meta_uid_raw is not None and user_by_meta and user.id != user_by_meta.id:
+            portal_logger.warning(
+                'checkout resolved user differs from metadata session_id=%s',
+                checkout_session_id,
+            )
+            return jsonify({'error': 'Session user mismatch'}), 400
+
+        user.stripe_customer_id = cust
+        user.payment_verification_status = 'processing'
+        if user.is_paid is False:
+            user.is_paid = None
+        if mode == 'subscription' and s.get('subscription'):
+            user.stripe_subscription_id = s.get('subscription')
+            plan = (meta.get('plan') or '').lower()
+            if plan:
+                user.subscription_tier = plan
+                ti = PricingManager.get_subscription_tier(plan)
+                if ti:
+                    user.plan_limit = ti['included_appeals']
+
+        amt_raw = s.get('amount_total')
+        amt = (Decimal(amt_raw) / Decimal(100)) if amt_raw is not None else None
+
+        db.session.add(ProcessedStripeSession(session_id=checkout_session_id, user_id=user.id))
+        db.session.add(
+            PaymentTransaction(
+                session_id=checkout_session_id,
+                user_id=user.id,
+                amount=amt,
+                status='processing',
+            )
+        )
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            portal_logger.info(
+                'create-session-from-stripe integrity replay session_id=%s', checkout_session_id
+            )
+            row = ProcessedStripeSession.query.get(checkout_session_id)
+            if not row:
+                return jsonify({'error': 'Could not record session'}), 500
+            user = User.query.get(row.user_id)
+            if not user:
+                return jsonify({'error': 'User not found'}), 500
+
+        bind_customer_session(user, portal_logger)
+        return jsonify({'success': True, 'user': _user_public(user)}), 200
+
     @customer_bp.route('/auth/me', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth(require_paid=False)
     def auth_me():
         user = User.query.get(g.current_user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
         new_count, new_value = _new_denials_since_visit(user)
+        has_data = Appeal.query.filter_by(user_id=user.id).first() is not None
+        pvs = getattr(user, 'payment_verification_status', None)
         return jsonify(
             {
                 'user': {
                     'id': user.id,
                     'email': user.email,
-                    'last_queue_visit_at': user.last_queue_visit_at.isoformat() if user.last_queue_visit_at else None,
+                    'is_paid': user.is_paid,
+                    'has_data': has_data,
+                    **({'payment_verification_status': pvs} if pvs is not None else {}),
                 },
                 'new_denials_since_visit': new_count,
                 'new_denials_dollar_value': new_value,
@@ -407,11 +596,13 @@ def init_customer_portal(app, limiter, generator):
         ), 200
 
     @customer_bp.route('/user/profile', methods=['GET', 'POST', 'PUT'])
-    @require_customer_auth
+    @require_customer_auth(require_paid=False)
     def user_profile():
         user = User.query.get(g.current_user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
+        if user.is_paid is not True and getattr(user, 'payment_verification_status', None) != 'processing':
+            return jsonify({'error': 'Active subscription required'}), 403
 
         if request.method == 'GET':
             return jsonify(
@@ -451,7 +642,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify({'success': True}), 200
 
     @customer_bp.route('/auth/queue-viewed', methods=['POST'])
-    @require_customer_auth
+    @require_customer_auth()
     def auth_queue_viewed():
         user = User.query.get(g.current_user_id)
         if not user:
@@ -461,7 +652,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify({'success': True}), 200
 
     @customer_bp.route('/queue/count', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_count():
         """Total rows for current filters — load async from UI so list endpoint skips COUNT(*)."""
         t0 = time.time()
@@ -471,7 +662,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify({'total': total}), 200
 
     @customer_bp.route('/queue', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_list():
         page = max(1, int(request.args.get('page', 1)))
         limit = min(100, max(1, int(request.args.get('limit', 25))))
@@ -530,7 +721,7 @@ def init_customer_portal(app, limiter, generator):
         )
 
     @customer_bp.route('/queue/metrics', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_metrics():
         t0 = time.time()
         uid = g.current_user_id
@@ -617,7 +808,7 @@ def init_customer_portal(app, limiter, generator):
         ), 200
 
     @customer_bp.route('/queue/<appeal_id>', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_detail(appeal_id):
         a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
         if not a:
@@ -625,7 +816,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify({'claim': _appeal_detail(a)}), 200
 
     @customer_bp.route('/queue/<appeal_id>', methods=['PATCH'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_patch(appeal_id):
         a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
         if not a:
@@ -676,7 +867,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/<appeal_id>/generate', methods=['POST'])
     @limit('30 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_generate(appeal_id):
         generator = _generator()
         a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
@@ -756,7 +947,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/<appeal_id>/rebuild-pdf', methods=['POST'])
     @limit('60 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_rebuild_pdf(appeal_id):
         generator = _generator()
         a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()
@@ -777,7 +968,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/analytics/recovery', methods=['GET'])
     @limit('120 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def analytics_recovery():
         """Denial Insights + Payer Intelligence in one payload (fast single round-trip)."""
         uid = g.current_user_id
@@ -787,7 +978,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/<appeal_id>/follow-up', methods=['POST'])
     @limit('20 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_follow_up(appeal_id):
         """Generate second-level (Level 2) appeal — uses one generation credit."""
         generator = _generator()
@@ -859,7 +1050,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/batch', methods=['POST'])
     @limit('20 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_batch():
         uid = g.current_user_id
         defaults = {}
@@ -975,7 +1166,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/<appeal_id>/export', methods=['GET'])
     @limit('120 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_export(appeal_id):
         """Download appeal PDF, merged appeal+fax, or ZIP (appeal + fax). mode=appeal|merged|zip"""
         mode = (request.args.get('mode') or 'appeal').lower()
@@ -1014,7 +1205,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/batch-appeals', methods=['POST'])
     @limit('8 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_batch_appeals_start():
         """CSV batch: generate appeal text + PDF per row; poll job then download ZIP.
         Accepts JSON { rows, defaults? } or multipart file field \"file\" (.csv)."""
@@ -1065,7 +1256,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/batch-appeals-pdfs', methods=['POST'])
     @limit('8 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_batch_appeals_pdfs_start():
         """Multi-PDF batch: extract each letter, generate appeal + PDF; poll then download ZIP."""
         if not (request.content_type and 'multipart/form-data' in request.content_type):
@@ -1110,7 +1301,7 @@ def init_customer_portal(app, limiter, generator):
         ), 202
 
     @customer_bp.route('/queue/zip-status/<job_id>', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_zip_status(job_id):
         """Lightweight job poll for batch ZIP generation (same payload as batch-appeals status)."""
         body = _batch_appeal_job_status_dict(job_id, g.current_user_id)
@@ -1119,7 +1310,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify(body), 200
 
     @customer_bp.route('/queue/batch-appeals/<job_id>', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_batch_appeals_status(job_id):
         body = _batch_appeal_job_status_dict(job_id, g.current_user_id)
         if body is None:
@@ -1127,7 +1318,7 @@ def init_customer_portal(app, limiter, generator):
         return jsonify(body), 200
 
     @customer_bp.route('/queue/batch-appeals/<job_id>/zip', methods=['GET'])
-    @require_customer_auth
+    @require_customer_auth()
     def queue_batch_appeals_zip(job_id):
         j = get_job(job_id)
         if not j or j.get('user_id') != g.current_user_id:
@@ -1141,7 +1332,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/claims/ingest', methods=['POST'])
     @limit('120 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def claims_ingest():
         """Billing/EHR-style single claim ingest: validate, score, persist."""
         uid = g.current_user_id
@@ -1216,7 +1407,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/claims/ingest/batch', methods=['POST'])
     @limit('60 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def claims_ingest_batch():
         """Batch ingest (max 100 rows) for clearinghouse / PM exports."""
         uid = g.current_user_id
@@ -1305,7 +1496,7 @@ def init_customer_portal(app, limiter, generator):
 
     @customer_bp.route('/queue/<appeal_id>/apply-fix-resubmit', methods=['POST'])
     @limit('30 per hour')
-    @require_customer_auth
+    @require_customer_auth()
     def queue_apply_fix_resubmit(appeal_id):
         """Auto-fix claim + build resubmission package (minimal user input)."""
         a = Appeal.query.filter_by(appeal_id=appeal_id, user_id=g.current_user_id).first()

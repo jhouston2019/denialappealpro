@@ -4,72 +4,69 @@ import { useUser } from './UserContext';
 
 const AuthContext = createContext(null);
 
-const TOKEN_KEY = 'customerToken';
-
 export function AuthProvider({ children }) {
   const { setUser, clearUser } = useUser();
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem('customerUser');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [authUser, setAuthUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [newDenialsBanner, setNewDenialsBanner] = useState(null);
   const [newDenialsDollarValue, setNewDenialsDollarValue] = useState(null);
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
+  const hydrateFromMe = useCallback((data) => {
+    setAuthUser(data.user);
+    if (typeof data.new_denials_since_visit === 'number') {
+      setNewDenialsBanner(data.new_denials_since_visit);
     }
-  }, [token]);
-
-  useEffect(() => {
-    if (!token || authUser) return;
-    api
-      .get('/api/auth/me')
-      .then(({ data }) => {
-        setAuthUser(data.user);
-        if (typeof data.new_denials_since_visit === 'number') {
-          setNewDenialsBanner(data.new_denials_since_visit);
-        }
-        if (typeof data.new_denials_dollar_value === 'number') {
-          setNewDenialsDollarValue(data.new_denials_dollar_value);
-        }
-      })
-      .catch(() => {
-        setToken(null);
-        setAuthUser(null);
-      });
-  }, [token, authUser]);
-
-  useEffect(() => {
-    if (authUser) {
-      localStorage.setItem('customerUser', JSON.stringify(authUser));
-      setUser(authUser.email, String(authUser.id));
-    } else {
-      localStorage.removeItem('customerUser');
-    }
-  }, [authUser, setUser]);
-
-  const applySession = useCallback((payload) => {
-    setToken(payload.token);
-    setAuthUser(payload.user);
-    if (typeof payload.new_denials_since_visit === 'number') {
-      setNewDenialsBanner(payload.new_denials_since_visit);
-    }
-    if (typeof payload.new_denials_dollar_value === 'number') {
-      setNewDenialsDollarValue(payload.new_denials_dollar_value);
+    if (typeof data.new_denials_dollar_value === 'number') {
+      setNewDenialsDollarValue(data.new_denials_dollar_value);
     }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get('/api/auth/me')
+      .then(({ data }) => {
+        if (cancelled) return;
+        hydrateFromMe(data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAuthUser(null);
+        setNewDenialsBanner(null);
+        setNewDenialsDollarValue(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateFromMe]);
+
+  useEffect(() => {
+    if (authUser) {
+      setUser(authUser.email, String(authUser.id));
+    } else {
+      clearUser();
+    }
+  }, [authUser, setUser, clearUser]);
+
+  const applySession = useCallback(
+    (payload) => {
+      if (payload?.user) setAuthUser(payload.user);
+      if (typeof payload?.new_denials_since_visit === 'number') {
+        setNewDenialsBanner(payload.new_denials_since_visit);
+      }
+      if (typeof payload?.new_denials_dollar_value === 'number') {
+        setNewDenialsDollarValue(payload.new_denials_dollar_value);
+      }
+    },
+    []
+  );
+
   const login = async (email, password) => {
     const { data } = await api.post('/api/auth/login', { email, password });
-    applySession(data);
+    hydrateFromMe(data);
     return data;
   };
 
@@ -80,43 +77,45 @@ export function AuthProvider({ children }) {
       password,
       referral_code: referralCode || undefined,
     });
-    applySession(data);
+    hydrateFromMe(data);
     return data;
   };
 
-  const logout = useCallback(() => {
-    setToken(null);
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/api/auth/logout', {});
+    } catch {
+      /* still clear client */
+    }
     setAuthUser(null);
     setNewDenialsBanner(null);
     setNewDenialsDollarValue(null);
     clearUser();
+    try {
+      sessionStorage.removeItem('dap_via_app');
+    } catch {
+      /* ignore */
+    }
   }, [clearUser]);
 
   const markQueueViewed = useCallback(async () => {
-    if (!token) return;
     try {
       await api.post('/api/auth/queue-viewed', {});
     } finally {
       setNewDenialsBanner(0);
       setNewDenialsDollarValue(0);
     }
-  }, [token]);
+  }, []);
 
   const refreshMe = useCallback(async () => {
-    if (!token) return null;
     const { data } = await api.get('/api/auth/me');
-    if (typeof data.new_denials_since_visit === 'number') {
-      setNewDenialsBanner(data.new_denials_since_visit);
-    }
-    if (typeof data.new_denials_dollar_value === 'number') {
-      setNewDenialsDollarValue(data.new_denials_dollar_value);
-    }
+    hydrateFromMe(data);
     return data;
-  }, [token]);
+  }, [hydrateFromMe]);
 
   const value = {
-    token,
-    isAuthenticated: Boolean(token),
+    authChecked,
+    isAuthenticated: Boolean(authUser),
     user: authUser,
     newDenialsBanner,
     newDenialsDollarValue,

@@ -27,7 +27,12 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     stripe_customer_id = db.Column(db.String(255), unique=True, index=True)
+    stripe_subscription_id = db.Column(db.String(255), nullable=True, index=True)
     subscription_tier = db.Column(db.String(50))  # starter, core, scale, or null
+    # Unified payment gate: only redirect to /pricing when explicitly False
+    is_paid = db.Column(db.Boolean, nullable=True, default=None)
+    # Checkout lifecycle: only verify-payment may set is_paid True; create-session sets processing
+    payment_verification_status = db.Column(db.String(32), nullable=True)
     
     # SEPARATED CREDIT POOLS - subscription resets, bulk accumulates
     subscription_credits = db.Column(db.Integer, default=0, nullable=False)
@@ -114,6 +119,27 @@ class CreditPack(db.Model):
     
     def __repr__(self):
         return f'<CreditPack {self.name} - {self.credits} credits>'
+
+class ProcessedStripeSession(db.Model):
+    """Idempotency for POST /api/auth/create-session-from-stripe (Checkout session_id)."""
+
+    __tablename__ = 'processed_sessions'
+
+    session_id = db.Column(db.String(255), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    processed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PaymentTransaction(db.Model):
+    __tablename__ = 'payment_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=True)  # major currency units
+    status = db.Column(db.String(64), nullable=False, default='succeeded')
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
 
 class ProcessedWebhookEvent(db.Model):
     __tablename__ = 'processed_webhook_events'

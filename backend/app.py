@@ -12,7 +12,17 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
 from config import Config
-from models import db, Appeal, User, SubscriptionPlan, CreditPack, ProcessedWebhookEvent, Admin, ClaimStatusEvent
+from models import (
+    db,
+    Appeal,
+    User,
+    SubscriptionPlan,
+    CreditPack,
+    ProcessedWebhookEvent,
+    Admin,
+    ClaimStatusEvent,
+    PaymentTransaction,
+)
 from appeal_generator import AppealGenerator
 from validator import validate_timely_filing, check_duplicate
 from supabase_storage import storage
@@ -25,7 +35,8 @@ from admin_auth import admin_auth, require_admin
 from auto_setup_admin import auto_setup_admin
 from stripe_billing import StripeBilling
 from customer_portal import init_customer_portal
-from onboarding_api import register_onboarding_routes
+from intake_api import register_intake_routes
+from unified_payment import register_unified_payment_routes
 from intelligence_api import register_intelligence_routes
 
 # Validate environment configuration on startup
@@ -92,6 +103,7 @@ allowed_origins = [
 CORS(
     app,
     origins=allowed_origins,
+    supports_credentials=True,
     allow_headers=['Content-Type', 'Authorization'],
     methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 )
@@ -124,7 +136,8 @@ stripe.api_key = stripe_key
 
 generator = AppealGenerator(app.config['GENERATED_FOLDER'])
 init_customer_portal(app, limiter, generator)
-register_onboarding_routes(app, limiter, generator)
+register_intake_routes(app, limiter, generator)
+register_unified_payment_routes(app, limiter)
 register_intelligence_routes(app, limiter)
 
 with app.app_context():
@@ -174,6 +187,12 @@ with app.app_context():
         sweep_interrupted_batch_jobs(db)
     except Exception as e:
         print(f"⚠️  Batch appeal jobs migration: {e}")
+    try:
+        from migrate_unified_payment import ensure_unified_payment_schema
+
+        ensure_unified_payment_schema(db)
+    except Exception as e:
+        print(f"⚠️  Unified payment migration: {e}")
     # Gunicorn loads app:app — __main__ block never runs; ensure tables, pricing, and admin exist.
     try:
         db.create_all()
@@ -231,122 +250,6 @@ def get_pricing_plans():
             'credit_packs': PricingManager.get_all_credit_packs()
         }), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/pricing/subscribe', methods=['POST'])
-@limiter.limit("5 per hour")
-def create_subscription():
-    """Create Stripe subscription checkout session"""
-    try:
-        data = request.json
-        email = data.get('email')
-        tier = data.get('tier')  # starter, core, scale
-        
-        if not email or not tier:
-            return jsonify({'error': 'Email and tier are required'}), 400
-        
-        tier_info = PricingManager.get_subscription_tier(tier)
-        if not tier_info:
-            return jsonify({'error': 'Invalid subscription tier'}), 400
-        
-        # Get or create user
-        user = CreditManager.get_or_create_user(email)
-        
-        # Create Stripe customer if doesn't exist
-        if not user.stripe_customer_id:
-            customer = stripe.Customer.create(email=email)
-            user.stripe_customer_id = customer.id
-            db.session.commit()
-        
-        # Get subscription plan from database
-        plan = SubscriptionPlan.query.filter_by(name=tier).first()
-        if not plan:
-            return jsonify({'error': 'Subscription plan not found in database'}), 404
-        
-        # Create Stripe checkout session for subscription
-        session = stripe.checkout.Session.create(
-            customer=user.stripe_customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price': plan.stripe_price_id,
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/subscription/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/pricing",
-            metadata={
-                'user_id': user.id,
-                'tier': tier,
-                'type': 'subscription',
-                'plan_limit': tier_info['included_appeals']
-            }
-        )
-        
-        return jsonify({
-            'session_id': session.id,
-            'user_id': user.id
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Error creating subscription: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/pricing/credits', methods=['POST'])
-@limiter.limit("10 per hour")
-def purchase_credits():
-    """Create Stripe checkout session for credit pack purchase"""
-    try:
-        data = request.json
-        email = data.get('email')
-        pack_id = data.get('pack_id')  # pack_25, pack_50, etc.
-        
-        if not email or not pack_id:
-            return jsonify({'error': 'Email and pack_id are required'}), 400
-        
-        pack_info = PricingManager.get_credit_pack(pack_id)
-        if not pack_info:
-            return jsonify({'error': 'Invalid credit pack'}), 400
-        
-        # Get or create user
-        user = CreditManager.get_or_create_user(email)
-        
-        # Create Stripe customer if doesn't exist
-        if not user.stripe_customer_id:
-            customer = stripe.Customer.create(email=email)
-            user.stripe_customer_id = customer.id
-            db.session.commit()
-        
-        # Get credit pack from database
-        pack = CreditPack.query.filter_by(name=pack_info['name']).first()
-        if not pack:
-            return jsonify({'error': 'Credit pack not found in database'}), 404
-        
-        # Create Stripe checkout session
-        session = stripe.checkout.Session.create(
-            customer=user.stripe_customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price': pack.stripe_price_id,
-                'quantity': 1,
-            }],
-            mode='payment',
-            success_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/credits/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/pricing",
-            metadata={
-                'user_id': user.id,
-                'pack_id': pack_id,
-                'credits': pack.credits,
-                'type': 'credit_pack'
-            }
-        )
-        
-        return jsonify({
-            'session_id': session.id,
-            'user_id': user.id
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Error purchasing credits: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
@@ -659,84 +562,9 @@ def generate_appeal_with_credits(appeal_id):
         print(f"❌ Error generating appeal: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/appeals/payment/<appeal_id>', methods=['POST'])
-@limiter.limit("5 per hour")
-def create_payment(appeal_id):
-    """Create retail payment for single appeal"""
-    try:
-        appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
-        if not appeal:
-            return jsonify({'error': 'Appeal not found'}), 404
-        
-        if appeal.payment_status == 'paid':
-            return jsonify({'error': 'Payment already completed'}), 400
-        
-        # Create Stripe checkout session for retail payment
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {'name': f'Appeal Generation - {appeal.claim_number}'},
-                    'unit_amount': 1000,  # $10.00
-                },
-                'quantity': 1,
-            }],
-            mode='payment',
-            success_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/download/{appeal_id}",
-            cancel_url=f"{request.headers.get('Origin', 'http://localhost:3000')}/payment/{appeal_id}",
-            metadata={
-                'appeal_id': appeal_id,
-                'type': 'retail'
-            }
-        )
-        
-        return jsonify({
-            'session_id': session.id,
-            'appeal_id': appeal_id
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Error in create_payment: {e}")
-        return jsonify({'error': str(e)}), 500
-
 # ============================================================================
-# STRIPE BILLING ENDPOINTS
+# STRIPE BILLING ENDPOINTS (customer portal + subscription info only)
 # ============================================================================
-
-@app.route('/api/stripe/create-checkout', methods=['POST'])
-@limiter.limit("10 per hour")
-def create_stripe_checkout():
-    """
-    Create Stripe checkout session for subscription
-    Uses new StripeBilling service with metered overage billing
-    """
-    try:
-        data = request.json
-        user_id = data.get('user_id')
-        plan = data.get('plan')  # starter, core, scale
-        
-        if not user_id or not plan:
-            return jsonify({'error': 'user_id and plan are required'}), 400
-        
-        # Get origin for redirect URLs
-        origin = request.headers.get('Origin', Config.DOMAIN)
-        success_url = f"{origin}/subscription/success?session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = f"{origin}/pricing"
-        
-        # Create checkout session with metered billing
-        result = StripeBilling.create_checkout_session(
-            user_id=user_id,
-            plan=plan,
-            success_url=success_url,
-            cancel_url=cancel_url
-        )
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        print(f"❌ Error creating checkout: {e}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stripe/create-portal', methods=['POST'])
 @limiter.limit("10 per hour")
@@ -754,7 +582,7 @@ def create_stripe_portal():
         
         # Get origin for return URL
         origin = request.headers.get('Origin', Config.DOMAIN)
-        return_url = f"{origin}/dashboard"
+        return_url = f"{origin}/app"
         
         # Create portal session
         result = StripeBilling.create_portal_session(
@@ -812,147 +640,67 @@ def upgrade_stripe_subscription():
 
 @app.route('/api/stripe/webhook', methods=['POST'])
 def stripe_webhook():
-    """
-    Enhanced Stripe webhook handler
-    Handles all subscription lifecycle events and metered billing
-    """
+    """Background reconciliation only — login, /success, and /app never depend on delivery."""
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
-    
-    # Verify webhook signature
     event = StripeBilling.verify_webhook_signature(payload, sig_header)
     if not event:
         return jsonify({'error': 'Invalid signature'}), 400
-    
+
     event_id = event['id']
     event_type = event['type']
-    
-    # HARD WEBHOOK IDEMPOTENCY - rely on unique constraint
     try:
         with db.session.begin():
             db.session.add(ProcessedWebhookEvent(event_id=event_id, event_type=event_type))
             db.session.flush()
     except Exception:
-        # IntegrityError from unique constraint = duplicate event
-        print(f"⚠️  Duplicate webhook event: {event_id}")
         return jsonify({'status': 'duplicate'}), 200
-    
-    print(f"📨 Processing webhook: {event_type}")
-    
-    # Handle checkout.session.completed
-    if event_type == 'checkout.session.completed':
-        session = event['data']['object']
-        metadata = session.get('metadata', {})
-        payment_type = metadata.get('type')
-        
-        if payment_type == 'subscription':
-            # NEW: Use StripeBilling service for subscription activation
-            StripeBilling.handle_checkout_completed(session)
-            
-            # LEGACY: Also update credit manager for backward compatibility
-            user_id = metadata.get('user_id')
-            tier = metadata.get('tier')
-            if user_id and tier:
-                CreditManager.set_subscription(user_id, tier)
-                CreditManager.update_plan_limit(user_id)
-                CreditManager.allocate_monthly_credits(user_id)
-        
-        elif payment_type == 'credit_pack':
-            # Handle credit pack purchase
-            user_id = metadata.get('user_id')
-            credits = int(metadata.get('credits', 0))
-            
-            if user_id and credits:
-                CreditManager.add_credits(user_id, credits, reason='purchase')
-                print(f"✓ Added {credits} credits to user {user_id}")
-        
-        elif payment_type == 'onboarding_retail':
-            appeal_id = metadata.get('appeal_id')
-            if appeal_id:
-                appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
-                if appeal and appeal.user_id is None:
-                    appeal.payment_status = 'paid'
-                    appeal.status = 'awaiting_account'
-                    appeal.paid_at = datetime.utcnow()
-                    appeal.stripe_payment_intent_id = session.get('payment_intent')
-                    db.session.commit()
-                    print(f"✓ Onboarding retail paid; awaiting account signup for {appeal_id}")
-        
-        elif payment_type == 'retail':
-            # Handle retail appeal payment
-            appeal_id = metadata.get('appeal_id')
-            
-            if appeal_id:
-                appeal = Appeal.query.filter_by(appeal_id=appeal_id).first()
-                if appeal:
-                    # CHECK IF ALREADY GENERATED
-                    if appeal.status == 'completed' or appeal.retail_token_used:
-                        print(f"⚠️  Appeal {appeal_id} already completed - ignoring webhook")
-                        return jsonify({'status': 'already_completed'}), 200
-                    
-                    appeal.payment_status = 'paid'
-                    appeal.status = 'paid'
-                    appeal.paid_at = datetime.utcnow()
-                    appeal.stripe_payment_intent_id = session.get('payment_intent')
-                    appeal.retail_token_used = True  # LOCK RETAIL GENERATION
-                    appeal.generation_count += 1
-                    db.session.commit()
-                    
-                    # Generate appeal after payment
-                    try:
-                        appeal_path = generator.generate_appeal(appeal)
-                        appeal.appeal_letter_path = appeal_path
-                        appeal.status = 'completed'
-                        appeal.completed_at = datetime.utcnow()
-                        appeal.last_generated_at = datetime.utcnow()
-                        if getattr(appeal, 'queue_status', None) is not None:
-                            appeal.queue_status = 'generated'
-                        db.session.commit()
-                        
-                        # INCREMENT USAGE TRACKING for retail appeals
-                        if appeal.user_id:
-                            CreditManager.increment_usage(appeal.user_id)
-                        
-                        print(f"✓ Appeal generated for {appeal_id}")
-                    except Exception as e:
-                        appeal.status = 'failed'
-                        db.session.commit()
-                        print(f"❌ Appeal generation failed: {e}")
-    
-    # Handle invoice.paid (for recurring subscriptions)
-    elif event_type == 'invoice.paid':
-        invoice = event['data']['object']
-        
-        # NEW: Use StripeBilling service to reset usage counters
-        StripeBilling.handle_invoice_paid(invoice)
-        
-        # LEGACY: Also allocate credits for backward compatibility
-        customer_id = invoice.get('customer')
-        user = User.query.filter_by(stripe_customer_id=customer_id).first()
-        if user and user.subscription_tier:
-            CreditManager.allocate_monthly_credits(user.id)
-    
-    # Handle customer.subscription.updated
-    elif event_type == 'customer.subscription.updated':
-        subscription = event['data']['object']
-        
-        # NEW: Use StripeBilling service to handle upgrades/downgrades
-        StripeBilling.handle_subscription_updated(subscription)
-    
-    # Handle customer.subscription.deleted
-    elif event_type == 'customer.subscription.deleted':
-        subscription = event['data']['object']
-        
-        # NEW: Use StripeBilling service to handle cancellation
-        StripeBilling.handle_subscription_deleted(subscription)
-        
-        # LEGACY: Also update credit manager
-        customer_id = subscription.get('customer')
-        user = User.query.filter_by(stripe_customer_id=customer_id).first()
-        if user:
-            CreditManager.cancel_subscription(user.id)
-    
-    # Event already marked as processed at start of function
+
+    try:
+        if event_type == 'checkout.session.completed':
+            session = event['data']['object']
+            metadata = session.get('metadata') or {}
+            if metadata.get('type') == 'subscription':
+                try:
+                    StripeBilling.handle_checkout_completed(session)
+                except Exception as e:
+                    print(f"⚠️ StripeBilling.handle_checkout_completed: {e}")
+                try:
+                    uid = metadata.get('user_id')
+                    tier = (metadata.get('plan') or metadata.get('tier') or '').lower()
+                    if uid and tier:
+                        iuid = int(uid)
+                        CreditManager.set_subscription(iuid, tier)
+                        CreditManager.update_plan_limit(iuid)
+                        CreditManager.allocate_monthly_credits(iuid)
+                except Exception as e:
+                    print(f"⚠️ CreditManager subscription sync: {e}")
+                sid = session.get('id')
+                if sid:
+                    txn = PaymentTransaction.query.filter_by(session_id=sid).first()
+                    if txn and txn.status != 'succeeded':
+                        txn.status = 'succeeded'
+                db.session.commit()
+        elif event_type == 'invoice.paid':
+            invoice = event['data']['object']
+            StripeBilling.handle_invoice_paid(invoice)
+            customer_id = invoice.get('customer')
+            user = User.query.filter_by(stripe_customer_id=customer_id).first()
+            if user and user.subscription_tier:
+                CreditManager.allocate_monthly_credits(user.id)
+        elif event_type == 'customer.subscription.updated':
+            StripeBilling.handle_subscription_updated(event['data']['object'])
+        elif event_type == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            StripeBilling.handle_subscription_deleted(subscription)
+            customer_id = subscription.get('customer')
+            user = User.query.filter_by(stripe_customer_id=customer_id).first()
+            if user:
+                CreditManager.cancel_subscription(user.id)
+    except Exception as e:
+        print(f"⚠️ webhook processing error: {e}")
+        db.session.rollback()
+
     return jsonify({'status': 'success'}), 200
 
 # ============================================================================

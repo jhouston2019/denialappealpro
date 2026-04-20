@@ -3,7 +3,7 @@ API for coding validation, modifier suggestions, and denial risk (intake + pre-g
 """
 import json
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 
 from coding_intelligence import (
     detectDenialRisk,
@@ -18,13 +18,10 @@ intelligence_bp = Blueprint('intelligence', __name__)
 
 def _optional_uid():
     try:
-        from user_auth import verify_user_token
-
-        auth = request.headers.get('Authorization', '')
-        if not auth.startswith('Bearer '):
+        uid = session.get('uid')
+        if uid is None:
             return None
-        data = verify_user_token(current_app.config['SECRET_KEY'], auth[7:].strip())
-        return data['uid'] if data else None
+        return int(uid)
     except Exception:
         return None
 
@@ -85,7 +82,7 @@ def register_intelligence_routes(app, limiter):
         if data.get('cptCodes') is not None or data.get('icdCodes') is not None:
             return jsonify(validateCoding(data)), 200
         cpt = data.get('cpt_codes') or data.get('cptCodes') or ''
-        icd = data.get('icd_codes') or data.get('icdCodes') or ''
+        icd = data.get('icd10_codes') or data.get('icd_codes') or data.get('icdCodes') or ''
         return jsonify(validateCoding(cpt, icd)), 200
 
     @intelligence_bp.route('/intelligence/suggest-modifiers', methods=['POST'])

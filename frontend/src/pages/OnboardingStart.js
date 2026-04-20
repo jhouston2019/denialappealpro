@@ -28,6 +28,7 @@ import {
   getDenialCategoryFromCodes,
   mapDenialToStrategy,
   serializeIntakeForBackend,
+  normalizeIcdCodesFromExtract,
   PAYER_SUGGESTIONS,
   normalizeCarcToken,
 } from '../utils/denialIntakeEngine';
@@ -206,7 +207,7 @@ function BulkQueueRows({ labels, job, jobKind }) {
 
 export default function OnboardingStart() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -329,7 +330,7 @@ export default function OnboardingStart() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       setProviderProfileEmpty(false);
       return undefined;
     }
@@ -340,17 +341,17 @@ export default function OnboardingStart() {
         if (cancelled) return;
         applyProviderProfilePayload(data);
       } catch {
-        if (token) setProviderProfileEmpty(true);
+        if (isAuthenticated) setProviderProfileEmpty(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token, applyProviderProfilePayload]);
+  }, [isAuthenticated, applyProviderProfilePayload]);
 
   /** Re-hydrate after landing actions call setIntake(emptyIntake()) and clear provider fields. */
   useEffect(() => {
-    if (!token || !mode) return undefined;
+    if (!isAuthenticated || !mode) return undefined;
     if (mode !== 'upload' && mode !== 'paste') return undefined;
     let cancelled = false;
     (async () => {
@@ -365,8 +366,15 @@ export default function OnboardingStart() {
     return () => {
       cancelled = true;
     };
-  }, [mode, token, applyProviderProfilePayload]);
+  }, [mode, isAuthenticated, applyProviderProfilePayload]);
 
+  /**
+   * Extraction → intake mapping (ICD pipeline):
+   * - API: icd10_codes (canonical) + icd_codes (legacy arrays) on /api/parse/denial-*
+   * - State: intake.icdCodes (camelCase array)
+   * - Preview POST: diagnosis_code + icd10_codes (comma string via serializeIntakeForBackend)
+   * - Backend: Appeal.diagnosis_code; generators use structured icd10_codes list from _split_codes(diagnosis_code)
+   */
   const applyExtractionData = useCallback((data) => {
     lastDenialParseResponseRef.current = data;
     const sfc = data.field_confidence || data.fieldConfidence || {};
@@ -380,7 +388,8 @@ export default function OnboardingStart() {
       .map((r) => String(r).trim().toUpperCase())
       .filter(Boolean);
     const cpts = (data.cpt_codes || []).map((c) => String(c).trim()).filter(Boolean);
-    const icds = (data.icd_codes || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+    /** Parse response: icd10_codes (canonical) + icd_codes (legacy). */
+    const icds = normalizeIcdCodesFromExtract(data);
     const overall = data.confidence || 'medium';
     const forceLow = overall === 'low' && !hasServerFc;
 
@@ -455,6 +464,7 @@ export default function OnboardingStart() {
     return {
       cpt_codes: (intake.cptCodes || []).join(', '),
       cptCodes: (intake.cptCodes || []).join(', '),
+      icd10_codes: serialized.icd10_codes || serialized.diagnosis_code || '',
       icd_codes: (intake.icdCodes || []).join(', '),
       icdCodes: (intake.icdCodes || []).join(', '),
       diagnosis_code: serialized.diagnosis_code || '',
@@ -504,7 +514,7 @@ export default function OnboardingStart() {
 
   /** Refresh profile when user reaches Step 3 so Settings saves apply mid-flow. */
   useEffect(() => {
-    if (singleStep !== 2 || !token) return undefined;
+    if (singleStep !== 2 || !isAuthenticated) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -518,7 +528,7 @@ export default function OnboardingStart() {
     return () => {
       cancelled = true;
     };
-  }, [singleStep, token, applyProviderProfilePayload]);
+  }, [singleStep, isAuthenticated, applyProviderProfilePayload]);
 
   useEffect(() => {
     if (singleStep !== 1) return;
@@ -557,13 +567,14 @@ export default function OnboardingStart() {
         fd.append('date_of_service', intake.dateOfService || '');
         fd.append('cpt_codes', payload.cpt_codes || '');
         fd.append('diagnosis_code', payload.diagnosis_code || '');
+        fd.append('icd10_codes', payload.icd10_codes || payload.diagnosis_code || '');
         fd.append('denial_code', payload.denial_code || '');
         if (file) fd.append('denial_file', file);
-        const { data } = await api.post('/api/onboarding/preview', fd);
+        const { data } = await api.post('/api/intake/preview', fd);
         navigate(`/start/preview/${data.appeal_id}`);
         return;
       }
-      const { data } = await api.post('/api/onboarding/preview', {
+      const { data } = await api.post('/api/intake/preview', {
         intake_mode: 'paste',
         payer,
         denial_reason: payload.denial_reason,
@@ -576,6 +587,7 @@ export default function OnboardingStart() {
         date_of_service: intake.dateOfService || '',
         cpt_codes: payload.cpt_codes || '',
         diagnosis_code: payload.diagnosis_code || '',
+        icd10_codes: payload.icd10_codes || payload.diagnosis_code || '',
         denial_code: payload.denial_code || '',
       });
       navigate(`/start/preview/${data.appeal_id}`);
@@ -818,7 +830,7 @@ export default function OnboardingStart() {
   };
 
   const importAllToQueue = async () => {
-    if (!token || !csvRows.length) return;
+    if (!isAuthenticated || !csvRows.length) return;
     setBatchMsg('');
     setLoading(true);
     try {
@@ -863,7 +875,7 @@ export default function OnboardingStart() {
   };
 
   const runCsvBulkAppeals = async () => {
-    if (!token || !csvRows.length) return;
+    if (!isAuthenticated || !csvRows.length) return;
     setErr('');
     setBatchMsg('');
     setBulkDoneJobId(null);
@@ -895,7 +907,7 @@ export default function OnboardingStart() {
   };
 
   const runPdfBulkAppeals = async () => {
-    if (!token || !bulkPdfFiles.length) return;
+    if (!isAuthenticated || !bulkPdfFiles.length) return;
     setErr('');
     setBatchMsg('');
     setBulkDoneJobId(null);
@@ -1243,7 +1255,7 @@ export default function OnboardingStart() {
               <code style={{ fontSize: 13 }}>processing_report.txt</code> inside the ZIP.
             </p>
 
-            {!token && (
+            {!isAuthenticated && (
               <p style={{ color: '#c2410c', fontWeight: 600, marginBottom: 14, fontSize: 14 }}>
                 Sign in to run bulk PDF processing and download your appeals ZIP.
               </p>
@@ -1361,26 +1373,26 @@ export default function OnboardingStart() {
                 )}
                 <button
                   type="button"
-                  disabled={!token || !bulkPdfFiles.length || bulkProcessing}
+                  disabled={!isAuthenticated || !bulkPdfFiles.length || bulkProcessing}
                   onClick={runPdfBulkAppeals}
                   style={{
                     width: '100%',
                     padding: 16,
                     marginTop: 16,
-                    background: !token || !bulkPdfFiles.length || bulkProcessing ? '#94a3b8' : primaryCta,
+                    background: !isAuthenticated || !bulkPdfFiles.length || bulkProcessing ? '#94a3b8' : primaryCta,
                     color: '#fff',
                     border: 'none',
                     borderRadius: 10,
                     fontWeight: 800,
                     fontSize: 16,
-                    cursor: !token || !bulkPdfFiles.length || bulkProcessing ? 'not-allowed' : 'pointer',
+                    cursor: !isAuthenticated || !bulkPdfFiles.length || bulkProcessing ? 'not-allowed' : 'pointer',
                   }}
                   onMouseEnter={(e) => {
-                    if (!token || !bulkPdfFiles.length || bulkProcessing) return;
+                    if (!isAuthenticated || !bulkPdfFiles.length || bulkProcessing) return;
                     e.target.style.background = primaryCtaHover;
                   }}
                   onMouseLeave={(e) => {
-                    if (!token || !bulkPdfFiles.length || bulkProcessing) return;
+                    if (!isAuthenticated || !bulkPdfFiles.length || bulkProcessing) return;
                     e.target.style.background = primaryCta;
                   }}
                 >
@@ -1466,7 +1478,7 @@ export default function OnboardingStart() {
                     </tbody>
                   </table>
                 </div>
-                {token && (
+                {isAuthenticated && (
                   <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     <button
                       type="button"
@@ -1502,7 +1514,7 @@ export default function OnboardingStart() {
                     </button>
                   </div>
                 )}
-                {!token && (
+                {!isAuthenticated && (
                   <p style={{ fontSize: 13, marginTop: 10, color: '#c2410c', fontWeight: 600 }}>
                     Sign in to generate all appeals as PDFs in one ZIP (up to {csvRows.length} rows).
                   </p>
@@ -1932,7 +1944,7 @@ export default function OnboardingStart() {
             <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
               Only fields that still need you are shown. Provider profile values are filled automatically when saved on your account.
             </p>
-            {token && providerProfileEmpty && (
+            {isAuthenticated && providerProfileEmpty && (
               <p style={{ fontSize: 13, color: '#64748b', marginBottom: 14, lineHeight: 1.45 }}>
                 Save your provider details in{' '}
                 <Link to="/profile" style={{ color: primaryCta, fontWeight: 700 }}>

@@ -81,7 +81,13 @@ def autoFixClaim(claimData: Dict[str, Any]) -> Dict[str, Any]:
     Apply recommended modifiers, flag weak ICDs, attach suggested improvements.
     """
     cpt = claimData.get("cpt_codes") or claimData.get("cptCodes") or ""
-    icd = claimData.get("icd_codes") or claimData.get("icdCodes") or claimData.get("diagnosis_code") or ""
+    icd = (
+        claimData.get("icd10_codes")
+        or claimData.get("icd_codes")
+        or claimData.get("icdCodes")
+        or claimData.get("diagnosis_code")
+        or ""
+    )
     denial_blob = " ".join(
         [
             str(claimData.get("denial_codes") or ""),

@@ -37,7 +37,7 @@ export function mapExtractedToForm(data) {
   const cleanCodes = [...new Set(denialCodes)].filter(Boolean);
 
   const payerName = data.payer_name || data.payer || '';
-  const icdNorm = normalizeCodeList(data.icd_codes);
+  const icdNorm = normalizeCodeList(data.icd10_codes || data.icd_codes);
 
   return {
     payer_name: payerName,

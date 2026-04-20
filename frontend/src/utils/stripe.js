@@ -22,40 +22,6 @@ export const getStripe = () => {
 };
 
 /**
- * Create and redirect to Stripe checkout for subscription
- * 
- * @param {number} userId - User ID
- * @param {string} plan - Plan name (starter, core, scale)
- * @returns {Promise<void>}
- */
-export const createSubscriptionCheckout = async (userId, plan) => {
-  try {
-    // Create checkout session
-    const response = await api.post('/api/stripe/create-checkout', {
-      user_id: userId,
-      plan: plan
-    });
-
-    const { session_id } = response.data;
-
-    // Redirect to Stripe Checkout
-    const stripe = await getStripe();
-    if (!stripe) {
-      throw new Error('Stripe not initialized');
-    }
-
-    const { error } = await stripe.redirectToCheckout({ sessionId: session_id });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-  } catch (error) {
-    console.error('❌ Error creating checkout:', error);
-    throw error;
-  }
-};
-
-/**
  * Create and redirect to Stripe customer portal
  * Allows users to manage billing, upgrade, downgrade, cancel
  * 

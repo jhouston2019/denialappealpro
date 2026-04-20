@@ -28,6 +28,17 @@ def _esc(s) -> str:
     return escape(str(s), {'"': '&quot;', "'": '&apos;'})
 
 
+def _pdf_header_codes_display(val) -> str:
+    """Comma-join list/tuple for summary block; empty → em dash."""
+    if val is None:
+        return '—'
+    if isinstance(val, (list, tuple)):
+        joined = ', '.join(str(x).strip() for x in val if x is not None and str(x).strip())
+        return joined if joined else '—'
+    s = str(val).strip()
+    return s if s else '—'
+
+
 def _sanitize_filename_claim(claim_number: str) -> str:
     s = re.sub(r'[^\w\-.]+', '_', str(claim_number or 'claim').strip())
     return (s or 'claim')[:120]
@@ -134,8 +145,8 @@ def build_professional_pdf_bytes(appeal, pdf_document_title=None, pdf_re_line=No
         pdf_document_title = pdf_document_title or 'Second-Level Appeal'
         pdf_re_line = pdf_re_line or f'RE: Second-Level Appeal – Claim #{claim}'
     dos = appeal.date_of_service.strftime('%m/%d/%Y') if getattr(appeal, 'date_of_service', None) else ''
-    cpt = getattr(appeal, 'cpt_codes', None) or '—'
-    icd = getattr(appeal, 'diagnosis_code', None) or '—'
+    cpt = _pdf_header_codes_display(getattr(appeal, 'cpt_codes', None))
+    icd = _pdf_header_codes_display(getattr(appeal, 'diagnosis_code', None))
     carc, rarc = extract_carc_rarc_from_intake(appeal)
     denial_codes_line = f'CARC: {carc} | RARC: {rarc}'
     initials = patient_initials(appeal)

@@ -139,7 +139,7 @@ function AppealForm() {
         timeout: 30000, // 30 second timeout
       });
 
-      navigate(`/payment/${response.data.appeal_id}`);
+      navigate('/pricing');
     } catch (error) {
       console.error('Appeal submission error:', error);
       

@@ -39,6 +39,7 @@ class CreditManager:
             user = User(
                 email=email,
                 stripe_customer_id=stripe_customer_id,
+                is_paid=False,
             )
             db.session.add(user)
             db.session.commit()

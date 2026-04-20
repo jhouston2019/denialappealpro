@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { UserProvider } from './context/UserContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppealProvider } from './context/AppealContext';
-import ProtectedRoute from './components/ProtectedRoute';
+import PaidAppGate from './components/PaidAppGate';
+import ViaAppGate from './components/ViaAppGate';
 import './App.css';
 import { PAGE_BG_SLATE, TEXT_ON_SLATE } from './theme/appShell';
 // Force rebuild: 2026-02-11-v3
@@ -14,22 +15,20 @@ const LandingConsumer = lazy(() => import('./LandingConsumer'));
 const AppealForm = lazy(() => import('./pages/AppealForm'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const AppealHistory = lazy(() => import('./pages/AppealHistory'));
-const PaymentConfirmation = lazy(() => import('./pages/PaymentConfirmation'));
-const AppealDownload = lazy(() => import('./pages/AppealDownload'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const SubscriptionSuccess = lazy(() => import('./pages/SubscriptionSuccess'));
 const BillingManagement = lazy(() => import('./pages/BillingManagement'));
 const Login = lazy(() => import('./pages/Login'));
 const DenialQueue = lazy(() => import('./pages/DenialQueue'));
 const ClaimDetail = lazy(() => import('./pages/ClaimDetail'));
 const OnboardingStart = lazy(() => import('./pages/OnboardingStart'));
 const OnboardingPreview = lazy(() => import('./pages/OnboardingPreview'));
-const OnboardingAccount = lazy(() => import('./pages/OnboardingAccount'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
+const AppEntrance = lazy(() => import('./pages/AppEntrance'));
 
 // Loading component
 const PageLoader = () => (
@@ -66,7 +65,7 @@ const PageLoader = () => (
 function AppealConfirmRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate('/start', { replace: true });
+    navigate('/app', { replace: true });
   }, [navigate]);
   return <PageLoader />;
 }
@@ -79,11 +78,11 @@ const Navbar = ({ transparent }) => {
   const { isAuthenticated, logout, newDenialsBanner, newDenialsDollarValue } = useAuth();
 
   const navLinks = [
-    { label: 'New Appeal', path: '/start' },
+    { label: 'New Appeal', path: '/app' },
     ...(isAuthenticated
       ? [
-          { label: 'Dashboard', path: '/dashboard' },
-          { label: 'Queue', path: '/queue' },
+          { label: 'Dashboard', path: '/app?dest=dashboard' },
+          { label: 'Queue', path: '/app?dest=queue' },
         ]
       : []),
     { label: 'Pricing', path: '/pricing' },
@@ -92,7 +91,19 @@ const Navbar = ({ transparent }) => {
   ];
 
   const isActive = (path) => {
-    if (path === '/start') return location.pathname.startsWith('/start');
+    if (path === '/app') {
+      return (
+        location.pathname.startsWith('/app') ||
+        location.pathname.startsWith('/upload') ||
+        location.pathname.startsWith('/start')
+      );
+    }
+    if (path === '/app?dest=dashboard') {
+      return location.pathname.startsWith('/dashboard');
+    }
+    if (path === '/app?dest=queue') {
+      return location.pathname.startsWith('/queue');
+    }
     return location.pathname === path;
   };
 
@@ -245,7 +256,7 @@ const Navbar = ({ transparent }) => {
             </button>
           )}
           <button
-            onClick={() => navigate('/start')}
+            onClick={() => navigate('/app')}
             style={{
               marginLeft: '8px',
               padding: '7px 18px',
@@ -340,7 +351,7 @@ const Navbar = ({ transparent }) => {
             {isAuthenticated ? 'Log out' : 'Log in'}
           </button>
           <button
-            onClick={() => { navigate('/start'); setMenuOpen(false); }}
+            onClick={() => { navigate('/app'); setMenuOpen(false); }}
             style={{
               marginTop: '8px',
               padding: '10px 18px',
@@ -377,7 +388,7 @@ function ReferralCapture() {
 function AppContent() {
   const location = useLocation();
   const adminPages = ['/admin/login', '/admin/dashboard'];
-  const successPages = ['/subscription/success', '/credits/success'];
+  const successPages = ['/success'];
   const isAdminPage = adminPages.some(page => location.pathname.startsWith('/admin'));
   const isSuccessPage = successPages.some(page => location.pathname.startsWith(page));
   const isLandingPage = ['/', '/pro', '/appeal', '/denied'].includes(location.pathname);
@@ -385,8 +396,10 @@ function AppContent() {
   const isQueuePage =
     location.pathname.startsWith('/queue') ||
     location.pathname.startsWith('/dashboard') ||
-    location.pathname.startsWith('/start');
-  const isStartFlow = location.pathname.startsWith('/start') || location.pathname.startsWith('/onboarding');
+    location.pathname.startsWith('/start') ||
+    location.pathname.startsWith('/upload') ||
+    location.pathname.startsWith('/app');
+  const isStartFlow = location.pathname.startsWith('/start') || location.pathname.startsWith('/upload');
 
   return (
     <div className="App">
@@ -410,49 +423,92 @@ function AppContent() {
             {/* App pages */}
             <Route path="/submit" element={<AppealForm />} />
             <Route path="/appeal/confirm" element={<AppealConfirmRedirect />} />
-            <Route path="/appeal-form" element={<Navigate to="/start" replace />} />
+            <Route path="/appeal-form" element={<Navigate to="/app" replace />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/history" element={<AppealHistory />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/start" element={<OnboardingStart />} />
-            <Route path="/start/preview/:appealId" element={<OnboardingPreview />} />
-            <Route path="/onboarding/account" element={<OnboardingAccount />} />
+            <Route path="/success" element={<CheckoutSuccess />} />
+            <Route path="/app" element={<AppEntrance />} />
+            <Route
+              path="/upload"
+              element={
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <OnboardingStart />
+                  </ViaAppGate>
+                </PaidAppGate>
+              }
+            />
+            <Route
+              path="/start"
+              element={
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <OnboardingStart />
+                  </ViaAppGate>
+                </PaidAppGate>
+              }
+            />
+            <Route
+              path="/start/preview/:appealId"
+              element={
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <OnboardingPreview />
+                  </ViaAppGate>
+                </PaidAppGate>
+              }
+            />
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <Dashboard />
+                  </ViaAppGate>
+                </PaidAppGate>
               }
             />
             <Route
               path="/queue"
               element={
-                <ProtectedRoute>
-                  <DenialQueue />
-                </ProtectedRoute>
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <DenialQueue />
+                  </ViaAppGate>
+                </PaidAppGate>
               }
             />
             <Route
               path="/queue/:appealId"
               element={
-                <ProtectedRoute>
-                  <ClaimDetail />
-                </ProtectedRoute>
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <ClaimDetail />
+                  </ViaAppGate>
+                </PaidAppGate>
               }
             />
             <Route
               path="/profile"
               element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <ProfilePage />
+                  </ViaAppGate>
+                </PaidAppGate>
               }
             />
-            <Route path="/payment/:appealId" element={<PaymentConfirmation />} />
-            <Route path="/download/:appealId" element={<AppealDownload />} />
-            <Route path="/subscription/success" element={<SubscriptionSuccess />} />
-            <Route path="/billing" element={<BillingManagement />} />
+            <Route
+              path="/billing"
+              element={
+                <PaidAppGate>
+                  <ViaAppGate>
+                    <BillingManagement />
+                  </ViaAppGate>
+                </PaidAppGate>
+              }
+            />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
           </Routes>

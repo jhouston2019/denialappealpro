@@ -168,7 +168,7 @@ function LandingPro() {
             </p>
             <button
               type="button"
-              onClick={() => navigate('/start')}
+              onClick={() => navigate('/pricing')}
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
@@ -448,7 +448,7 @@ function LandingPro() {
             flexWrap: 'wrap'
           }}>
             <button 
-              onClick={() => navigate('/start')}
+              onClick={() => navigate('/pricing')}
               style={{
                 background: 'white',
                 color: '#0f172a',
@@ -1413,7 +1413,7 @@ function LandingPro() {
                   Delivered as PDF — ready for portal, fax, or mail
                 </div>
                 <button 
-                  onClick={() => navigate('/start')}
+                  onClick={() => navigate('/pricing')}
                   style={{
                     background: 'white',
                     color: '#0f172a',
@@ -2013,7 +2013,7 @@ function LandingPro() {
               </p>
               
               <button 
-                onClick={() => navigate('/start')}
+                onClick={() => navigate('/pricing')}
                 style={{
                   background: 'white',
                   color: '#0f172a',
@@ -2167,7 +2167,7 @@ function LandingPro() {
           </p>
           
           <button 
-            onClick={() => navigate('/start')}
+            onClick={() => navigate('/pricing')}
             style={{
               background: 'white',
               color: '#0f172a',

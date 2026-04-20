@@ -187,7 +187,12 @@ def extract_rarc_codes_from_appeal(appeal) -> List[str]:
     return out[:20]
 
 
-def _split_codes(s: Optional[str]) -> List[str]:
+def _split_codes(s: Optional[Any]) -> List[str]:
+    if s is None:
+        return []
+    if isinstance(s, (list, tuple)):
+        out = [str(x).strip() for x in s if x is not None and str(x).strip()]
+        return out[:40]
     if not s:
         return []
     return [x.strip() for x in re.split(r"[,;\s]+", str(s)) if x.strip()][:40]

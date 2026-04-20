@@ -56,9 +56,10 @@ function Pricing() {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/pricing/subscribe', {
+      const response = await api.post('/api/create-checkout-session', {
         email,
-        tier,
+        plan: tier,
+        type: 'subscription',
       });
 
       const stripe = await stripePromise;

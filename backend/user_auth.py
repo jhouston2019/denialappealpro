@@ -55,11 +55,11 @@ def register_user(secret_key: str, email: str, password: str, referral_code: str
             email=email,
             password_hash=generate_password_hash(password),
             referred_by_id=partner_id,
+            is_paid=False,
         )
         db.session.add(user)
         db.session.commit()
-    token = create_user_token(secret_key, user.id, user.email)
-    return {'user': _user_public(user), 'token': token}, None
+    return {'user': _user_public(user)}, None
 
 
 def login_user(secret_key: str, email: str, password: str):
@@ -71,16 +71,20 @@ def login_user(secret_key: str, email: str, password: str):
         return None, 'Invalid email or password'
     if not check_password_hash(user.password_hash, password):
         return None, 'Invalid email or password'
-    token = create_user_token(secret_key, user.id, user.email)
-    return {'user': _user_public(user), 'token': token}, None
+    return {'user': _user_public(user)}, None
 
 
 def _user_public(user: User):
-    return {
+    d = {
         'id': user.id,
         'email': user.email,
+        'is_paid': user.is_paid,
         'last_queue_visit_at': user.last_queue_visit_at.isoformat() if user.last_queue_visit_at else None,
     }
+    pvs = getattr(user, 'payment_verification_status', None)
+    if pvs is not None:
+        d['payment_verification_status'] = pvs
+    return d
 
 
 def require_user(secret_key: str):

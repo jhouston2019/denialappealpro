@@ -35,7 +35,7 @@ export default function Login() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const from = location.state?.from || '/queue';
+  const from = location.state?.from || '/app';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -126,7 +126,7 @@ export default function Login() {
           </button>
         </form>
         <p style={{ marginTop: '16px', fontSize: '13px' }}>
-          <Link to="/start">Single appeal (no account)</Link>
+          <Link to="/pricing">Subscribe</Link>
           {' · '}
           <Link to="/">Home</Link>
         </p>

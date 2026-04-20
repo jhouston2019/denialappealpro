@@ -108,7 +108,7 @@ function LandingConsumer() {
             flexWrap: 'wrap'
           }}>
             <button 
-              onClick={() => navigate('/start')}
+              onClick={() => navigate('/pricing')}
               style={{
                 background: 'white',
                 color: '#0f172a',
@@ -626,7 +626,7 @@ function LandingConsumer() {
           </p>
           
           <button 
-            onClick={() => navigate('/start')}
+            onClick={() => navigate('/pricing')}
             style={{
               background: 'white',
               color: '#0f172a',
@@ -752,7 +752,7 @@ function LandingConsumer() {
           </p>
           
           <button 
-            onClick={() => navigate('/start')}
+            onClick={() => navigate('/pricing')}
             style={{
               background: 'white',
               color: '#0f172a',

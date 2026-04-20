@@ -57,6 +57,20 @@ def safe_array(val: Any) -> List[str]:
     return [s] if s else []
 
 
+def _merge_icd_fields(raw: Dict[str, Any]) -> List[str]:
+    """Union icd_codes + icd10_codes (dedupe, preserve order)."""
+    combined = safe_array(raw.get("icd_codes")) + safe_array(raw.get("icd10_codes"))
+    seen: set[str] = set()
+    out: List[str] = []
+    for c in combined:
+        k = c.upper()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out
+
+
 def safe_string(val: Any) -> str:
     if val is None:
         return ""
@@ -83,7 +97,7 @@ def normalize_denial_parse(raw: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("Invalid service_date format: %s", raw_service)
 
     cpt_codes = safe_array(raw.get("cpt_codes"))
-    icd_codes = safe_array(raw.get("icd_codes"))
+    icd_codes = _merge_icd_fields(raw)
 
     primary = safe_string(raw.get("primary_denial_code"))
     if not primary:

@@ -65,7 +65,7 @@ def _normalize_validate_pair(cpt_codes: Any, icd_codes: Any, kwargs: Any) -> tup
         d = cpt_codes
         return (
             d.get("cptCodes") or d.get("cpt_codes"),
-            d.get("icdCodes") or d.get("icd_codes"),
+            d.get("icdCodes") or d.get("icd10_codes") or d.get("icd_codes"),
         )
     cpt = kwargs.get("cptCodes") if kwargs.get("cptCodes") is not None else cpt_codes
     icd = kwargs.get("icdCodes") if kwargs.get("icdCodes") is not None else icd_codes
@@ -281,7 +281,12 @@ def detectDenialRisk(input_data: Dict[str, Any]) -> Dict[str, Any]:
     score = 0
 
     cpts = _split_codes(input_data.get("cpt_codes") or input_data.get("cptCodes"))
-    icds = _split_icd(input_data.get("icd_codes") or input_data.get("diagnosis_code") or input_data.get("icdCodes"))
+    icds = _split_icd(
+        input_data.get("icd10_codes")
+        or input_data.get("icd_codes")
+        or input_data.get("diagnosis_code")
+        or input_data.get("icdCodes")
+    )
     mods = str(input_data.get("modifiers") or "").upper()
     payer = str(input_data.get("payer") or "")
     plan = str(input_data.get("planType") or input_data.get("plan_type") or "")
@@ -379,9 +384,15 @@ def detectDenialRisk(input_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_intelligence_analysis(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Single payload: supports cpt_codes / cptCodes, icd_codes / icdCodes, carcCodes, planType, etc."""
+    """Single payload: cpt_codes / cptCodes; icd10_codes (canonical) / icd_codes / icdCodes / diagnosis_code; carcCodes; planType."""
     cpt = payload.get("cpt_codes") or payload.get("cptCodes") or ""
-    icd = payload.get("icd_codes") or payload.get("icdCodes") or payload.get("diagnosis_code") or ""
+    icd = (
+        payload.get("icd10_codes")
+        or payload.get("icd_codes")
+        or payload.get("icdCodes")
+        or payload.get("diagnosis_code")
+        or ""
+    )
 
     carc_list = payload.get("carcCodes") or payload.get("carc_codes")
     if carc_list is None and payload.get("carc_codes"):

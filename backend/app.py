@@ -491,19 +491,15 @@ def generate_appeal_with_credits(appeal_id):
         if appeal.user_id:
             user = User.query.get(appeal.user_id)
             if user:
-                # TESTING: payment disabled
-                # allowed, _used, used_free_trial = CreditManager.try_begin_generation(user.id)
-                allowed, _used, used_free_trial = True, False, False
-                # if not allowed:
-                #     return jsonify(
-                #         {
-                #             'error': 'No credits available',
-                #             'message': 'Please purchase credits or pay for this appeal',
-                #             'requires_payment': True,
-                #         }
-                #     ), 402
-                # TESTING: payment disabled
-                allowed = True
+                allowed, _used, used_free_trial = CreditManager.try_begin_generation(user.id)
+                if not allowed:
+                    return jsonify(
+                        {
+                            'error': 'No credits available',
+                            'message': 'Please purchase credits or pay for this appeal',
+                            'requires_payment': True,
+                        }
+                    ), 402
                 if allowed:
                     appeal.credit_used = True
                     appeal.payment_status = 'free_trial' if used_free_trial else 'paid'
@@ -543,20 +539,13 @@ def generate_appeal_with_credits(appeal_id):
                         db.session.commit()
                         return jsonify({'error': f'Generation failed: {str(e)}'}), 500
         
-        # return jsonify({
-        #     'error': 'No credits available',
-        #     'message': 'Please purchase credits or pay for this appeal',
-        #     'requires_payment': True
-        # }), 402
-        # TESTING: payment disabled
-        allowed = True
         return jsonify(
             {
                 'error': 'No credits available',
                 'message': 'Please purchase credits or pay for this appeal',
                 'requires_payment': True,
             }
-        ), 400
+        ), 402
 
     except Exception as e:
         print(f"❌ Error generating appeal: {e}")

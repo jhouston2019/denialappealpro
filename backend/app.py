@@ -86,25 +86,63 @@ def unhandled_exception(e):
 
 app.config.from_object(Config)
 
-# CORS: production https://denialappealpro.com (+ www), Netlify hostnames for builds/previews, local dev
+# CORS: explicit origins only (never '*') — required when supports_credentials=True.
+# Merge defaults with ALLOWED_ORIGINS so a Fly/secret list that only has Netlify cannot drop
+# the production custom domain (fixes empty Access-Control-Allow-Credentials in the browser).
+def _parse_cors_origins(s):
+    return [o.strip() for o in s.split(',') if o.strip() and o.strip() != '*']
+
+
 _default_origins = (
-    'http://localhost:3000,'
-    'http://127.0.0.1:3000,'
     'https://denialappealpro.com,'
     'https://www.denialappealpro.com,'
+    'http://localhost:3000,'
+    'http://127.0.0.1:3000,'
     'https://denialappealpro.netlify.app,'
     'https://denial-appeal-pro.netlify.app'
 )
-allowed_origins = [
-    o.strip()
-    for o in os.getenv('ALLOWED_ORIGINS', _default_origins).split(',')
-    if o.strip()
-]
+_base = _parse_cors_origins(_default_origins)
+_env = (os.getenv('ALLOWED_ORIGINS') or '').strip()
+_env_origins = _parse_cors_origins(_env) if _env else []
+_seen = set()
+allowed_origins = []
+for o in _base + _env_origins:
+    if o not in _seen:
+        _seen.add(o)
+        allowed_origins.append(o)
+if not allowed_origins:
+    allowed_origins = ['https://denialappealpro.com', 'http://localhost:3000']
+ALLOWED_ORIGIN_SET = frozenset(allowed_origins)
+
+# Register this *before* CORS() so it runs *last* in after_request (Flask reverses order);
+# that way we merge our Allow-Headers + credentials with flask-cors and are not clobbered.
+@app.after_request
+def _cors_cookie_headers(response):
+    """Credentialed CORS: ACAO, credentials, and (for preflight) echo requested headers."""
+    origin = (request.headers.get('Origin') or '').strip()
+    if not origin or origin not in ALLOWED_ORIGIN_SET:
+        return response
+    response.headers['Access-Control-Allow-Origin'] = origin
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    rch = request.headers.get('Access-Control-Request-Headers')
+    if rch:
+        response.headers['Access-Control-Allow-Headers'] = rch
+    return response
+
+# Browsers send Access-Control-Request-Headers: content-type (lowercase); that token must
+# be allowed, or we echo it in _cors_cookie_headers (runs after CORS, wins on conflicts).
 CORS(
     app,
     origins=allowed_origins,
     supports_credentials=True,
-    allow_headers=['Content-Type', 'Authorization'],
+    allow_headers=[
+        'Content-Type',
+        'content-type',
+        'Authorization',
+        'authorization',
+        'Accept',
+        'X-Requested-With',
+    ],
     methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 )
 
@@ -858,6 +896,7 @@ def get_upgrade_suggestions(user_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/dashboard', methods=['GET'])
+@require_admin
 def admin_dashboard():
     """Admin dashboard with metrics"""
     try:

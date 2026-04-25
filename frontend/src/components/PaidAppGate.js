@@ -5,8 +5,7 @@ import { PAGE_BG_SLATE, TEXT_ON_SLATE } from '../theme/appShell';
 
 /**
  * Allow unauthenticated → /login after session hydrate.
- * Block only when is_paid === false (explicit).
- * Allow null / undefined is_paid while session hydrates or payment is processing.
+ * Paid app requires is_paid === true (new unpaid users and explicit false go to /pricing).
  */
 export default function PaidAppGate({ children }) {
   const { authChecked, isAuthenticated, user } = useAuth();
@@ -33,7 +32,7 @@ export default function PaidAppGate({ children }) {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (user && user.is_paid === false) {
+  if (!user || user.is_paid !== true) {
     return <Navigate to="/pricing" replace />;
   }
   return children;

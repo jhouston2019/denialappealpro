@@ -3,8 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Post-payment routes: enter via /app (dap_via_app === 'true') or verified paid session.
- * Aligns with server-side paid checks on APIs.
+ * Post-payment deep routes: require verified paid session (is_paid === true).
+ * sessionStorage dap_via_app is for UI flow only, not access control.
  */
 export default function ViaAppGate({ children }) {
   const location = useLocation();
@@ -22,9 +22,9 @@ export default function ViaAppGate({ children }) {
   }
 
   const paid = user?.is_paid === true;
-  if (paid || via) {
-    return children;
+  if (!paid) {
+    return <Navigate to="/app" replace state={{ from: location.pathname }} />;
   }
 
-  return <Navigate to="/app" replace state={{ from: location.pathname }} />;
+  return children;
 }

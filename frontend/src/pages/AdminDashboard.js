@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -12,17 +12,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [adminUser, setAdminUser] = useState(null);
 
-  useEffect(() => {
-    verifyAuth();
-  }, []);
-
-  useEffect(() => {
-    if (adminUser) {
-      loadData();
-    }
-  }, [activeTab, adminUser]);
-
-  const verifyAuth = async () => {
+  const verifyAuth = useCallback(async () => {
     const token = localStorage.getItem('adminToken');
     const user = localStorage.getItem('adminUser');
 
@@ -41,9 +31,9 @@ const AdminDashboard = () => {
       localStorage.removeItem('adminUser');
       navigate('/admin/login');
     }
-  };
+  }, [navigate]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     const token = localStorage.getItem('adminToken');
 
@@ -72,7 +62,17 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    verifyAuth();
+  }, [verifyAuth]);
+
+  useEffect(() => {
+    if (adminUser) {
+      loadData();
+    }
+  }, [activeTab, adminUser, loadData]);
 
   const viewAppealDetail = async (appealId) => {
     const token = localStorage.getItem('adminToken');

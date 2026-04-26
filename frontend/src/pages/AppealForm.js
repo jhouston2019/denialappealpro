@@ -134,7 +134,7 @@ function AppealForm() {
       const letter = uploadedFile ?? formData.denial_letter;
       if (letter) data.append('denial_letter', letter);
 
-      const response = await api.post('/api/appeals/submit', data, {
+      await api.post('/api/appeals/submit', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000, // 30 second timeout
       });

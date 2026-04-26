@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -6,13 +6,8 @@ function UpgradeModal({ isOpen, onClose, currentTier, usageStats, nextTier: next
   const navigate = useNavigate();
   const [nextTier, setNextTier] = useState(nextTierProp);
 
-  useEffect(() => {
-    if (isOpen && !nextTierProp && usageStats?.user_id) {
-      fetchNextTier();
-    }
-  }, [isOpen, usageStats]);
-
-  const fetchNextTier = async () => {
+  const fetchNextTier = useCallback(async () => {
+    if (!usageStats?.user_id) return;
     try {
       const response = await api.get(`/api/upgrade/suggestions/${usageStats.user_id}`);
       if (response.data.next_tier) {
@@ -21,7 +16,13 @@ function UpgradeModal({ isOpen, onClose, currentTier, usageStats, nextTier: next
     } catch (error) {
       console.error('Error fetching upgrade suggestions:', error);
     }
-  };
+  }, [usageStats?.user_id]);
+
+  useEffect(() => {
+    if (isOpen && !nextTierProp && usageStats?.user_id) {
+      fetchNextTier();
+    }
+  }, [isOpen, nextTierProp, usageStats, fetchNextTier]);
 
   if (!isOpen) return null;
 

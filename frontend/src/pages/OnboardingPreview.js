@@ -4,7 +4,6 @@ import api from '../api/axios';
 import { PAGE_BG_SLATE, TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from '../theme/appShell';
 
 const pageBg = PAGE_BG_SLATE;
-const navy = '#0f172a';
 const cardBg = '#ffffff';
 const primaryGreen = '#22c55e';
 const primaryGreenHover = '#16a34a';

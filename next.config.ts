@@ -1,13 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /**
-   * Windows build: `resolve.symlinks = false` avoids readlink issues on some setups.
-   * If `next build` still fails with EISDIR readlink on `app/**/route.ts`, the project drive
-   * is often exFAT or similar (use NTFS), or build on Linux CI — see Next.js discussion #77912.
-   */
-  webpack: (config) => {
-    config.resolve = config.resolve ?? {};
+  webpack(config) {
     config.resolve.symlinks = false;
     return config;
   },

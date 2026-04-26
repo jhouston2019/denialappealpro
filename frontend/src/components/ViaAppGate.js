@@ -14,13 +14,6 @@ export default function ViaAppGate({ children }) {
     return null;
   }
 
-  let via = false;
-  try {
-    via = sessionStorage.getItem('dap_via_app') === 'true';
-  } catch {
-    via = false;
-  }
-
   const paid = user?.is_paid === true;
   if (!paid) {
     return <Navigate to="/app" replace state={{ from: location.pathname }} />;

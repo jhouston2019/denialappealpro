@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import api from '../api/axios';
@@ -13,15 +13,7 @@ function BillingManagement() {
   const [usageStats, setUsageStats] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!userEmail || !userId) {
-      navigate('/pricing');
-      return;
-    }
-    fetchBillingData();
-  }, [userEmail, userId]);
-
-  const fetchBillingData = async () => {
+  const fetchBillingData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -39,7 +31,15 @@ function BillingManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userEmail || !userId) {
+      navigate('/pricing');
+      return;
+    }
+    fetchBillingData();
+  }, [userEmail, userId, navigate, fetchBillingData]);
 
   const handleManageBilling = async () => {
     try {

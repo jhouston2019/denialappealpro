@@ -4,9 +4,15 @@ import { checkIpHourLimit, getClientIp } from "@/lib/rate-limit/ip-hour";
 import {
   DAP_TEASER_LINES,
   type DapClaimDataForPreview,
+  type DapIntakeSnapshot,
   type DapPreviewAnalysisResult,
 } from "@/lib/dap/preview-flow";
-import { generateAppealPreviewLetter, type PreviewLetterContext } from "@/lib/appeal/generate-preview-letter";
+import {
+  buildPreviewLetterContextFromPreviewPayload,
+  generateAppealPreviewLetter,
+} from "@/lib/appeal/generate-preview-letter";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
 
@@ -63,33 +69,6 @@ function asCarcArray(v: unknown): string[] {
     .filter(Boolean);
 }
 
-function parseBilledForLetter(raw: unknown): number {
-  if (raw == null || raw === "") return 0;
-  const n = parseFloat(String(raw));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function claimDataToPreviewLetterContext(cd: unknown): PreviewLetterContext | null {
-  if (cd == null || typeof cd !== "object") return null;
-  const c = cd as DapClaimDataForPreview;
-  const denial = [c.denial_reason, c.paste_details].filter((x) => String(x || "").trim()).join("\n\n");
-  if (!String(denial).trim()) return null;
-  const npi = String(c.provider_npi || "").replace(/\D/g, "");
-  const npi10 = (npi + "0000000000").slice(0, 10);
-  return {
-    payer: String(c.payer || "Unknown payer").trim() || "Unknown payer",
-    claim_number: String(c.claim_number || "").trim() || "—",
-    patient_name: String(c.patient_name || "").trim() || "—",
-    provider_name: String(c.provider_name || "").trim() || "—",
-    provider_npi: npi10,
-    date_of_service: String(c.date_of_service || "").trim() || "—",
-    denial_reason: denial.slice(0, 12_000),
-    billed_amount: parseBilledForLetter(c.billed_amount),
-    cpt_codes: (c.cpt_codes && String(c.cpt_codes).trim()) || null,
-    diagnosis_code: (c.diagnosis_code && String(c.diagnosis_code).trim()) || (c.icd10_codes && String(c.icd10_codes).trim()) || null,
-  };
-}
-
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const limited = checkIpHourLimit(ip, MAX_PER_IP, WINDOW_MS);
@@ -100,9 +79,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: { extracted_text?: string; claim_data?: unknown };
+  let body: { extracted_text?: string; claim_data?: unknown; intake_snapshot?: unknown };
   try {
-    body = (await request.json()) as { extracted_text?: string; claim_data?: unknown };
+    body = (await request.json()) as { extracted_text?: string; claim_data?: unknown; intake_snapshot?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -119,7 +98,49 @@ export async function POST(request: NextRequest) {
 
   const userMsg = `Denial data: ${extracted_text.slice(0, 24000)}`;
 
-  const letterCtx = claimDataToPreviewLetterContext(body.claim_data);
+  let profile = { provider_name: "", provider_npi: "", provider_address: "" };
+  let isAnonymous = true;
+  const supa = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supa.auth.getUser();
+  if (authUser?.id) {
+    isAnonymous = false;
+    const svc = createServiceRoleClient();
+    const { data: urow, error: profErr } = await svc
+      .from("users")
+      .select("provider_name, provider_npi, provider_address")
+      .eq("id", authUser.id)
+      .maybeSingle();
+    if (!profErr && urow) {
+      const r = urow as {
+        provider_name: string | null;
+        provider_npi: string | null;
+        provider_address: string | null;
+      };
+      profile = {
+        provider_name: String(r.provider_name || "").trim(),
+        provider_npi: String(r.provider_npi || "").trim(),
+        provider_address: String(r.provider_address || "").trim(),
+      };
+    }
+  }
+
+  const claimData =
+    body.claim_data && typeof body.claim_data === "object"
+      ? (body.claim_data as DapClaimDataForPreview)
+      : null;
+  const intakeSnapshot =
+    body.intake_snapshot && typeof body.intake_snapshot === "object"
+      ? (body.intake_snapshot as DapIntakeSnapshot)
+      : null;
+
+  const letterCtx = buildPreviewLetterContextFromPreviewPayload({
+    claim_data: claimData,
+    intake_snapshot: intakeSnapshot,
+    profile,
+    isAnonymous,
+  });
   const letterPromise = letterCtx
     ? generateAppealPreviewLetter(letterCtx)
     : Promise.resolve("");

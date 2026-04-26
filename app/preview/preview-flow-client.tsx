@@ -81,9 +81,11 @@ export function PreviewFlowClient() {
         const res = await fetch("/api/preview/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             extracted_text: flowPayload.extracted_text,
             claim_data: flowPayload.claim_data,
+            intake_snapshot: flowPayload.intake_snapshot,
           }),
         });
         const data = (await res.json()) as DapPreviewAnalysisResult & { error?: string };

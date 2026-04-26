@@ -11,9 +11,23 @@ function resolvePriceIdFromPlan(
     const id = process.env.STRIPE_RETAIL_PRICE_ID?.trim();
     return id || null;
   }
-  if (p === "starter") return process.env.STRIPE_STARTER_PRICE_ID?.trim() || null;
-  if (p === "core") return process.env.STRIPE_CORE_PRICE_ID?.trim() || null;
-  if (p === "scale") return process.env.STRIPE_SCALE_PRICE_ID?.trim() || null;
+  if (p === "essential" || p === "starter") {
+    return (
+      process.env.STRIPE_ESSENTIAL_PRICE_ID?.trim() ||
+      process.env.STRIPE_STARTER_PRICE_ID?.trim() ||
+      null
+    );
+  }
+  if (p === "professional" || p === "core") {
+    return (
+      process.env.STRIPE_PROFESSIONAL_PRICE_ID?.trim() || process.env.STRIPE_CORE_PRICE_ID?.trim() || null
+    );
+  }
+  if (p === "enterprise" || p === "scale") {
+    return (
+      process.env.STRIPE_ENTERPRISE_PRICE_ID?.trim() || process.env.STRIPE_SCALE_PRICE_ID?.trim() || null
+    );
+  }
   return null;
 }
 
@@ -21,7 +35,7 @@ function resolvePriceIdFromPlan(
  * Stripe checkout.
  *
  * New: { price_id, plan, email?, mode? }
- * CRA: { email, plan: "starter"|"core"|"scale", type: "subscription" } — resolves price_id from env.
+ * { email, plan: "essential"|"professional"|"enterprise", type: "subscription" } — legacy starter/core/scale still resolve.
  */
 export async function POST(request: NextRequest) {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -58,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Missing or invalid price: pass price_id or set STRIPE_STARTER_PRICE_ID, STRIPE_CORE_PRICE_ID, STRIPE_SCALE_PRICE_ID (and STRIPE_RETAIL_PRICE_ID for pay-as-you-go).",
+            "Missing or invalid price: pass price_id or set STRIPE_ESSENTIAL_PRICE_ID, STRIPE_PROFESSIONAL_PRICE_ID, STRIPE_ENTERPRISE_PRICE_ID (legacy STRIPE_*_PRICE_ID aliases supported; STRIPE_RETAIL_PRICE_ID for pay-as-you-go).",
         },
         { status: 400 }
       );

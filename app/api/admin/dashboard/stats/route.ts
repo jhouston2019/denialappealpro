@@ -95,18 +95,21 @@ export async function GET(request: NextRequest) {
       : null;
 
   const tierMap: Record<string, number> = {
-    starter: 0,
-    core: 0,
-    scale: 0,
+    essential: 0,
+    professional: 0,
+    enterprise: 0,
     other: 0,
   };
   for (const u of (allUsersTiers.data || []) as { subscription_tier: string | null }[]) {
     const t = (u.subscription_tier || "").toLowerCase();
-    if (t === "starter" || t === "core" || t === "scale") {
-      tierMap[t] += 1;
-    } else {
+    if (!t) {
       tierMap.other += 1;
+      continue;
     }
+    if (t === "starter" || t === "essential") tierMap.essential += 1;
+    else if (t === "core" || t === "professional") tierMap.professional += 1;
+    else if (t === "scale" || t === "enterprise") tierMap.enterprise += 1;
+    else tierMap.other += 1;
   }
 
   return NextResponse.json(

@@ -1,28 +1,28 @@
 /**
- * Matches backend/credit_manager.PricingManager (Flask /api/pricing/plans).
+ * DAP subscription tiers (Next /api/pricing/plans). Amounts align with product pricing page.
  */
 export const RETAIL_PRICE = 79.0;
 
 export const SUBSCRIPTION_TIERS: Record<
-  "starter" | "core" | "scale",
+  "essential" | "professional" | "enterprise",
   { name: string; monthly_price: number; included_appeals: number; overage_price: number }
 > = {
-  starter: {
-    name: "Starter",
-    monthly_price: 199.0,
-    included_appeals: 15,
+  essential: {
+    name: "Essential",
+    monthly_price: 399.0,
+    included_appeals: 10,
     overage_price: 15.0,
   },
-  core: {
-    name: "Growth",
-    monthly_price: 399.0,
-    included_appeals: 40,
+  professional: {
+    name: "Professional",
+    monthly_price: 699.0,
+    included_appeals: 25,
     overage_price: 12.0,
   },
-  scale: {
-    name: "Scale",
-    monthly_price: 799.0,
-    included_appeals: 120,
+  enterprise: {
+    name: "Enterprise",
+    monthly_price: 1499.0,
+    included_appeals: 75,
     overage_price: 10.0,
   },
 };

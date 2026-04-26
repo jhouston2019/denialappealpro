@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import type Stripe from "stripe";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getAuthUserIdByEmail } from "@/lib/stripe/get-auth-user-id-by-email";
+import { normalizeSubscriptionTier } from "@/lib/billing/subscription-tier";
 
 const STRIPE_VERSION = "2025-02-24.acacia" as const;
 
@@ -59,7 +60,7 @@ export async function processCheckoutSessionCompletedEvent(
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const subId = typeof session.subscription === "string" ? session.subscription : null;
 
-  const tier = plan === "starter" || plan === "core" || plan === "scale" ? plan : null;
+  const tier = normalizeSubscriptionTier(plan);
 
   let userId = await getAuthUserIdByEmail(supabase, email);
 

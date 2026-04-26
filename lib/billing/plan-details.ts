@@ -1,35 +1,43 @@
-/** Ported from frontend/src/utils/stripe.js */
+import { normalizeSubscriptionTier, type SubscriptionTierSlug } from "./subscription-tier";
+
+const DISPLAY: Record<SubscriptionTierSlug, string> = {
+  essential: "Essential",
+  professional: "Professional",
+  enterprise: "Enterprise",
+};
 
 export function formatPlanName(plan: string | null | undefined) {
-  const names: Record<string, string> = {
-    starter: "Starter",
-    core: "Growth",
-    scale: "Scale",
-  };
-  return plan ? (names[plan.toLowerCase()] ?? plan) : "—";
+  if (!plan) return "—";
+  const n = normalizeSubscriptionTier(plan);
+  if (n) return DISPLAY[n];
+  return plan;
 }
 
 export function getPlanDetails(plan: string | null | undefined) {
-  const plans: Record<string, { name: string; price: number; appeals: number; description: string }> = {
-    starter: {
-      name: "Starter",
-      price: 199,
-      appeals: 15,
-      description: "Perfect for small practices",
-    },
-    core: {
-      name: "Growth",
+  const n = plan ? normalizeSubscriptionTier(plan) : null;
+  const plans: Record<
+    SubscriptionTierSlug,
+    { name: string; price: number; appeals: number; description: string }
+  > = {
+    essential: {
+      name: "Essential",
       price: 399,
-      appeals: 40,
-      description: "Most popular for billing teams",
+      appeals: 10,
+      description: "Core monthly capacity for small billing teams",
     },
-    scale: {
-      name: "Scale",
-      price: 799,
-      appeals: 120,
-      description: "For high-volume operations",
+    professional: {
+      name: "Professional",
+      price: 699,
+      appeals: 25,
+      description: "Batch tools and higher volume for growing practices",
+    },
+    enterprise: {
+      name: "Enterprise",
+      price: 1499,
+      appeals: 75,
+      description: "Maximum volume, dedicated support, and custom templates",
     },
   };
-  if (!plan) return null;
-  return plans[plan.toLowerCase()] ?? null;
+  if (!n) return null;
+  return plans[n] ?? null;
 }

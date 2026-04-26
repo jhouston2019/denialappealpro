@@ -25,7 +25,7 @@ export default function PricingPageClient() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
 
-  const handleSubscribe = async (tier: "starter" | "core" | "scale") => {
+  const handleSubscribe = async (tier: "essential" | "professional" | "enterprise") => {
     if (!email.trim()) {
       window.alert("Please enter your email address");
       return;
@@ -154,7 +154,7 @@ export default function PricingPageClient() {
             <button
               type="button"
               className="dap-pricing-cta dap-pricing-cta--green"
-              onClick={() => void handleSubscribe("starter")}
+              onClick={() => void handleSubscribe("essential")}
               disabled={loading}
             >
               {loading ? "Processing…" : "Start Essential Plan"}
@@ -189,7 +189,7 @@ export default function PricingPageClient() {
             <button
               type="button"
               className="dap-pricing-cta dap-pricing-cta--green"
-              onClick={() => void handleSubscribe("core")}
+              onClick={() => void handleSubscribe("professional")}
               disabled={loading}
             >
               {loading ? "Processing…" : "Start Professional Plan"}
@@ -225,7 +225,7 @@ export default function PricingPageClient() {
             <button
               type="button"
               className="dap-pricing-cta dap-pricing-cta--enterprise"
-              onClick={() => void handleSubscribe("scale")}
+              onClick={() => void handleSubscribe("enterprise")}
               disabled={loading}
             >
               {loading ? "Processing…" : "Start Enterprise Plan"}

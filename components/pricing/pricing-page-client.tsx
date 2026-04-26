@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 
 const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
@@ -21,9 +20,66 @@ const BASE_FEATURES = [
 ];
 
 export default function PricingPageClient() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
+
+  /** Client needs NEXT_PUBLIC_*; set to the Stripe Price ID for the one-time $59 (5900¢) product. */
+  const singlePriceId = (process.env.NEXT_PUBLIC_STRIPE_PRICE_SINGLE || "").trim();
+
+  const handleSinglePayment = async () => {
+    if (!email.trim()) {
+      window.alert("Please enter your email address");
+      return;
+    }
+    if (!singlePriceId) {
+      window.alert(
+        "Single-appeal checkout is not configured. Set NEXT_PUBLIC_STRIPE_PRICE_SINGLE to your $59 (5900¢) Stripe Price ID."
+      );
+      return;
+    }
+    if (!stripePromise) {
+      window.alert("Stripe is not configured (set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and STRIPE_*_PRICE_ID).");
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          plan: "single",
+          type: "payment" as const,
+          price_id: singlePriceId,
+        }),
+        credentials: "include",
+      });
+      const out = (await response.json()) as { session_id?: string; error?: string };
+      if (!response.ok) {
+        window.alert(out.error || "Error creating checkout session.");
+        return;
+      }
+      if (!out.session_id) {
+        window.alert("No session returned.");
+        return;
+      }
+      const stripe = await stripePromise;
+      if (!stripe) {
+        window.alert("Stripe failed to load.");
+        return;
+      }
+      const { error } = await stripe.redirectToCheckout({ sessionId: out.session_id });
+      if (error) {
+        console.error("Stripe error:", error);
+        window.alert("Payment error: " + error.message);
+      }
+    } catch (e) {
+      console.error("Single appeal checkout error:", e);
+      window.alert("Error starting checkout. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubscribe = async (tier: "essential" | "professional" | "enterprise") => {
     if (!email.trim()) {
@@ -69,10 +125,6 @@ export default function PricingPageClient() {
     }
   };
 
-  const handleSingleAppeal = () => {
-    router.push("/start");
-  };
-
   return (
     <div className="dap-pricing-page" style={{ background: PAGE_BG }}>
       <header className="dap-pricing-hero">
@@ -94,7 +146,9 @@ export default function PricingPageClient() {
             placeholder="you@practice.com"
             autoComplete="email"
           />
-          <p className="dap-pricing-email-hint">Required for Essential, Professional, and Enterprise. Single appeal uses the form without a subscription.</p>
+          <p className="dap-pricing-email-hint">
+            Required for Single appeal checkout and for Essential, Professional, and Enterprise.
+          </p>
         </div>
 
         <div className="dap-pricing-grid">
@@ -122,10 +176,10 @@ export default function PricingPageClient() {
             <button
               type="button"
               className="dap-pricing-cta dap-pricing-cta--green"
-              onClick={handleSingleAppeal}
+              onClick={() => void handleSinglePayment()}
               disabled={loading}
             >
-              Start Single Appeal
+              {loading ? "Processing…" : "Start Single Appeal"}
             </button>
           </article>
 

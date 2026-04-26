@@ -69,6 +69,10 @@ const AdminDashboardClient = () => {
   }, [router]);
 
   const loadData = useCallback(async () => {
+    if (activeTab === "site-pages") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const needStats = activeTab === "overview" || activeTab === "ai-quality" || activeTab === "outcomes";
@@ -152,6 +156,7 @@ const AdminDashboardClient = () => {
               ["users", "👥 Users"],
               ["ai-quality", "🤖 AI Quality"],
               ["outcomes", "✅ Outcomes"],
+              ["site-pages", "🌐 Site pages"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -185,6 +190,7 @@ const AdminDashboardClient = () => {
               {activeTab === "users" && <UsersTab users={users} />}
               {activeTab === "ai-quality" && <AIQualityTab stats={stats} />}
               {activeTab === "outcomes" && <OutcomesTab stats={stats} />}
+              {activeTab === "site-pages" && <SitePagesTab />}
             </>
           )}
         </main>
@@ -192,6 +198,207 @@ const AdminDashboardClient = () => {
     </div>
   );
 };
+
+type SitePageGate = "public" | "paid";
+
+type SitePageRow = {
+  label: string;
+  path: string;
+  description: string;
+  gate: SitePageGate;
+};
+
+const SITE_PAGE_GROUPS: { title: string; pages: SitePageRow[] }[] = [
+  {
+    title: "Public & marketing",
+    pages: [
+      { label: "Home (landing)", path: "/", description: "Marketing home", gate: "public" },
+      { label: "Pricing", path: "/pricing", description: "Plans and purchase", gate: "public" },
+      { label: "Terms of Service", path: "/terms", description: "Legal terms", gate: "public" },
+      { label: "Privacy Policy", path: "/privacy", description: "Privacy policy", gate: "public" },
+      { label: "Customer login", path: "/login", description: "Supabase sign-in for customers", gate: "public" },
+      {
+        label: "Welcome",
+        path: "/welcome",
+        description: "Post-checkout / onboarding handoff",
+        gate: "public",
+      },
+    ],
+  },
+  {
+    title: "Customer app (paid subscription required)",
+    pages: [
+      { label: "Dashboard", path: "/dashboard", description: "Paid app home", gate: "paid" },
+      { label: "Denial queue", path: "/queue", description: "Queue list", gate: "paid" },
+      { label: "New denial (start intake)", path: "/start", description: "Start new appeal flow", gate: "paid" },
+      { label: "Appeal history", path: "/appeal-history", description: "Past appeals", gate: "paid" },
+      { label: "Billing", path: "/billing", description: "Subscription billing", gate: "paid" },
+      { label: "Account", path: "/account", description: "Account settings", gate: "paid" },
+      { label: "Profile", path: "/profile", description: "User profile", gate: "paid" },
+    ],
+  },
+  {
+    title: "Admin",
+    pages: [
+      { label: "Admin login", path: "/admin/login", description: "Admin password session", gate: "public" },
+      {
+        label: "Admin dashboard (this page)",
+        path: "/admin/dashboard",
+        description: "Stats, appeals, users",
+        gate: "public",
+      },
+    ],
+  },
+];
+
+function gateBadgeStyle(gate: SitePageGate): React.CSSProperties {
+  const base: React.CSSProperties = {
+    ...styles.badge,
+    fontSize: "11px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  };
+  if (gate === "public") return { ...base, background: "#e0e7ff", color: "#3730a3" };
+  return { ...base, background: "#dbeafe", color: "#1e40af" };
+}
+
+function SitePagesTab() {
+  const [queueAppealId, setQueueAppealId] = useState("");
+  const [previewAppealId, setPreviewAppealId] = useState("");
+
+  const openPath = (path: string) => {
+    window.open(path, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div style={styles.tab}>
+      <h2 style={styles.tabTitle}>Site pages</h2>
+      <p style={{ marginTop: 0, marginBottom: "24px", color: "#64748b", fontSize: "15px", lineHeight: 1.6 }}>
+        Every customer-facing and admin route in this Next.js app. Links open in a new tab so this dashboard stays
+        open. Customer app routes are still protected: sign in as a paid user in that tab to use them (admin login does
+        not grant customer access).
+      </p>
+
+      {SITE_PAGE_GROUPS.map((group) => (
+        <div key={group.title} style={{ marginBottom: "36px" }}>
+          <h3 style={{ ...styles.sectionTitle, marginBottom: "16px" }}>{group.title}</h3>
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeader}>
+                  <th style={styles.th}>Page</th>
+                  <th style={styles.th}>Path</th>
+                  <th style={styles.th}>Access</th>
+                  <th style={styles.th}>Notes</th>
+                  <th style={styles.th}>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.pages.map((p) => (
+                  <tr key={p.path + p.label} style={styles.tableRow}>
+                    <td style={styles.td}>
+                      <strong>{p.label}</strong>
+                    </td>
+                    <td style={styles.td}>
+                      <code style={{ fontSize: "13px", color: "#0f172a" }}>{p.path}</code>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={gateBadgeStyle(p.gate)}>{p.gate === "paid" ? "Paid app" : "Public"}</span>
+                    </td>
+                    <td style={{ ...styles.td, maxWidth: "320px" }}>{p.description}</td>
+                    <td style={styles.td}>
+                      <button type="button" onClick={() => openPath(p.path)} style={styles.viewBtn}>
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      <h3 style={{ ...styles.sectionTitle, marginBottom: "16px" }}>Dynamic routes</h3>
+      <div style={styles.detailGrid}>
+        <div style={styles.detailSection}>
+          <h4 style={{ ...styles.sectionTitle, marginBottom: "12px" }}>Queue — claim detail</h4>
+          <p style={{ fontSize: "14px", color: "#64748b", marginTop: 0 }}>
+            Path: <code>/queue/[appealId]</code>
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", marginTop: "12px" }}>
+            <input
+              type="text"
+              value={queueAppealId}
+              onChange={(e) => setQueueAppealId(e.target.value.trim())}
+              placeholder="Appeal ID"
+              style={{
+                flex: "1 1 200px",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "14px",
+              }}
+            />
+            <button
+              type="button"
+              style={styles.viewBtn}
+              onClick={() => {
+                if (!queueAppealId) return;
+                openPath(`/queue/${encodeURIComponent(queueAppealId)}`);
+              }}
+            >
+              Open
+            </button>
+          </div>
+        </div>
+        <div style={styles.detailSection}>
+          <h4 style={{ ...styles.sectionTitle, marginBottom: "12px" }}>Intake — letter preview</h4>
+          <p style={{ fontSize: "14px", color: "#64748b", marginTop: 0 }}>
+            Path: <code>/start/preview/[appealId]</code>
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", marginTop: "12px" }}>
+            <input
+              type="text"
+              value={previewAppealId}
+              onChange={(e) => setPreviewAppealId(e.target.value.trim())}
+              placeholder="Appeal ID"
+              style={{
+                flex: "1 1 200px",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "14px",
+              }}
+            />
+            <button
+              type="button"
+              style={styles.viewBtn}
+              onClick={() => {
+                if (!previewAppealId) return;
+                openPath(`/start/preview/${encodeURIComponent(previewAppealId)}`);
+              }}
+            >
+              Open
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.infoBox}>
+        <h4 style={styles.infoTitle}>Using customer pages as admin</h4>
+        <p style={styles.infoText}>
+          The paid app layout checks the customer&apos;s Supabase session and <code>is_paid</code> in the database.
+          Keep this admin tab for operations; use a second tab with{" "}
+          <a href="/login" target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>
+            /login
+          </a>{" "}
+          and a test or real paid account to exercise dashboards, queue, and intake flows end to end.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function OverviewTab({ stats }: { stats: Stats | null }) {
   if (!stats) return <div>No data available</div>;

@@ -1,16 +1,13 @@
 [build]
-  base = "frontend"
-  # Let Netlify cache node_modules; full rm -rf each build is slow and invites timeouts/cancels.
-  command = "npm install --legacy-peer-deps && npm run build"
-  publish = "build"
+  command = "npm run build"
+  publish = ".next"
 
-[build.environment]
-  NODE_VERSION = "18"
-  CI = "false"
-  REACT_APP_API_URL = "https://denial-appeal-pro.fly.dev"
-  REACT_APP_STRIPE_PUBLISHABLE_KEY = "pk_test_51SxDTD8YMLJfp2rpPC0NXjdZ5lSF6oxPE7jW1q03SWRjHC1jC4o3kgXMyY62Oo8kaiTM2PJ7xxJGJWSXpZEJAnO300IFxfUu5o"
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Background-style name is reserved by Netlify; this file is named stripe-webhook-background.ts
+# and will run as a regular serverless function unless you add -background (Netlify convention).

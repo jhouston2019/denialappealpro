@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
-import { generateAppealPreviewLetter } from "@/lib/appeal/generate-preview-letter";
+import { createClient } from "@/lib/supabase/server";
+import { getInternalFlaskBaseUrl } from "@/lib/engine/forward-internal";
 
 export const runtime = "nodejs";
 
 const PREVIEW_CHARS = 900;
-const RETAIL_PRICE = 79.0;
 
 function normalizeDenialCodes(codes: string[]): string[] {
   const valid: string[] = [];
@@ -177,9 +176,6 @@ export async function POST(request: NextRequest) {
   const denial_code_stored = denial_codes.join(" / ").slice(0, 50);
 
   const today = new Date();
-  const appDate = today.toISOString().slice(0, 10).replace(/-/g, "");
-  const idSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-  const appeal_id = `APP-ONB-${appDate}-${idSuffix}`;
   const claim_number =
     claim_number_in ||
     `ONB-${String(today.getUTCHours()).padStart(2, "0")}${String(today.getUTCMinutes()).padStart(2, "0")}${String(
@@ -194,53 +190,60 @@ export async function POST(request: NextRequest) {
 
   const npi10 = (provider_npi_in.replace(/\D/g, "") + "0000000000").slice(0, 10);
 
-  const text = await generateAppealPreviewLetter({
-    payer,
-    claim_number,
-    patient_name: patient_name.slice(0, 100),
-    provider_name: provider_name_in.slice(0, 200),
-    provider_npi: npi10,
-    date_of_service: dos,
-    denial_reason: denial_reason.slice(0, 12000),
-    billed_amount: billed,
-    cpt_codes: cpt_part || null,
-    diagnosis_code: icd_part || null,
-  });
-  const excerpt = text.slice(0, PREVIEW_CHARS);
-  const total_len = text.length;
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const svc = createServiceRoleClient();
-  const { error } = await svc.from("appeals").insert({
-    appeal_id,
-    user_id: r.userId,
-    payer: payer.slice(0, 200),
-    payer_name: payer.slice(0, 200),
-    claim_number,
-    patient_id: patient_name.slice(0, 100),
-    provider_name: provider_name_in.slice(0, 200),
-    provider_npi: npi10,
-    date_of_service: dos,
-    denial_reason: denial_reason,
-    denial_code: denial_code_stored,
-    cpt_codes: cpt_part || null,
-    diagnosis_code: icd_part || null,
-    billed_amount: billed,
-    denial_letter_path: null,
-    status: "pending",
-    payment_status: "unpaid",
-    price_charged: RETAIL_PRICE,
-    credit_used: false,
-    queue_status: "pending",
-    generated_letter_text: text,
-  });
-
-  if (error) {
-    console.error("intake preview insert", error);
+  const base = getInternalFlaskBaseUrl();
+  if (!base) {
     return NextResponse.json(
-      { error: "Preview generation failed", details: error.message, type: "insert" },
-      { status: 500 }
+      {
+        error: "Intake engine not configured",
+        message: "Set INTERNAL_FLASK_BASE_URL or NEXT_PUBLIC_FLASK_API_URL to the Fly.io engine URL.",
+      },
+      { status: 503 }
     );
   }
+
+  const res = await fetch(`${base}/api/generate/appeal`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      payer: payer.slice(0, 200),
+      claim_number,
+      patient_name: patient_name.slice(0, 100),
+      provider_name: provider_name_in.slice(0, 200),
+      provider_npi: npi10,
+      date_of_service: dos,
+      denial_reason: denial_reason.slice(0, 12000),
+      denial_codes: denial_codes,
+      denial_code: denial_code_stored,
+      billed_amount: billed,
+      cpt_codes: cpt_part || null,
+      diagnosis_code: icd_part || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    return NextResponse.json(
+      { error: errBody.error || "Preview generation failed", details: res.statusText },
+      { status: res.status }
+    );
+  }
+
+  const out = (await res.json()) as { appeal_id: string; letter_text: string; pdf_url?: string };
+  const { appeal_id: createdAppealId, letter_text: text } = out;
+  const appeal_id = createdAppealId;
+  const excerpt = text.slice(0, PREVIEW_CHARS);
+  const total_len = text.length;
 
   return NextResponse.json(
     {

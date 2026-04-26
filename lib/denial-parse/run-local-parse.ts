@@ -3,7 +3,10 @@ import { extractWithOpenAI } from "./extract-with-openai";
 import { extractTextFromPdfBuffer } from "./pdf-text";
 import { forwardToInternalEngine } from "@/lib/engine/forward-internal";
 
-export async function runParseDenialTextLocal(text: string): Promise<
+export async function runParseDenialTextLocal(
+  text: string,
+  accessToken: string | null
+): Promise<
   | { ok: true; data: Record<string, unknown>; status: number }
   | { ok: false; data: Record<string, unknown>; status: number }
 > {
@@ -15,11 +18,15 @@ export async function runParseDenialTextLocal(text: string): Promise<
     return { ok: false, data: { success: false, error: "Text exceeds maximum length" }, status: 400 };
   }
 
-  const forward = await forwardToInternalEngine("/api/parse/denial-text", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: trimmed }),
-  });
+  const forward = await forwardToInternalEngine(
+    "/api/extract/text",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: trimmed }),
+    },
+    accessToken
+  );
   if (forward && forward.ok) {
     const data = (await forward.json()) as Record<string, unknown>;
     return { ok: true, data, status: 200 };
@@ -49,16 +56,23 @@ export async function runParseDenialTextLocal(text: string): Promise<
   };
 }
 
-export async function runParseDenialLetterLocal(file: File): Promise<
+export async function runParseDenialLetterLocal(
+  file: File,
+  accessToken: string | null
+): Promise<
   | { ok: true; data: Record<string, unknown>; status: number }
   | { ok: false; data: Record<string, unknown>; status: number }
 > {
   const forwardForm = new FormData();
   forwardForm.append("file", file, file.name);
-  const forward = await forwardToInternalEngine("/api/parse/denial-letter", {
-    method: "POST",
-    body: forwardForm,
-  });
+  const forward = await forwardToInternalEngine(
+    "/api/extract/file",
+    {
+      method: "POST",
+      body: forwardForm,
+    },
+    accessToken
+  );
   if (forward && forward.ok) {
     const data = (await forward.json()) as Record<string, unknown>;
     return { ok: true, data, status: 200 };

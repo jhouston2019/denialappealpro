@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  DAP_RESUME_AFTER_PAYMENT_KEY,
+  DAP_WIZARD_RESUME_KEY,
+  type DapResumeAfterPaymentPayload,
+} from "@/lib/dap/preview-flow";
 
 type Msg = { kind: "ok" | "err" | "info"; text: string } | null;
 
@@ -13,11 +19,70 @@ type Msg = { kind: "ok" | "err" | "info"; text: string } | null;
  * Never trust the client: server routes still re-query public.users for is_paid.
  */
 export function WelcomeClient({ sessionId }: { sessionId?: string }) {
+  const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<Msg>(null);
   const [busy, setBusy] = useState(false);
+
+  const resumeAppealIfPending = useCallback(async (): Promise<boolean> => {
+    const raw = sessionStorage.getItem(DAP_RESUME_AFTER_PAYMENT_KEY);
+    if (!raw) return false;
+    let payload: DapResumeAfterPaymentPayload;
+    try {
+      payload = JSON.parse(raw) as DapResumeAfterPaymentPayload;
+    } catch {
+      return false;
+    }
+    if (!payload.claim_data || !payload.intake_snapshot || !payload.mode) return false;
+    try {
+      const res = await fetch("/api/intake/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload.claim_data),
+        credentials: "include",
+      });
+      const data = (await res.json()) as { appeal_id?: string; error?: string };
+      if (res.ok && data.appeal_id) {
+        sessionStorage.removeItem(DAP_RESUME_AFTER_PAYMENT_KEY);
+        router.push(`/appeal/${data.appeal_id}`);
+        return true;
+      }
+      const errText = (data.error || "").toLowerCase();
+      if (
+        res.status === 400 &&
+        (errText.includes("required") || errText.includes("patient name") || errText.includes("npi"))
+      ) {
+        sessionStorage.setItem(
+          DAP_WIZARD_RESUME_KEY,
+          JSON.stringify({ intake: payload.intake_snapshot, mode: payload.mode })
+        );
+        sessionStorage.removeItem(DAP_RESUME_AFTER_PAYMENT_KEY);
+        router.push("/start?dap_need_details=1");
+        return true;
+      }
+    } catch {
+      /* keep resume payload for retry */
+    }
+    return false;
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled || !data.session?.user) return;
+      if (!data.session.user.email_confirmed_at) return;
+      const done = await resumeAppealIfPending();
+      if (done && !cancelled) {
+        setMsg({ kind: "ok", text: "Opening your appeal…" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, resumeAppealIfPending]);
 
   const sendReset = async () => {
     if (!email.trim()) {
@@ -51,16 +116,23 @@ export function WelcomeClient({ sessionId }: { sessionId?: string }) {
       email: email.trim().toLowerCase(),
       password,
     });
-    setBusy(false);
     if (error) {
+      setBusy(false);
       setMsg({ kind: "err", text: error.message });
       return;
     }
     if (!data.user?.email_confirmed_at) {
+      setBusy(false);
       setMsg({
         kind: "info",
         text: "Confirm your email from the link we sent, then sign in again. Paid access requires a verified address that matches your checkout email.",
       });
+      return;
+    }
+    const resumed = await resumeAppealIfPending();
+    setBusy(false);
+    if (resumed) {
+      setMsg({ kind: "ok", text: "Opening your appeal…" });
       return;
     }
     setMsg({ kind: "ok", text: "Signed in. Continue in the app (server checks your paid status)." });

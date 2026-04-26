@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "@/lib/api-client";
 
-type AuthUser = Record<string, unknown> | null;
+type AuthUser = {
+  id?: string;
+  email?: string;
+  is_paid?: boolean | null;
+  has_data?: boolean;
+  payment_verification_status?: string | null;
+} | null;
 
 /**
  * Replaces CRA AuthContext for the appeal wizard: session via /api/auth/me (cookies).
@@ -15,7 +21,7 @@ export function useAuth() {
   const [newDenialsDollarValue, setNewDenialsDollarValue] = useState<number | null>(null);
 
   const hydrateFromMe = useCallback((data: { user: AuthUser; new_denials_since_visit?: number; new_denials_dollar_value?: number }) => {
-    setAuthUser(data.user);
+    setAuthUser(data.user ?? null);
     if (typeof data.new_denials_since_visit === "number") {
       setNewDenialsBanner(data.new_denials_since_visit);
     }
@@ -59,9 +65,12 @@ export function useAuth() {
     }
   }, []);
 
+  const isPaid = Boolean(authUser?.is_paid === true);
+
   return {
     authChecked,
     isAuthenticated: Boolean(authUser),
+    isPaid,
     user: authUser,
     newDenialsBanner,
     newDenialsDollarValue,

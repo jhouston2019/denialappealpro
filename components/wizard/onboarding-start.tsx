@@ -36,6 +36,11 @@ import {
   PAYER_SUGGESTIONS,
   normalizeCarcToken,
 } from '@/lib/wizard/denial-intake-engine';
+import {
+  DAP_PREVIEW_PAYLOAD_KEY,
+  DAP_WIZARD_RESUME_KEY,
+  snapshotIntakeFromWizard,
+} from '@/lib/dap/preview-flow';
 
 const navy = '#0f172a';
 const border = '#e2e8f0';
@@ -211,7 +216,7 @@ function BulkQueueRows({ labels, job, jobKind }) {
 
 export default function OnboardingStart() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authChecked, isPaid } = useAuth();
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -241,6 +246,7 @@ export default function OnboardingStart() {
   const [step4GenerateError, setStep4GenerateError] = useState('');
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
+  const [step2PreviewBusy, setStep2PreviewBusy] = useState(false);
   /** Step 3: show provider/patient fields — snapped only when entering Step 3, not from live intake (avoids unmount while typing). */
   const [step3ProviderFieldMount, setStep3ProviderFieldMount] = useState({
     name: true,
@@ -284,6 +290,80 @@ export default function OnboardingStart() {
 
   const advanceSingle = (next) => {
     setSingleStep(next);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('dap_need_details') !== '1') return;
+    const raw = sessionStorage.getItem(DAP_WIZARD_RESUME_KEY);
+    if (!raw) return;
+    try {
+      const blob = JSON.parse(raw);
+      const intakeSnap = blob?.intake;
+      const resumeMode = blob?.mode;
+      if (!intakeSnap || !resumeMode) return;
+      setIntake({ ...emptyIntake(), ...intakeSnap });
+      setMode(resumeMode);
+      setSingleStep(2);
+      sessionStorage.removeItem(DAP_WIZARD_RESUME_KEY);
+      window.history.replaceState({}, '', '/start');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onStep2ReviewContinue = async () => {
+    setErr('');
+    const shouldBypassPreview = authChecked && isAuthenticated && isPaid === true;
+    if (shouldBypassPreview) {
+      advanceSingle(2);
+      return;
+    }
+    setStep2PreviewBusy(true);
+    try {
+      const payload = serializeIntakeForBackend(intake);
+      const payer = (intake.payer || '').trim() || 'Unknown payer';
+      const claimNum = (intake.claimNumber || '').trim();
+      const pasteSupplement = mode === 'paste' && pasteText.trim() ? pasteText.trim().slice(0, 15000) : '';
+      const pasteBlock = [payload.paste_details, pasteSupplement].filter(Boolean).join('\n\n');
+      const rawParse = lastDenialParseResponseRef.current;
+      const extractedParts = [rawParse?.raw_text, rawParse?.denial_reason_text, intake.medicalNecessity].filter(
+        Boolean
+      );
+      const extractedText = String(extractedParts.join('\n\n').trim() || pasteText.trim() || '');
+      if (extractedText.length < 10) {
+        setErr('Add a bit more denial detail so we can analyze your letter.');
+        return;
+      }
+      const intakeMode = mode === 'csv' ? 'csv' : mode === 'paste' ? 'paste' : 'upload';
+      const claim_data = {
+        intake_mode: intakeMode,
+        payer,
+        denial_reason: payload.denial_reason,
+        billed_amount: intake.billedAmount || '0',
+        paste_details: pasteBlock,
+        claim_number: claimNum,
+        patient_name: (intake.patientName || '').trim(),
+        provider_name: (intake.providerName || '').trim(),
+        provider_npi: (intake.providerNpi || '').trim(),
+        date_of_service: intake.dateOfService || '',
+        cpt_codes: payload.cpt_codes || '',
+        diagnosis_code: payload.diagnosis_code || '',
+        icd10_codes: payload.icd10_codes || payload.diagnosis_code || '',
+        denial_code: payload.denial_code || '',
+      };
+      const stored = {
+        extracted_text: extractedText.slice(0, 50000),
+        claim_data,
+        intake_snapshot: snapshotIntakeFromWizard(intake),
+        mode: intakeMode,
+      };
+      sessionStorage.setItem(DAP_PREVIEW_PAYLOAD_KEY, JSON.stringify(stored));
+      router.push('/preview');
+    } finally {
+      setStep2PreviewBusy(false);
+    }
   };
 
   const applyProviderProfilePayload = useCallback((data) => {
@@ -575,7 +655,7 @@ export default function OnboardingStart() {
         fd.append('denial_code', payload.denial_code || '');
         if (file) fd.append('denial_file', file);
         const { data } = await api.post('/api/intake/preview', fd);
-        router.push(`/start/preview/${data.appeal_id}`);
+        router.push(`/appeal/${data.appeal_id}`);
         return;
       }
       const { data } = await api.post('/api/intake/preview', {
@@ -594,7 +674,7 @@ export default function OnboardingStart() {
         icd10_codes: payload.icd10_codes || payload.diagnosis_code || '',
         denial_code: payload.denial_code || '',
       });
-      router.push(`/start/preview/${data.appeal_id}`);
+      router.push(`/appeal/${data.appeal_id}`);
     } catch (err) {
       console.error('Preview error:', err.response?.data || err);
       throw err;
@@ -1928,16 +2008,19 @@ export default function OnboardingStart() {
             </datalist>
             <button
               type="button"
-              onClick={() => advanceSingle(2)}
-              style={ctaButton(false, false, '')}
+              disabled={step2PreviewBusy || !authChecked}
+              onClick={() => void onStep2ReviewContinue()}
+              style={ctaButton(step2PreviewBusy || !authChecked, false, '')}
               onMouseEnter={(e) => {
+                if (step2PreviewBusy || !authChecked) return;
                 e.target.style.background = primaryCtaHover;
               }}
               onMouseLeave={(e) => {
+                if (step2PreviewBusy || !authChecked) return;
                 e.target.style.background = primaryCta;
               }}
             >
-              Looks good — next
+              {!authChecked ? 'Loading…' : step2PreviewBusy ? 'Preparing preview…' : 'Looks good — next'}
             </button>
           </div>
         )}

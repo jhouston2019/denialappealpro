@@ -71,6 +71,12 @@ class Config:
     STRIPE_CORE_PRICE_ID = os.getenv('STRIPE_CORE_PRICE_ID', 'price_core_placeholder')
     STRIPE_SCALE_PRICE_ID = os.getenv('STRIPE_SCALE_PRICE_ID', 'price_scale_placeholder')
     STRIPE_OVERAGE_PRICE_ID = os.getenv('STRIPE_OVERAGE_PRICE_ID', 'price_overage_placeholder')
+
+    # Internal engine: verify Supabase access tokens (HS256) — from Supabase Dashboard → API → JWT Secret
+    SUPABASE_JWT_SECRET = (os.getenv('SUPABASE_JWT_SECRET') or '').strip()
+
+    # App URL (Next) for post-generation record-usage callback from internal engine
+    NEXT_INTERNAL_API_URL = (os.getenv('NEXT_INTERNAL_API_URL') or '').strip().rstrip('/')
     
     # Domain for Stripe redirects
     DOMAIN = os.getenv('DOMAIN', 'http://localhost:3000')

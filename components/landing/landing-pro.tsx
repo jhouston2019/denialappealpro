@@ -451,7 +451,7 @@ function LandingPro() {
             flexWrap: 'wrap'
           }}>
             <button 
-              onClick={() => router.push('/pricing')}
+              onClick={() => router.push('/start')}
               style={{
                 background: 'white',
                 color: '#0f172a',
@@ -474,7 +474,7 @@ function LandingPro() {
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
               }}
             >
-              Run Denial Analysis → Generate Appeal
+              Upload Your Denial Letter — Free Preview
             </button>
             
             <button 

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
 import { runParseDenialLetterLocal } from "@/lib/denial-parse/run-local-parse";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const r = await requirePaidCustomer();
   if (!r.ok) return r.response;
+  const supabase = await createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token ?? null;
+
   const form = await request.formData();
   const file = form.get("file");
   if (!file || !(file instanceof File) || !file.size) {
@@ -21,6 +26,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const res = await runParseDenialLetterLocal(file);
+  const res = await runParseDenialLetterLocal(file, accessToken);
   return NextResponse.json(res.data, { status: res.status });
 }

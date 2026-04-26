@@ -1,17 +1,31 @@
 /**
- * Optional proxy to a legacy Flask (or other) engine serving the same /api/parse/* paths.
- * Set INTERNAL_ENGINE_BASE_URL (e.g. http://127.0.0.1:5000) and optional INTERNAL_ENGINE_SECRET.
+ * Proxy to the internal engine (Fly.io Flask) for extraction and generation.
+ * Set INTERNAL_FLASK_BASE_URL (or NEXT_PUBLIC_FLASK_API_URL) to the same Fly URL.
+ * Pass the caller's Supabase access token so the engine can verify JWTs.
  */
 
+export type EngineExtractPath = "/api/extract/file" | "/api/extract/text";
+
+export function getInternalFlaskBaseUrl(): string | null {
+  const base = (
+    process.env.INTERNAL_FLASK_BASE_URL ||
+    process.env.INTERNAL_ENGINE_BASE_URL ||
+    process.env.NEXT_PUBLIC_FLASK_API_URL
+  )?.replace(/\/$/, "");
+  return base || null;
+}
+
 export async function forwardToInternalEngine(
-  path: "/api/parse/denial-letter" | "/api/parse/denial-text",
-  init: RequestInit
+  path: EngineExtractPath,
+  init: RequestInit,
+  accessToken: string | null
 ): Promise<Response | null> {
-  const base = process.env.INTERNAL_ENGINE_BASE_URL?.replace(/\/$/, "");
+  const base = getInternalFlaskBaseUrl();
   if (!base) return null;
   const url = `${base}${path}`;
   const headers = new Headers(init.headers);
-  const secret = process.env.INTERNAL_ENGINE_SECRET;
-  if (secret) headers.set("Authorization", `Bearer ${secret}`);
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
   return fetch(url, { ...init, headers });
 }

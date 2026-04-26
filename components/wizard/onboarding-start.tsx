@@ -247,6 +247,8 @@ export default function OnboardingStart() {
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
   const [step2PreviewBusy, setStep2PreviewBusy] = useState(false);
+  /** True after /welcome sent user here to finish provider/patient/NPI (no re-upload). */
+  const [resumedNeedDetails, setResumedNeedDetails] = useState(false);
   /** Step 3: show provider/patient fields — snapped only when entering Step 3, not from live intake (avoids unmount while typing). */
   const [step3ProviderFieldMount, setStep3ProviderFieldMount] = useState({
     name: true,
@@ -292,7 +294,7 @@ export default function OnboardingStart() {
     setSingleStep(next);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     if (q.get('dap_need_details') !== '1') return;
@@ -306,6 +308,7 @@ export default function OnboardingStart() {
       setIntake({ ...emptyIntake(), ...intakeSnap });
       setMode(resumeMode);
       setSingleStep(2);
+      setResumedNeedDetails(true);
       sessionStorage.removeItem(DAP_WIZARD_RESUME_KEY);
       window.history.replaceState({}, '', '/start');
     } catch {
@@ -723,6 +726,7 @@ export default function OnboardingStart() {
     setSingleStep(0);
     setBulkStep(0);
     setCodingAccordionOpen(false);
+    setResumedNeedDetails(false);
   };
 
   const applyCsvRow = useCallback(
@@ -2028,6 +2032,24 @@ export default function OnboardingStart() {
         {singleStep === 2 && (
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 3 — Confirm details</h1>
+            {resumedNeedDetails ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  borderRadius: 10,
+                  background: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  fontSize: 14,
+                  color: '#14532d',
+                  lineHeight: 1.5,
+                  fontWeight: 600,
+                }}
+              >
+                Your denial details were restored after checkout — complete any missing fields below. You do not need to
+                upload the letter again.
+              </div>
+            ) : null}
             <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
               Only fields that still need you are shown. Provider profile values are filled automatically when saved on your account.
             </p>

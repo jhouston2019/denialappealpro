@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
+
+function resolvePriceIdFromPlan(
+  plan: string,
+  mode: "subscription" | "payment"
+): string | null {
+  const p = plan.toLowerCase();
+  if (mode === "payment" || p === "retail" || p === "payg") {
+    const id = process.env.STRIPE_RETAIL_PRICE_ID?.trim();
+    return id || null;
+  }
+  if (p === "starter") return process.env.STRIPE_STARTER_PRICE_ID?.trim() || null;
+  if (p === "core") return process.env.STRIPE_CORE_PRICE_ID?.trim() || null;
+  if (p === "scale") return process.env.STRIPE_SCALE_PRICE_ID?.trim() || null;
+  return null;
+}
 
 /**
- * Stripe-first checkout. Does not create or touch public.users.
- * Request JSON: { price_id: string, plan: string, email?: string, mode?: "subscription" | "payment" }
- * Metadata on session: price_id, plan (and optional extra keys).
+ * Stripe checkout.
+ *
+ * New: { price_id, plan, email?, mode? }
+ * CRA: { email, plan: "starter"|"core"|"scale", type: "subscription" } — resolves price_id from env.
  */
 export async function POST(request: NextRequest) {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -17,6 +34,8 @@ export async function POST(request: NextRequest) {
     plan?: string;
     email?: string;
     mode?: "subscription" | "payment";
+    /** CRA compatibility */
+    type?: string;
   };
   try {
     body = await request.json();
@@ -24,10 +43,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const priceId = (body.price_id || "").trim();
+  let priceId = (body.price_id || "").trim();
   const plan = (body.plan || "").trim();
-  if (!priceId || !plan) {
-    return NextResponse.json({ error: "price_id and plan are required" }, { status: 400 });
+  const mode: "subscription" | "payment" =
+    body.mode === "payment" || body.type === "payment" ? "payment" : "subscription";
+
+  if (!plan) {
+    return NextResponse.json({ error: "plan is required" }, { status: 400 });
+  }
+
+  if (!priceId) {
+    const resolved = resolvePriceIdFromPlan(plan, mode);
+    if (!resolved) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing or invalid price: pass price_id or set STRIPE_STARTER_PRICE_ID, STRIPE_CORE_PRICE_ID, STRIPE_SCALE_PRICE_ID (and STRIPE_RETAIL_PRICE_ID for pay-as-you-go).",
+        },
+        { status: 400 }
+      );
+    }
+    priceId = resolved;
   }
 
   const baseUrl =
@@ -39,12 +75,11 @@ export async function POST(request: NextRequest) {
   const successUrl = `${baseUrl.replace(/\/$/, "")}/welcome?session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
 
-  const mode = body.mode || "subscription";
   if (mode !== "subscription" && mode !== "payment") {
     return NextResponse.json({ error: "mode must be subscription or payment" }, { status: 400 });
   }
 
-  const stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
+  const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
   const email = (body.email || "").trim().toLowerCase();
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {

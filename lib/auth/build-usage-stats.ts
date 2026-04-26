@@ -28,6 +28,13 @@ export async function buildUsageStats(userId: string): Promise<Record<string, un
   const planLimit = u.plan_limit || 0;
   const used = u.appeals_generated_monthly || 0;
   const usagePercentage = planLimit > 0 ? Math.min(100, (used / planLimit) * 100) : 0;
+  const pctRounded = Math.round(usagePercentage * 10) / 10;
+  let upgrade_status: "limit_reached" | "approaching_limit" | "warning" | null = null;
+  if (planLimit > 0) {
+    if (usagePercentage >= 100) upgrade_status = "limit_reached";
+    else if (usagePercentage >= 90) upgrade_status = "approaching_limit";
+    else if (usagePercentage >= 70) upgrade_status = "warning";
+  }
   return {
     user_id: u.id,
     email: u.email,
@@ -36,10 +43,11 @@ export async function buildUsageStats(userId: string): Promise<Record<string, un
     appeals_generated_monthly: used,
     appeals_generated_weekly: u.appeals_generated_weekly,
     appeals_generated_today: u.appeals_generated_today,
-    usage_percentage: Math.round(usagePercentage * 10) / 10,
+    usage_percentage: pctRounded,
     overage_count: u.overage_count,
     billing_status: u.billing_status,
     can_generate: true,
     plan_usage_label: planLimit > 0 ? `${used}/${planLimit}` : "—",
+    upgrade_status,
   };
 }

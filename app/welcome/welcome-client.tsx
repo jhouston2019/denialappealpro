@@ -4,8 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
+  DAP_PRACTICE_PROFILE_KEY,
   DAP_RESUME_AFTER_PAYMENT_KEY,
   DAP_WIZARD_RESUME_KEY,
+  type DapClaimDataForPreview,
+  type DapPracticeProfileStored,
   type DapResumeAfterPaymentPayload,
 } from "@/lib/dap/preview-flow";
 
@@ -36,11 +39,40 @@ export function WelcomeClient({ sessionId }: { sessionId?: string }) {
       return false;
     }
     if (!payload.claim_data || !payload.intake_snapshot || !payload.mode) return false;
+    let claimForApi: DapClaimDataForPreview = { ...payload.claim_data };
+    let practice: DapPracticeProfileStored | undefined = payload.practice_profile;
+    if (!practice) {
+      try {
+        const pr = sessionStorage.getItem(DAP_PRACTICE_PROFILE_KEY);
+        if (pr) {
+          const p = JSON.parse(pr) as Partial<DapPracticeProfileStored>;
+          const nm = String(p.provider_name || "").trim();
+          const npi = String(p.provider_npi || "").replace(/\D/g, "");
+          if (nm && npi.length === 10) {
+            practice = {
+              provider_name: nm,
+              provider_npi: npi,
+              ...(p.provider_address ? { provider_address: String(p.provider_address) } : {}),
+              ...(p.provider_phone ? { provider_phone: String(p.provider_phone) } : {}),
+            };
+          }
+        }
+      } catch {
+        /* keep claim as stored */
+      }
+    }
+    if (practice) {
+      claimForApi = {
+        ...claimForApi,
+        provider_name: practice.provider_name,
+        provider_npi: practice.provider_npi,
+      };
+    }
     try {
       const res = await fetch("/api/intake/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload.claim_data),
+        body: JSON.stringify(claimForApi),
         credentials: "include",
       });
       const data = (await res.json()) as { appeal_id?: string; error?: string };

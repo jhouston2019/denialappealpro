@@ -38,9 +38,11 @@ import {
 } from '@/lib/wizard/denial-intake-engine';
 import {
   DAP_PREVIEW_PAYLOAD_KEY,
+  DAP_PRACTICE_PROFILE_KEY,
   DAP_WIZARD_RESUME_KEY,
   snapshotIntakeFromWizard,
 } from '@/lib/dap/preview-flow';
+import { applyPracticeToDapPreviewPayload } from '@/lib/dap/apply-practice-to-preview-payload';
 
 const navy = '#0f172a';
 const border = '#e2e8f0';
@@ -315,6 +317,14 @@ export default function OnboardingStart() {
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
   const [step2PreviewBusy, setStep2PreviewBusy] = useState(false);
+  /** Pre-preview practice form (anonymous or no saved org name) before /preview. */
+  const [showPracticeForPreview, setShowPracticeForPreview] = useState(false);
+  const [ppName, setPpName] = useState('');
+  const [ppNpi, setPpNpi] = useState('');
+  const [ppAddress, setPpAddress] = useState('');
+  const [ppPhone, setPpPhone] = useState('');
+  const [ppErr, setPpErr] = useState('');
+  const pendingPreviewPayloadRef = useRef(null);
   /** True after /welcome sent user here to finish provider/patient/NPI (no re-upload). */
   const [resumedNeedDetails, setResumedNeedDetails] = useState(false);
   /** Step 3: show provider/patient fields — snapped only when entering Step 3, not from live intake (avoids unmount while typing). */
@@ -362,27 +372,30 @@ export default function OnboardingStart() {
     setSingleStep(next);
   };
 
-  useLayoutEffect(() => {
-    if (typeof window === 'undefined') return;
-    const q = new URLSearchParams(window.location.search);
-    if (q.get('dap_need_details') !== '1') return;
-    const raw = sessionStorage.getItem(DAP_WIZARD_RESUME_KEY);
-    if (!raw) return;
+  useEffect(() => {
+    if (!showPracticeForPreview || typeof window === 'undefined') return;
+    setPpErr('');
     try {
-      const blob = JSON.parse(raw);
-      const intakeSnap = blob?.intake;
-      const resumeMode = blob?.mode;
-      if (!intakeSnap || !resumeMode) return;
-      setIntake({ ...emptyIntake(), ...intakeSnap });
-      setMode(resumeMode);
-      setSingleStep(2);
-      setResumedNeedDetails(true);
-      sessionStorage.removeItem(DAP_WIZARD_RESUME_KEY);
-      window.history.replaceState({}, '', '/start');
+      const raw = sessionStorage.getItem(DAP_PRACTICE_PROFILE_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (p && typeof p === 'object') {
+        if (p.provider_name) setPpName(String(p.provider_name));
+        if (p.provider_npi) setPpNpi(String(p.provider_npi).replace(/\D/g, ''));
+        if (p.provider_address) setPpAddress(String(p.provider_address));
+        if (p.provider_phone) setPpPhone(String(p.provider_phone));
+      }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [showPracticeForPreview]);
+
+  const navigateToPreviewWithStored = useCallback((stored) => {
+    sessionStorage.setItem(DAP_PREVIEW_PAYLOAD_KEY, JSON.stringify(stored));
+    setShowPracticeForPreview(false);
+    pendingPreviewPayloadRef.current = null;
+    router.push('/preview');
+  }, [router]);
 
   const onStep2ReviewContinue = async () => {
     setErr('');
@@ -430,12 +443,133 @@ export default function OnboardingStart() {
         intake_snapshot: snapshotIntakeFromWizard(intake),
         mode: intakeMode,
       };
-      sessionStorage.setItem(DAP_PREVIEW_PAYLOAD_KEY, JSON.stringify(stored));
-      router.push('/preview');
+
+      if (typeof window !== 'undefined') {
+        const prRaw = sessionStorage.getItem(DAP_PRACTICE_PROFILE_KEY);
+        if (prRaw) {
+          try {
+            const p = JSON.parse(prRaw);
+            const nm = (p && String(p.provider_name || '').trim()) || '';
+            const npiRaw = p && p.provider_npi != null ? String(p.provider_npi) : '';
+            const npiDigits = npiRaw.replace(/\D/g, '');
+            if (nm && npiDigits.length === 10) {
+              const merged = applyPracticeToDapPreviewPayload(stored, {
+                provider_name: nm,
+                provider_npi: npiDigits,
+                provider_address: p.provider_address ? String(p.provider_address) : undefined,
+                provider_phone: p.provider_phone ? String(p.provider_phone) : undefined,
+              });
+              sessionStorage.setItem(
+                DAP_PRACTICE_PROFILE_KEY,
+                JSON.stringify({
+                  provider_name: merged.practice_profile?.provider_name || nm,
+                  provider_npi: merged.practice_profile?.provider_npi || npiDigits,
+                  provider_address: merged.practice_profile?.provider_address,
+                  provider_phone: merged.practice_profile?.provider_phone,
+                })
+              );
+              navigateToPreviewWithStored(merged);
+              return;
+            }
+          } catch {
+            /* fall through */
+          }
+        }
+      }
+
+      if (authChecked && isAuthenticated) {
+        try {
+          const res = await fetch('/api/preview/saved-practice', { credentials: 'include' });
+          if (res.ok) {
+            const d = await res.json();
+            if (d.hasProviderName && d.profile) {
+              const m = d.profile;
+              const merged = applyPracticeToDapPreviewPayload(stored, {
+                provider_name: m.provider_name,
+                provider_npi: String(m.provider_npi || '')
+                  .replace(/\D/g, '')
+                  .slice(0, 10),
+                provider_address: m.provider_address || undefined,
+                provider_phone: m.provider_phone || undefined,
+              });
+              navigateToPreviewWithStored(merged);
+              return;
+            }
+          }
+        } catch {
+          /* fall through to practice form */
+        }
+      }
+
+      pendingPreviewPayloadRef.current = stored;
+      setShowPracticeForPreview(true);
     } finally {
       setStep2PreviewBusy(false);
     }
   };
+
+  const commitPracticeForPreview = () => {
+    setPpErr('');
+    const name = (ppName || '').trim();
+    const npiD = (ppNpi || '').replace(/\D/g, '');
+    if (!name) {
+      setPpErr('Practice name is required.');
+      return;
+    }
+    if (npiD.length !== 10) {
+      setPpErr('Provider NPI must be exactly 10 digits.');
+      return;
+    }
+    const stored = pendingPreviewPayloadRef.current;
+    if (!stored) {
+      setPpErr('Preview data was lost. Go back to Step 2 and try again.');
+      return;
+    }
+    const practice = {
+      provider_name: name,
+      provider_npi: npiD,
+      provider_address: (ppAddress || '').trim() || undefined,
+      provider_phone: (ppPhone || '').trim() || undefined,
+    };
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(DAP_PRACTICE_PROFILE_KEY, JSON.stringify(practice));
+    }
+    const merged = applyPracticeToDapPreviewPayload(stored, practice);
+    setStep2PreviewBusy(true);
+    try {
+      navigateToPreviewWithStored(merged);
+    } finally {
+      setStep2PreviewBusy(false);
+    }
+  };
+
+  const cancelPracticeForPreview = () => {
+    setShowPracticeForPreview(false);
+    setPpErr('');
+    pendingPreviewPayloadRef.current = null;
+  };
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('dap_need_details') !== '1') return;
+    const raw = sessionStorage.getItem(DAP_WIZARD_RESUME_KEY);
+    if (!raw) return;
+    try {
+      const blob = JSON.parse(raw);
+      const intakeSnap = blob?.intake;
+      const resumeMode = blob?.mode;
+      if (!intakeSnap || !resumeMode) return;
+      setIntake({ ...emptyIntake(), ...intakeSnap });
+      setMode(resumeMode);
+      setSingleStep(2);
+      setResumedNeedDetails(true);
+      sessionStorage.removeItem(DAP_WIZARD_RESUME_KEY);
+      window.history.replaceState({}, '', '/start');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const applyProviderProfilePayload = useCallback((data) => {
     const pn = profileTextField(data?.provider_name);
@@ -1991,10 +2125,106 @@ export default function OnboardingStart() {
 
         {singleStep === 1 && (
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 2 — Review extraction</h1>
-            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
-              Confirmed fields are highlighted in green. Gaps use an orange edge — edit anything inline.
-            </p>
+            {showPracticeForPreview ? (
+              <>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Tell us about your practice</h1>
+                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 8, lineHeight: 1.5 }}>
+                  We&apos;ll use this to personalize your appeal letter.
+                </p>
+                {ppErr ? (
+                  <p style={{ color: '#b91c1c', fontWeight: 600, fontSize: 14, marginBottom: 12 }}>{ppErr}</p>
+                ) : null}
+                <div style={{ display: 'grid', gap: 14, maxWidth: '100%' }}>
+                  <label style={{ display: 'block' }}>
+                    <span style={flowFieldLabelStyle}>
+                      Practice name <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
+                    </span>
+                    <input
+                      className="dap-flow-input"
+                      value={ppName}
+                      onChange={(e) => {
+                        setPpName(e.target.value);
+                        if (ppErr) setPpErr('');
+                      }}
+                      placeholder="e.g. Riverside Medical Group"
+                      style={{ ...inputBase, width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </label>
+                  <label style={{ display: 'block' }}>
+                    <span style={flowFieldLabelStyle}>
+                      Provider NPI <span style={{ color: '#c2410c' }} aria-hidden="true">*</span>
+                    </span>
+                    <input
+                      className="dap-flow-input"
+                      value={ppNpi}
+                      onChange={(e) => setPpNpi(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="10-digit NPI"
+                      style={{ ...inputBase, width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </label>
+                  <label style={{ display: 'block' }}>
+                    <span style={flowFieldLabelStyle}>Practice address (optional)</span>
+                    <input
+                      className="dap-flow-input"
+                      value={ppAddress}
+                      onChange={(e) => setPpAddress(e.target.value)}
+                      placeholder="Street address"
+                      style={{ ...inputBase, width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </label>
+                  <label style={{ display: 'block' }}>
+                    <span style={flowFieldLabelStyle}>Phone (optional)</span>
+                    <input
+                      className="dap-flow-input"
+                      value={ppPhone}
+                      onChange={(e) => setPpPhone(e.target.value)}
+                      placeholder="(xxx) xxx-xxxx"
+                      type="tel"
+                      style={{ ...inputBase, width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </label>
+                </div>
+                <div
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20, alignItems: 'center' }}
+                >
+                  <button
+                    type="button"
+                    onClick={cancelPracticeForPreview}
+                    style={{
+                      ...singleBackLinkButtonStyle,
+                      display: 'inline-block',
+                      width: 'auto',
+                    }}
+                  >
+                    ← Back to review
+                  </button>
+                  <button
+                    type="button"
+                    onClick={commitPracticeForPreview}
+                    disabled={step2PreviewBusy}
+                    style={ctaButton(step2PreviewBusy, false, '')}
+                    onMouseEnter={(e) => {
+                      if (step2PreviewBusy) return;
+                      e.currentTarget.style.background = primaryCtaHover;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (step2PreviewBusy) return;
+                      e.currentTarget.style.background = primaryCta;
+                    }}
+                  >
+                    {step2PreviewBusy ? 'Preparing…' : 'Generate My Preview →'}
+                  </button>
+                </div>
+                {unlockPricingCtaBar}
+              </>
+            ) : (
+              <>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Step 2 — Review extraction</h1>
+                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
+                  Confirmed fields are highlighted in green. Gaps use an orange edge — edit anything inline.
+                </p>
             {extractedReady && extractedMeta?.warning && (
               <div
                 style={{
@@ -2154,6 +2384,8 @@ export default function OnboardingStart() {
               {!authChecked ? 'Loading…' : step2PreviewBusy ? 'Preparing preview…' : 'Looks good — next'}
             </button>
             {unlockPricingCtaBar}
+              </>
+            )}
           </div>
         )}
 

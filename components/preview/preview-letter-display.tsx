@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useState, useMemo, type CSSProperties } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const MUTED = "#94a3b8";
@@ -10,6 +10,12 @@ const NAVY = "#0f172a";
 const CARD = "#ffffff";
 const BORDER = "#e2e8f0";
 const UNLOCK_TIP = "Unlock your appeal to download";
+
+const blurLocked: CSSProperties = {
+  filter: "blur(4px)",
+  userSelect: "none",
+  pointerEvents: "none",
+};
 
 function escapeHtml(s: string) {
   return String(s || "")
@@ -26,6 +32,90 @@ export function splitAppealLetterParagraphs(text: string): string[] {
   const byDouble = t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   if (byDouble.length > 0) return byDouble;
   return [t];
+}
+
+const SALUTATION_RE = /^(dear|to whom it may concern|greetings|hello)\b/i;
+
+/**
+ * Splits the letter for preview lock UI:
+ * - letterhead: through the "Re:" line, or the first block if there is no Re: line
+ * - salutation: e.g. "Dear Payer", when a following body paragraph exists
+ * - firstBody: first substantive paragraph after the letterhead
+ * - rest: everything after the first body paragraph
+ */
+function splitPreviewLetterForLock(letterText: string): {
+  letterhead: string;
+  salutation: string;
+  firstBody: string;
+  rest: string;
+} {
+  const t = (letterText || "").replace(/\r\n/g, "\n");
+  if (!t.trim()) {
+    return { letterhead: "", salutation: "", firstBody: "", rest: "" };
+  }
+
+  const lines = t.split("\n");
+  let reIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/^\s*re:\s*/i.test(line) || /^\s*re\s*[\-–—:]\s*/i.test(line.trimStart())) {
+      reIdx = i;
+      break;
+    }
+  }
+
+  let letterhead: string;
+  let afterHead: string;
+  if (reIdx >= 0) {
+    letterhead = lines.slice(0, reIdx + 1).join("\n").trimEnd();
+    afterHead = lines.slice(reIdx + 1).join("\n");
+  } else {
+    const paras = t
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (paras.length >= 1) {
+      letterhead = paras[0] ?? "";
+      afterHead = paras.slice(1).join("\n\n");
+    } else {
+      letterhead = t;
+      afterHead = "";
+    }
+  }
+
+  afterHead = afterHead.replace(/^\n+/, "").trimStart();
+  if (!afterHead) {
+    return { letterhead, salutation: "", firstBody: "", rest: "" };
+  }
+
+  const bodyParts = afterHead
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (bodyParts.length === 0) {
+    return { letterhead, salutation: "", firstBody: "", rest: "" };
+  }
+
+  if (bodyParts.length === 1) {
+    return { letterhead, salutation: "", firstBody: bodyParts[0] ?? "", rest: "" };
+  }
+
+  const first = bodyParts[0] ?? "";
+  const second = bodyParts[1] ?? "";
+  const isSal = SALUTATION_RE.test(first);
+
+  if (isSal) {
+    const firstBody = second;
+    const rest = bodyParts.slice(2).join("\n\n");
+    return { letterhead, salutation: first, firstBody, rest };
+  }
+
+  return {
+    letterhead,
+    salutation: "",
+    firstBody: first,
+    rest: bodyParts.slice(1).join("\n\n"),
+  };
 }
 
 function wrapLine(line: string, maxChars: number): string[] {
@@ -91,9 +181,63 @@ const btnDisabled: CSSProperties = {
   opacity: 0.9,
 };
 
+const preWrap: CSSProperties = {
+  margin: 0,
+  whiteSpace: "pre-wrap" as const,
+  wordBreak: "break-word" as const,
+};
+
+function UnlockOverlay() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        pointerEvents: "auto" as const,
+      }}
+    >
+      <div
+        style={{
+          textAlign: "center" as const,
+          maxWidth: 360,
+          background: "rgba(255,255,255,0.92)",
+          padding: "20px 24px",
+          borderRadius: 12,
+          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.12)",
+          border: `1px solid ${BORDER}`,
+        }}
+      >
+        <p style={{ margin: "0 0 14px", color: NAVY, fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>Your full appeal letter is ready.</p>
+        <Link
+          href="/pricing"
+          style={{
+            display: "inline-block",
+            background: GREEN,
+            color: "#fff",
+            fontWeight: 800,
+            fontSize: 15,
+            padding: "12px 22px",
+            borderRadius: 10,
+            textDecoration: "none",
+          }}
+        >
+          Unlock My Appeal →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export type PreviewLetterDisplayProps = {
   letterText: string;
-  /** When true: blur tail paragraphs, lock downloads, show overlay CTA */
+  /** When true: blur after letterhead (salutation + all but first body para), lock buttons */
   locked: boolean;
 };
 
@@ -102,11 +246,7 @@ export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDispla
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docxBusy, setDocxBusy] = useState(false);
 
-  const parts = splitAppealLetterParagraphs(letterText);
-  const head = parts.slice(0, 3);
-  const tail = parts.slice(3);
-  const hasTail = tail.length > 0;
-  const showBlurBlock = hasTail;
+  const split = useMemo(() => splitPreviewLetterForLock(letterText), [letterText]);
 
   const doCopy = useCallback(async () => {
     if (locked) return;
@@ -154,6 +294,9 @@ export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDispla
     }
   }, [letterText, locked]);
 
+  const hasLetter = (letterText || "").trim().length > 0;
+  const { letterhead, salutation, firstBody, rest } = split;
+
   return (
     <div
       style={{
@@ -186,90 +329,58 @@ export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDispla
           padding: "24px 28px",
           fontSize: 15,
           lineHeight: 1.6,
-          whiteSpace: "pre-wrap" as const,
           color: NAVY,
         }}
       >
-        {head.length > 0 ? (
-          <div>
-            {head.map((p, i) => (
-              <p key={i} style={{ margin: i === 0 ? "0 0 16px" : "0 0 16px" }}>
-                {p}
-              </p>
-            ))}
-          </div>
-        ) : (
+        {!hasLetter ? (
           <p style={{ margin: 0, color: MUTED }}>No letter text yet.</p>
-        )}
+        ) : !locked ? (
+          <div style={preWrap}>{letterText.replace(/\r\n/g, "\n")}</div>
+        ) : (
+          <>
+            {letterhead ? (
+              <div style={{ marginBottom: salutation || firstBody || rest ? 20 : 0 }}>
+                <p style={preWrap}>{letterhead}</p>
+              </div>
+            ) : null}
 
-        {showBlurBlock && (
-          <div style={{ position: "relative", marginTop: head.length ? 0 : 0 }}>
-            <div
-              style={
-                locked
-                  ? {
-                      filter: "blur(4px)",
-                      userSelect: "none" as const,
-                      pointerEvents: "none" as const,
-                      margin: 0,
-                    }
-                  : { margin: 0 }
-              }
-            >
-              {tail.map((p, i) => (
-                <p key={i} style={{ margin: "0 0 16px" }}>
-                  {p}
-                </p>
-              ))}
-            </div>
-            {locked && (
+            {locked && salutation ? (
               <div
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 16,
-                  pointerEvents: "auto" as const,
+                  position: "relative",
+                  marginBottom: firstBody || rest ? 16 : 0,
+                  minHeight: rest ? undefined : 80,
                 }}
               >
-                <div
-                  style={{
-                    textAlign: "center" as const,
-                    maxWidth: 360,
-                    background: "rgba(255,255,255,0.92)",
-                    padding: "20px 24px",
-                    borderRadius: 12,
-                    boxShadow: "0 4px 20px rgba(15, 23, 42, 0.12)",
-                    border: `1px solid ${BORDER}`,
-                  }}
-                >
-                  <p style={{ margin: "0 0 14px", color: NAVY, fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
-                    Your full appeal letter is ready.
-                  </p>
-                  <Link
-                    href="/pricing"
-                    style={{
-                      display: "inline-block",
-                      background: GREEN,
-                      color: "#fff",
-                      fontWeight: 800,
-                      fontSize: 15,
-                      padding: "12px 22px",
-                      borderRadius: 10,
-                      textDecoration: "none",
-                    }}
-                  >
-                    Unlock My Appeal →
-                  </Link>
+                <div style={blurLocked}>
+                  <p style={preWrap}>{salutation}</p>
                 </div>
+                {!rest && <UnlockOverlay />}
               </div>
-            )}
-          </div>
+            ) : null}
+
+            {firstBody ? (
+              <div
+                style={{
+                  marginBottom: rest ? 20 : 0,
+                  position: "relative",
+                  zIndex: 1,
+                  background: "#fafafa",
+                }}
+              >
+                <p style={preWrap}>{firstBody}</p>
+              </div>
+            ) : null}
+
+            {locked && rest ? (
+              <div style={{ position: "relative", margin: 0, minHeight: 120 }}>
+                <div style={blurLocked}>
+                  <p style={preWrap}>{rest}</p>
+                </div>
+                <UnlockOverlay />
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 

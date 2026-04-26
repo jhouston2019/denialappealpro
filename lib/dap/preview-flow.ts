@@ -3,6 +3,7 @@
  */
 
 export const DAP_PREVIEW_PAYLOAD_KEY = "dap_preview_payload";
+export const DAP_PRACTICE_PROFILE_KEY = "dap_practice_profile";
 export const DAP_RESUME_AFTER_PAYMENT_KEY = "dap_resume_after_payment";
 /** Wizard resume after payment when intake preview API needs missing fields. */
 export const DAP_WIZARD_RESUME_KEY = "dap_wizard_resume";
@@ -16,11 +17,20 @@ export const DAP_TEASER_LINES = [
 export type DapIntakeMode = "upload" | "paste" | "csv";
 
 /** Stored when leaving Step 2 (review) for anonymous preview. */
+export type DapPracticeProfileStored = {
+  provider_name: string;
+  provider_npi: string;
+  provider_address?: string;
+  provider_phone?: string;
+};
+
 export type DapPreviewPayloadStored = {
   extracted_text: string;
   claim_data: DapClaimDataForPreview;
   intake_snapshot: DapIntakeSnapshot;
   mode: DapIntakeMode;
+  /** Set when the user completed the pre-preview practice form (or equivalent). */
+  practice_profile?: DapPracticeProfileStored;
 };
 
 export type DapClaimDataForPreview = {
@@ -75,6 +85,7 @@ export type DapResumeAfterPaymentPayload = {
   intake_snapshot: DapIntakeSnapshot;
   preview_data: DapPreviewAnalysisResult;
   mode: DapIntakeMode;
+  practice_profile?: DapPracticeProfileStored;
 };
 
 export type DapPreviewAnalysisResult = {

@@ -5,8 +5,10 @@ import Link from "next/link";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   DAP_PREVIEW_PAYLOAD_KEY,
+  DAP_PRACTICE_PROFILE_KEY,
   DAP_RESUME_AFTER_PAYMENT_KEY,
   type DapPreviewAnalysisResult,
+  type DapPracticeProfileStored,
   type DapPreviewPayloadStored,
 } from "@/lib/dap/preview-flow";
 import { useAuth } from "@/hooks/use-auth";
@@ -130,6 +132,27 @@ export function PreviewFlowClient() {
       }
       setCheckoutLoading(true);
       try {
+        let practice: DapPracticeProfileStored | undefined = flowPayload.practice_profile;
+        if (!practice) {
+          try {
+            const pr = sessionStorage.getItem(DAP_PRACTICE_PROFILE_KEY);
+            if (pr) {
+              const p = JSON.parse(pr) as Partial<DapPracticeProfileStored>;
+              const nm = String(p.provider_name || "").trim();
+              const npi = String(p.provider_npi || "").replace(/\D/g, "");
+              if (nm && npi.length === 10) {
+                practice = {
+                  provider_name: nm,
+                  provider_npi: npi,
+                  ...(p.provider_address ? { provider_address: String(p.provider_address) } : {}),
+                  ...(p.provider_phone ? { provider_phone: String(p.provider_phone) } : {}),
+                };
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         sessionStorage.setItem(
           DAP_RESUME_AFTER_PAYMENT_KEY,
           JSON.stringify({
@@ -138,6 +161,7 @@ export function PreviewFlowClient() {
             intake_snapshot: flowPayload.intake_snapshot,
             preview_data: analysis,
             mode: flowPayload.mode,
+            ...(practice ? { practice_profile: practice } : {}),
           })
         );
         const body =

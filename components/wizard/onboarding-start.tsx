@@ -85,7 +85,8 @@ function shouldRetryApiCall(status) {
 }
 
 const backBtnStyle = {
-  marginBottom: 16,
+  marginTop: 0,
+  marginBottom: 14,
   background: 'none',
   border: 'none',
   cursor: 'pointer',
@@ -94,10 +95,10 @@ const backBtnStyle = {
   fontWeight: 600,
 };
 
-/** Main single-claim flow: space below stepper, slate back link, underline on hover */
+/** Main single-claim flow: back sits above the sticky stepper so it does not scroll under it */
 const singleBackLinkButtonStyle = {
-  marginTop: 16,
-  marginBottom: 16,
+  marginTop: 0,
+  marginBottom: 14,
   display: 'block' as const,
   width: '100%',
   textAlign: 'left' as const,
@@ -1420,6 +1421,9 @@ export default function OnboardingStart() {
         }}
       >
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 20px 48px' }}>
+          <button type="button" onClick={resetIntake} style={backBtnStyle}>
+            ← Back
+          </button>
           <IntakeStepper
             steps={BULK_STEPS}
             activeIndex={bulkStep}
@@ -1427,9 +1431,6 @@ export default function OnboardingStart() {
               if (i < bulkStep) setBulkStep(i);
             }}
           />
-          <button type="button" onClick={resetIntake} style={backBtnStyle}>
-            ← Back
-          </button>
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Bulk PDF denials</h1>
             <p style={{ fontSize: 15, color: '#475569', marginBottom: 18 }}>
@@ -1593,6 +1594,9 @@ export default function OnboardingStart() {
     return (
       <div style={{ background: pageBg, minHeight: 'calc(100vh - 60px)', fontFamily: '"Inter", system-ui, sans-serif' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px 48px' }}>
+          <button type="button" onClick={resetIntake} style={backBtnStyle}>
+            ← Back
+          </button>
           <IntakeStepper
             steps={BULK_STEPS}
             activeIndex={bulkStep}
@@ -1600,9 +1604,6 @@ export default function OnboardingStart() {
               if (i < bulkStep) setBulkStep(i);
             }}
           />
-          <button type="button" onClick={resetIntake} style={backBtnStyle}>
-            ← Back
-          </button>
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: navy, marginBottom: 8 }}>Bulk spreadsheet intake</h1>
             {bulkStep === 0 && (
@@ -1771,11 +1772,6 @@ export default function OnboardingStart() {
             }
           }
         `}</style>
-        <IntakeStepper
-          steps={SINGLE_STEPS}
-          activeIndex={singleStep}
-          onStepClick={(i) => i < singleStep && handleStepperBack(i)}
-        />
         <button
           type="button"
           onClick={resetIntake}
@@ -1789,6 +1785,11 @@ export default function OnboardingStart() {
         >
           ← Back
         </button>
+        <IntakeStepper
+          steps={SINGLE_STEPS}
+          activeIndex={singleStep}
+          onStepClick={(i) => i < singleStep && handleStepperBack(i)}
+        />
 
         {singleStep === 0 && (
           <div style={{ background: cardBg, borderRadius: 14, padding: 22, border: `1px solid ${border}` }}>

@@ -25,7 +25,8 @@ export default function IntakeStepper({ steps, activeIndex, onStepClick, sticky 
         marginLeft: -20,
         marginRight: -20,
         padding: '14px 20px 16px',
-        background: 'transparent',
+        /* Match PAGE_BG_SLATE so content scrolling under the sticky bar does not show through */
+        background: '#1e293b',
         borderBottom: '1px solid rgba(148, 163, 184, 0.25)',
         boxShadow: sticky ? '0 8px 24px rgba(15, 23, 42, 0.25)' : undefined,
       }}

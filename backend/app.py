@@ -79,9 +79,7 @@ def create_app():
 
     @app.route("/api/extract/text", methods=["POST"])
     def extract_text():
-        _, _, err = _require_jwt()
-        if err:
-            return err
+        # No JWT — read-only extraction; no DB writes. Generation routes stay protected.
         body = request.get_json(silent=True) or {}
         text = (body.get("text") or "").strip()
         if not text:
@@ -93,9 +91,7 @@ def create_app():
 
     @app.route("/api/extract/file", methods=["POST"])
     def extract_file():
-        _, _, err = _require_jwt()
-        if err:
-            return err
+        # No JWT — read-only extraction; no DB writes.
         if "file" not in request.files:
             return jsonify({"success": False, "error": "No file uploaded"}), 400
         f = request.files["file"]

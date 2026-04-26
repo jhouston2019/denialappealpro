@@ -92,6 +92,23 @@ const backBtnStyle = {
   fontWeight: 600,
 };
 
+/** Main single-claim flow: space below stepper, slate back link, underline on hover */
+const singleBackLinkButtonStyle = {
+  marginTop: 16,
+  marginBottom: 16,
+  display: 'block' as const,
+  width: '100%',
+  textAlign: 'left' as const,
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: '#94a3b8',
+  fontSize: 14,
+  fontWeight: 500,
+  textDecoration: 'none',
+  padding: 0,
+};
+
 const SINGLE_STEPS = [
   { key: 'upload', label: 'Upload' },
   { key: 'review', label: 'Review Extraction' },
@@ -581,6 +598,8 @@ export default function OnboardingStart() {
 
   useEffect(() => {
     if (!mode) return;
+    if (singleStep === 0) return; /* no coding intelligence on step 1 (upload) */
+    if (!authChecked || !isAuthenticated) return;
     if (singleStep >= 3) return;
     if (intelDebounceRef.current) clearTimeout(intelDebounceRef.current);
     intelDebounceRef.current = setTimeout(async () => {
@@ -597,7 +616,7 @@ export default function OnboardingStart() {
     return () => {
       if (intelDebounceRef.current) clearTimeout(intelDebounceRef.current);
     };
-  }, [mode, singleStep, buildIntelPayload]);
+  }, [mode, singleStep, buildIntelPayload, authChecked, isAuthenticated]);
 
   /** Refresh profile when user reaches Step 3 so Settings saves apply mid-flow. */
   useEffect(() => {
@@ -1660,7 +1679,17 @@ export default function OnboardingStart() {
           activeIndex={singleStep}
           onStepClick={(i) => i < singleStep && handleStepperBack(i)}
         />
-        <button type="button" onClick={resetIntake} style={backBtnStyle}>
+        <button
+          type="button"
+          onClick={resetIntake}
+          style={singleBackLinkButtonStyle}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.textDecoration = 'underline';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.textDecoration = 'none';
+          }}
+        >
           ← Back
         </button>
 

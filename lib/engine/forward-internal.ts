@@ -1,7 +1,8 @@
 /**
  * Proxy to the internal engine (Fly.io Flask) for extraction and generation.
  * Set INTERNAL_FLASK_BASE_URL (or NEXT_PUBLIC_FLASK_API_URL) to the same Fly URL.
- * Pass the caller's Supabase access token so the engine can verify JWTs.
+ * For `/api/extract/*` the engine does not require Authorization (extraction is stateless).
+ * Optional `accessToken` is forwarded as Bearer when present; omitted for anonymous users.
  */
 
 export type EngineExtractPath = "/api/extract/file" | "/api/extract/text";

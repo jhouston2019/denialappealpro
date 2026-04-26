@@ -38,8 +38,9 @@ ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 CORS_ORIGINS = [
-    "https://denial-appeal-pro.netlify.app",
+    "https://denialappealpro.com",
     "https://www.denialappealpro.com",
+    "https://denial-appeal-pro.netlify.app",
     "http://localhost:3000",
 ]
 

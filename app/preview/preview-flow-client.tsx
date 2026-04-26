@@ -9,6 +9,8 @@ import {
   type DapPreviewAnalysisResult,
   type DapPreviewPayloadStored,
 } from "@/lib/dap/preview-flow";
+import { useAuth } from "@/hooks/use-auth";
+import { PreviewLetterDisplay } from "@/components/preview/preview-letter-display";
 
 const PAGE_BG = "#1e293b";
 const CARD = "#ffffff";
@@ -37,15 +39,8 @@ function strengthColor(s: DapPreviewAnalysisResult["appeal_strength"]): string {
   return YELLOW;
 }
 
-function LockIcon() {
-  return (
-    <span aria-hidden style={{ marginRight: 10, fontSize: 16 }}>
-      🔒
-    </span>
-  );
-}
-
 export function PreviewFlowClient() {
+  const { isAuthenticated, isPaid } = useAuth();
   const [flowPayload, setFlowPayload] = useState<DapPreviewPayloadStored | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DapPreviewAnalysisResult | null>(null);
@@ -209,6 +204,8 @@ export function PreviewFlowClient() {
 
   const showLoadingOverlay = analyzeLoading || !analysis;
   const loadingLabel = LOADING_LINES[loadingPhase] ?? LOADING_LINES[LOADING_LINES.length - 1];
+  const letterLocked = !isPaid || !isAuthenticated;
+  const showPaywall = letterLocked;
 
   return (
     <div
@@ -327,43 +324,14 @@ export function PreviewFlowClient() {
                   </p>
                 </div>
               ) : null}
-
-              <div
-                style={{
-                  marginTop: 28,
-                  paddingTop: 22,
-                  borderTop: "1px solid #e2e8f0",
-                }}
-              >
-                <h2 style={{ fontSize: 15, fontWeight: 700, color: "#64748b", margin: "0 0 14px" }}>
-                  Included after unlock
-                </h2>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {(analysis.teaser.length ? analysis.teaser : []).map((line) => (
-                    <li
-                      key={line}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "12px 14px",
-                        marginBottom: 10,
-                        borderRadius: 10,
-                        background: "#f1f5f9",
-                        color: "#64748b",
-                        filter: "blur(0.4px)",
-                        opacity: 0.85,
-                        fontSize: 14,
-                        fontWeight: 600,
-                      }}
-                    >
-                      <LockIcon />
-                      {line}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
 
+            <PreviewLetterDisplay
+              letterText={analysis.appeal_letter ?? ""}
+              locked={letterLocked}
+            />
+
+            {showPaywall ? (
             <div
               style={{
                 background: "#0f172a",
@@ -480,6 +448,7 @@ export function PreviewFlowClient() {
                 </div>
               </div>
             </div>
+            ) : null}
           </>
         ) : null}
       </div>

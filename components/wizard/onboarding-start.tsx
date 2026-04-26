@@ -59,6 +59,8 @@ const VERIFY_TOOLTIP = 'Please verify this field';
 const STEP1_EXTRACTION_FAILED_MSG =
   'Extraction failed — please check your file and try again.';
 
+const FLASK_URL = process.env.NEXT_PUBLIC_FLASK_API_URL;
+
 /** Safe string for profile text fields (API may return numbers). */
 function profileTextField(v) {
   if (v == null || v === '') return '';
@@ -234,6 +236,54 @@ function BulkQueueRows({ labels, job, jobKind }) {
 export default function OnboardingStart() {
   const router = useRouter();
   const { isAuthenticated, authChecked, isPaid } = useAuth();
+  const showUnlockPricingCta = !isAuthenticated || !isPaid;
+  const unlockPricingCtaBar = useMemo(
+    () =>
+      showUnlockPricingCta ? (
+        <div
+          className="dap-unlock-cta"
+          style={{
+            marginTop: 24,
+            padding: '16px 24px',
+            background: '#0f172a',
+            borderRadius: 8,
+            border: '1px solid #22c55e',
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: '#f1f5f9',
+              fontSize: 14,
+              lineHeight: 1.45,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            See your full appeal letter — no subscription needed.
+          </p>
+          <Link
+            className="dap-unlock-cta-link"
+            href="/pricing"
+            style={{
+              display: 'inline-block',
+              background: '#22c55e',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 14,
+              padding: '10px 16px',
+              borderRadius: 8,
+              textDecoration: 'none',
+              textAlign: 'center',
+              boxSizing: 'border-box',
+            }}
+          >
+            Unlock My Appeal →
+          </Link>
+        </div>
+      ) : null,
+    [showUnlockPricingCta]
+  );
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -303,7 +353,7 @@ export default function OnboardingStart() {
   const [codingAccordionOpen, setCodingAccordionOpen] = useState(false);
   const intelDebounceRef = useRef(null);
   const firstGapRef = useRef(null);
-  /** Latest /api/parse/denial-letter|denial-text payload for Step 2 debugging */
+  /** Latest Flask /api/extract/file|/api/extract/text payload for Step 2 debugging */
   const lastDenialParseResponseRef = useRef(null);
   const previewSubmitLockRef = useRef(false);
 
@@ -474,7 +524,7 @@ export default function OnboardingStart() {
 
   /**
    * Extraction → intake mapping (ICD pipeline):
-   * - API: icd10_codes (canonical) + icd_codes (legacy arrays) on /api/parse/denial-*
+   * - API: icd10_codes (canonical) + icd_codes (legacy arrays) from Flask extract responses
    * - State: intake.icdCodes (camelCase array)
    * - Preview POST: diagnosis_code + icd10_codes (comma string via serializeIntakeForBackend)
    * - Backend: Appeal.diagnosis_code; generators use structured icd10_codes list from _split_codes(diagnosis_code)
@@ -814,9 +864,21 @@ export default function OnboardingStart() {
 
     setExtracting(true);
     try {
-      const fd = new FormData();
-      fd.append('file', f);
-      const { data } = await api.post('/api/parse/denial-letter', fd);
+      if (!FLASK_URL) {
+        throw new Error('NEXT_PUBLIC_FLASK_API_URL is not set');
+      }
+      const formData = new FormData();
+      formData.append('file', f);
+      const res = await fetch(`${FLASK_URL}/api/extract/file`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (data && (data.message || data.error)) || res.statusText || 'Extraction request failed'
+        );
+      }
       if (data.success === false && data.error) {
         throw new Error(data.message || data.error);
       }
@@ -848,7 +910,20 @@ export default function OnboardingStart() {
     setExtracting(true);
     setErr('');
     try {
-      const { data } = await api.post('/api/parse/denial-text', { text: t });
+      if (!FLASK_URL) {
+        throw new Error('NEXT_PUBLIC_FLASK_API_URL is not set');
+      }
+      const res = await fetch(`${FLASK_URL}/api/extract/text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: t }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (data && (data.message || data.error)) || res.statusText || 'Extraction request failed'
+        );
+      }
       if (data.success === false && data.error) {
         throw new Error(data.message || data.error);
       }
@@ -1673,6 +1748,28 @@ export default function OnboardingStart() {
           .dap-flow-coding-details > summary::-webkit-details-marker {
             display: none;
           }
+          .dap-unlock-cta {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: 14px;
+            box-sizing: border-box;
+          }
+          .dap-unlock-cta .dap-unlock-cta-link {
+            width: 100%;
+            box-sizing: border-box;
+          }
+          @media (min-width: 640px) {
+            .dap-unlock-cta {
+              flex-direction: row;
+              align-items: center;
+              justify-content: space-between;
+            }
+            .dap-unlock-cta .dap-unlock-cta-link {
+              width: auto;
+            }
+          }
         `}</style>
         <IntakeStepper
           steps={SINGLE_STEPS}
@@ -2055,6 +2152,7 @@ export default function OnboardingStart() {
             >
               {!authChecked ? 'Loading…' : step2PreviewBusy ? 'Preparing preview…' : 'Looks good — next'}
             </button>
+            {unlockPricingCtaBar}
           </div>
         )}
 
@@ -2396,6 +2494,7 @@ export default function OnboardingStart() {
             >
               Next — review & generate
             </button>
+            {unlockPricingCtaBar}
           </div>
         )}
 
@@ -2519,6 +2618,7 @@ export default function OnboardingStart() {
             >
               {loading ? 'Generating…' : 'Generate submission-ready appeal'}
             </button>
+            {unlockPricingCtaBar}
           </div>
         )}
       </div>

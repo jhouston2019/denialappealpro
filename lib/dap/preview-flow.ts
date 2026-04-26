@@ -86,6 +86,8 @@ export type DapPreviewAnalysisResult = {
   strategy: string;
   carc_codes: string[];
   teaser: readonly string[] | string[];
+  /** Full draft appeal letter (plain text) for /preview display and exports */
+  appeal_letter?: string;
 };
 
 export function snapshotIntakeFromWizard(intake: {

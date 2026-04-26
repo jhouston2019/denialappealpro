@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import ComparisonTable from "./comparison-table";
+import MarketingNav from "./marketing-nav";
 
 function LandingPro() {
   const router = useRouter();
@@ -18,6 +19,7 @@ function LandingPro() {
       background: '#f0f4f8',
       fontFamily: '"Inter", sans-serif'
     }}>
+      <MarketingNav transparent />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         

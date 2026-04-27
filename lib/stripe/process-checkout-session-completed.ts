@@ -1,28 +1,29 @@
 import { randomBytes } from "crypto";
-import { createClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { getWelcomeRedirectUrl } from "@/lib/auth/welcome-redirect";
+import { planLimitForPaidTier } from "@/lib/billing/plan-limit";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { getAuthUserIdByEmail } from "@/lib/stripe/get-auth-user-id-by-email";
 import { normalizeSubscriptionTier } from "@/lib/billing/subscription-tier";
 
 const STRIPE_VERSION = "2025-02-24.acacia" as const;
 
 type ProcessResult = { statusCode: number; body: Record<string, unknown> };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
- * Idempotent Provisioning: checkout.session.completed → public.users (is_paid, Stripe ids, tier).
- * Shared by Netlify function and `POST /api/webhooks/stripe`.
+ * Idempotent: checkout.session.completed → update public.users by session.metadata.user_id
+ * and provision auth + magic link (no email lookup).
  */
 export async function processCheckoutSessionCompletedEvent(
   stripeEvent: Stripe.Event,
-  stripe: Stripe
+  _stripe: Stripe
 ): Promise<ProcessResult> {
   if (stripeEvent.type !== "checkout.session.completed") {
     return { statusCode: 200, body: { received: true, skipped: true } };
   }
 
-  /** Service role only — `auth.admin.createUser` requires the service key, not the anon key. */
   const supabase = createServiceRoleClient();
 
   const { data: existingEv } = await supabase
@@ -43,116 +44,79 @@ export async function processCheckoutSessionCompletedEvent(
   }
 
   const metadata = session.metadata || {};
-  const plan = ((metadata.plan as string) || "").toLowerCase().trim();
-  void ((metadata.price_id as string) || "");
-
-  let email =
-    (session.customer_email as string) || (session.customer_details?.email as string) || "";
-  if (!email && session.customer) {
-    const cust = await stripe.customers.retrieve(session.customer as string);
-    if (typeof cust !== "string" && !cust.deleted) {
-      email = cust.email || "";
-    }
-  }
-  email = email.trim().toLowerCase();
-  if (!email) {
-    console.error("No email on checkout session", session.id);
-    return { statusCode: 400, body: { error: "Missing email on session" } };
+  const userId = `${metadata.user_id || ""}`.trim();
+  const linkEmail = `${metadata.email || ""}`.trim().toLowerCase();
+  if (!userId || !UUID_RE.test(userId) || !linkEmail) {
+    console.error("Missing or invalid user_id / email in session metadata", session.id);
+    return { statusCode: 400, body: { error: "Missing user_id or email in session metadata" } };
   }
 
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const subId = typeof session.subscription === "string" ? session.subscription : null;
+  const isSubscription = session.mode === "subscription" || subId != null;
+  const rawPlan = `${metadata.plan || ""}`.toLowerCase().trim();
+  const subscriptionTier = normalizeSubscriptionTier(rawPlan) ?? (rawPlan ? rawPlan : null);
+  const planLimit = planLimitForPaidTier(subscriptionTier, isSubscription);
 
-  const rawTierKey = `${(metadata.subscription_tier as string) || ""}`.trim().toLowerCase() || plan;
-  const subscriptionTierForDb: string | null =
-    normalizeSubscriptionTier(rawTierKey) ?? (rawTierKey ? rawTierKey : null);
-
-  const createUserEmail =
-    (typeof session.customer_email === "string" && session.customer_email.trim()
-      ? session.customer_email.trim().toLowerCase()
-      : email) || email;
-
-  let userId = await getAuthUserIdByEmail(supabase, email);
-
-  if (!userId) {
-    console.log("[webhook] checkout.session.completed", {
-      email: session.customer_email,
-      session_id: session.id,
-    });
-    const tempPassword = randomBytes(32).toString("base64url");
-    const { data: createData, error: cErr } = await supabase.auth.admin.createUser({
-      email: createUserEmail,
-      email_confirm: true,
-      password: tempPassword,
-      app_metadata: { source: "stripe_checkout" },
-      user_metadata: { plan, price_id: (metadata.price_id as string) || null },
-    });
-    if (cErr) {
-      console.error("[webhook] failed to create user:", cErr);
-    } else {
-      console.log("[webhook] user created:", createData?.user?.id);
-    }
-    if (cErr) {
-      const msg = (cErr.message || "").toLowerCase();
-      if (msg.includes("registered") || msg.includes("exists") || cErr.status === 422) {
-        userId = await getAuthUserIdByEmail(supabase, email);
-      }
-      if (!userId) {
-        console.error("createUser failed:", cErr);
-        return { statusCode: 500, body: { error: "Auth user create failed" } };
-      }
-    } else {
-      userId = createData?.user?.id ?? (await getAuthUserIdByEmail(supabase, createUserEmail));
-      if (createData?.user?.id) {
-        const { error: linkErr } = await supabase.auth.admin.generateLink({
-          type: "recovery",
-          email: createUserEmail,
-          options: { redirectTo: getWelcomeRedirectUrl() },
-        });
-        if (linkErr) {
-          console.error("[webhook] generateLink (recovery) after createUser failed:", linkErr);
-        }
-        const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (publicUrl && anon) {
-          const pub = createClient(publicUrl, anon, {
-            auth: { persistSession: false, autoRefreshToken: false },
-          });
-          const { error: mailErr } = await pub.auth.resetPasswordForEmail(createUserEmail, {
-            redirectTo: getWelcomeRedirectUrl(),
-          });
-          if (mailErr) {
-            console.error("[webhook] resetPasswordForEmail (send recovery email) failed:", mailErr);
-          }
-        } else {
-          console.error("[webhook] missing NEXT_PUBLIC_SUPABASE_URL/ANON — cannot email recovery link");
-        }
-      }
-    }
-  }
-
-  if (!userId) {
-    return { statusCode: 500, body: { error: "Could not resolve auth user" } };
-  }
-
-  const { error: upErr } = await supabase.from("users").upsert(
-    {
-      id: userId,
-      email,
+  const { data: updatedRows, error: upErr } = await supabase
+    .from("users")
+    .update({
       is_paid: true,
       stripe_customer_id: customerId,
       stripe_subscription_id: subId,
-      subscription_tier: subscriptionTierForDb,
+      plan_limit: planLimit,
+      subscription_tier: subscriptionTier,
       payment_verification_status: null,
-    },
-    { onConflict: "id" }
-  );
+    })
+    .eq("id", userId)
+    .select("id");
   if (upErr) {
-    console.error("[webhook] failed to create profile:", upErr);
-    console.error("Users upsert failed:", upErr);
-    return { statusCode: 500, body: { error: "Users upsert failed" } };
+    console.error("[webhook] users update failed:", upErr);
+    return { statusCode: 500, body: { error: "Users update failed" } };
   }
-  console.log("[webhook] profile created for:", email);
+  if (!updatedRows?.length) {
+    console.error("[webhook] no public.users row for id", userId, session.id);
+    return { statusCode: 500, body: { error: "User profile not found" } };
+  }
+
+  const { data: getData, error: gErr } = await supabase.auth.admin.getUserById(userId);
+  if (gErr) {
+    console.error("[webhook] getUserById:", gErr);
+  }
+  if (!getData?.user) {
+    const tempPassword = randomBytes(32).toString("base64url");
+    const { error: cErr } = await supabase.auth.admin.createUser({
+      id: userId,
+      email: linkEmail,
+      email_confirm: true,
+      password: tempPassword,
+      app_metadata: { source: "stripe_checkout" },
+    });
+    if (cErr) {
+      const { data: retry } = await supabase.auth.admin.getUserById(userId);
+      if (!retry?.user) {
+        console.error("[webhook] createUser failed:", cErr);
+        return { statusCode: 500, body: { error: "Auth user create failed" } };
+      }
+    }
+  } else {
+    const { error: uErr } = await supabase.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+    });
+    if (uErr) {
+      console.error("[webhook] updateUserById (confirm) failed:", uErr);
+    }
+  }
+
+  const { error: linkErr } = await supabase.auth.admin.generateLink({
+    type: "magiclink",
+    email: linkEmail,
+    options: { redirectTo: getWelcomeRedirectUrl() },
+  });
+  if (linkErr) {
+    console.error("[webhook] generateLink (magiclink) failed:", linkErr);
+    return { statusCode: 500, body: { error: "Could not send access link" } };
+  }
 
   const { error: peErr } = await supabase.from("processed_webhook_events").insert({
     event_id: stripeEvent.id,

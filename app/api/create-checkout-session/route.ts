@@ -1,11 +1,21 @@
+import { randomBytes, randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
+import { planLimitForCheckout } from "@/lib/billing/plan-limit";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { getAuthUserIdByEmail } from "@/lib/stripe/get-auth-user-id-by-email";
 import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 function jsonResponse(data: Record<string, string>, status: number) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+}
+
+function isAuthDuplicateError(err: { message?: string; status?: number } | null): boolean {
+  if (!err) return false;
+  const m = (err.message || "").toLowerCase();
+  return m.includes("registered") || m.includes("exists") || m.includes("already") || err.status === 422;
 }
 
 function resolvePriceIdFromPlan(
@@ -31,8 +41,8 @@ function resolvePriceIdFromPlan(
 /**
  * Stripe checkout.
  *
- * { price_id?, plan, email?, mode? | type? }
- * Price IDs: STRIPE_PRICE_SINGLE (payment), STRIPE_PRICE_*_SUBSCRIPTION (per tier), or pass price_id.
+ * { price_id?, plan, email, mode? | type? }
+ * Creates auth + public.users (pending) with a stable user_id in Stripe metadata.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -46,7 +56,6 @@ export async function POST(request: NextRequest) {
       plan?: string;
       email?: string;
       mode?: "subscription" | "payment";
-      /** CRA compatibility */
       type?: string;
     };
     try {
@@ -62,6 +71,11 @@ export async function POST(request: NextRequest) {
 
     if (!plan) {
       return jsonResponse({ error: "plan is required" }, 400);
+    }
+
+    const email = (body.email || "").trim().toLowerCase();
+    if (!email) {
+      return jsonResponse({ error: "email is required" }, 400);
     }
 
     if (!priceId) {
@@ -92,27 +106,104 @@ export async function POST(request: NextRequest) {
     }
 
     const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
-    const email = (body.email || "").trim().toLowerCase();
+
+    let supabase: ReturnType<typeof createServiceRoleClient>;
+    try {
+      supabase = createServiceRoleClient();
+    } catch (e) {
+      console.error("[create-checkout-session] Supabase service role not configured", e);
+      return jsonResponse({ error: "Server configuration error" }, 500);
+    }
+
+    const { data: existingByEmail, error: exErr } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (exErr) {
+      console.error("[create-checkout-session] users lookup", exErr);
+      return jsonResponse({ error: "Could not prepare checkout" }, 500);
+    }
+
+    let userId: string;
+    if (existingByEmail?.id) {
+      userId = existingByEmail.id;
+    } else {
+      userId = randomUUID();
+      const tempPassword = randomBytes(32).toString("base64url");
+      const { error: cErr } = await supabase.auth.admin.createUser({
+        id: userId,
+        email,
+        email_confirm: false,
+        password: tempPassword,
+        app_metadata: { source: "stripe_checkout_pending" },
+      });
+      if (cErr) {
+        if (isAuthDuplicateError(cErr)) {
+          const alt = await getAuthUserIdByEmail(supabase, email);
+          if (!alt) {
+            console.error("[create-checkout-session] duplicate email but no user id", cErr);
+            return jsonResponse({ error: "Could not prepare checkout" }, 500);
+          }
+          userId = alt;
+        } else {
+          console.error("[create-checkout-session] createUser", cErr);
+          return jsonResponse({ error: "Could not create checkout identity" }, 500);
+        }
+      }
+
+      const { data: alreadyRow } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!alreadyRow) {
+        const { error: insErr } = await supabase.from("users").insert({
+          id: userId,
+          email,
+          is_paid: false,
+          subscription_tier: plan,
+          plan_limit: planLimitForCheckout(plan, mode),
+        });
+        if (insErr) {
+          if (insErr.code === "23505") {
+            const { data: again } = await supabase
+              .from("users")
+              .select("id")
+              .eq("email", email)
+              .maybeSingle();
+            if (again?.id) {
+              userId = again.id;
+            } else {
+              console.error("[create-checkout-session] insert public.users", insErr);
+              return jsonResponse({ error: "Could not prepare checkout" }, 500);
+            }
+          } else {
+            console.error("[create-checkout-session] insert public.users", insErr);
+            return jsonResponse({ error: "Could not prepare checkout" }, 500);
+          }
+        }
+      }
+    }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode,
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
+      customer_email: email,
       metadata: {
-        price_id: priceId,
+        user_id: userId,
+        email,
         plan,
       },
     };
 
-    if (email) {
-      sessionParams.customer_email = email;
-    }
-
     if (mode === "subscription" && !sessionParams.subscription_data) {
       sessionParams.subscription_data = {
         metadata: {
-          price_id: priceId,
+          user_id: userId,
+          email,
           plan,
         },
       };

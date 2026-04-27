@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -12,22 +12,29 @@ import {
   type DapResumeAfterPaymentPayload,
 } from "@/lib/dap/preview-flow";
 
+type MeResponse = { user: { is_paid?: boolean | null; email?: string } };
+
 type Msg = { kind: "ok" | "err" | "info"; text: string } | null;
 
+type Props = { sessionId?: string; initialEmail?: string };
+
 /**
- * Post-checkout landing. Access to paid data is only after:
- *   - The email on the account matches the paid row in public.users, and
- *   - For email/password, Supabase has confirmed the address (or OAuth equivalent).
- * Checkout uses one email: use that for password reset and sign-in.
- * Never trust the client: server routes still re-query public.users for is_paid.
+ * Post-checkout landing: payment confirmed; user receives a recovery / magic link by email
+ * (not password entry here). When session exists and is_paid, resume appeal or /start.
  */
-export function WelcomeClient({ sessionId }: { sessionId?: string }) {
+export function WelcomeClient({ sessionId, initialEmail = "" }: Props) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [resendEmail, setResendEmail] = useState(() => (initialEmail || "").trim());
   const [msg, setMsg] = useState<Msg>(null);
   const [busy, setBusy] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
+  const postPayRedirectDone = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setHasResume(Boolean(sessionStorage.getItem(DAP_RESUME_AFTER_PAYMENT_KEY)));
+  }, []);
 
   const resumeAppealIfPending = useCallback(async (): Promise<boolean> => {
     const raw = sessionStorage.getItem(DAP_RESUME_AFTER_PAYMENT_KEY);
@@ -58,7 +65,7 @@ export function WelcomeClient({ sessionId }: { sessionId?: string }) {
           }
         }
       } catch {
-        /* keep claim as stored */
+        /* keep */
       }
     }
     if (practice) {
@@ -95,124 +102,116 @@ export function WelcomeClient({ sessionId }: { sessionId?: string }) {
         return true;
       }
     } catch {
-      /* keep resume payload for retry */
+      /* keep for retry */
     }
     return false;
   }, [router]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled || !data.session?.user) return;
-      if (!data.session.user.email_confirmed_at) return;
-      const done = await resumeAppealIfPending();
-      if (done && !cancelled) {
-        setMsg({ kind: "ok", text: "Opening your appeal…" });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, resumeAppealIfPending]);
+  const runPaidUserRedirect = useCallback(async () => {
+    if (postPayRedirectDone.current) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const res = await fetch("/api/auth/me", { credentials: "include" });
+    if (!res.ok) return;
+    const me = (await res.json()) as MeResponse;
+    if (me.user.is_paid !== true) return;
+    if (postPayRedirectDone.current) return;
+    const didResume = await resumeAppealIfPending();
+    if (didResume) {
+      postPayRedirectDone.current = true;
+      return;
+    }
+    postPayRedirectDone.current = true;
+    router.replace("/start");
+  }, [supabase, router, resumeAppealIfPending]);
 
-  const sendReset = async () => {
-    if (!email.trim()) {
+  useEffect(() => {
+    void runPaidUserRedirect();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        void runPaidUserRedirect();
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase, runPaidUserRedirect]);
+
+  const resendAccessLink = async () => {
+    if (!resendEmail.trim()) {
       setMsg({ kind: "err", text: "Enter the same email you used in Stripe checkout." });
       return;
     }
     setBusy(true);
     setMsg(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/welcome` : undefined,
-    });
-    setBusy(false);
-    if (error) {
-      setMsg({ kind: "err", text: error.message });
-    } else {
-      setMsg({
-        kind: "ok",
-        text: "Check your email for a link to set your password. You must use the same email you entered at checkout.",
+    try {
+      const res = await fetch("/api/auth/send-access-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resendEmail.trim().toLowerCase() }),
       });
-    }
-  };
-
-  const signIn = async () => {
-    if (!email.trim() || !password) {
-      setMsg({ kind: "err", text: "Email and password are required." });
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-    if (error) {
+      const out = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok) {
+        setMsg({ kind: "err", text: out.error || "Could not send the link. Try again." });
+        return;
+      }
+      setMsg({ kind: "ok", text: "We sent a new link to that address. Check your email." });
+    } catch {
+      setMsg({ kind: "err", text: "Request failed. Try again." });
+    } finally {
       setBusy(false);
-      setMsg({ kind: "err", text: error.message });
-      return;
     }
-    if (!data.user?.email_confirmed_at) {
-      setBusy(false);
-      setMsg({
-        kind: "info",
-        text: "Confirm your email from the link we sent, then sign in again. Paid access requires a verified address that matches your checkout email.",
-      });
-      return;
-    }
-    const resumed = await resumeAppealIfPending();
-    setBusy(false);
-    if (resumed) {
-      setMsg({ kind: "ok", text: "Opening your appeal…" });
-      return;
-    }
-    setMsg({ kind: "ok", text: "Signed in. Continue in the app (server checks your paid status)." });
   };
 
   return (
-    <div style={{ maxWidth: 480, margin: "48px auto", padding: "0 20px" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>You&apos;re in</h1>
-      <p style={{ color: "#475569", lineHeight: 1.5 }}>
-        Your payment is complete. We linked your plan to the email used in Stripe. Use that exact email here —
-        the app only unlocks when your verified account email matches the paid profile row (server-enforced, not
-        client metadata).
+    <div
+      className="dap-welcome-page"
+      style={{ maxWidth: 520, margin: "40px auto", padding: "0 clamp(16px, 4vw, 24px)" }}
+    >
+      <h1 style={{ fontSize: "clamp(1.35rem, 4vw, 1.5rem)", fontWeight: 700, lineHeight: 1.2 }}>
+        Payment confirmed
+      </h1>
+      <p style={{ color: "#475569", lineHeight: 1.6, fontSize: 16, marginTop: 12 }}>
+        Check your email for a link to access your account. Use the same address you used in checkout.
       </p>
+      {hasResume && (
+        <p
+          style={{
+            color: "#0f172a",
+            lineHeight: 1.5,
+            fontSize: 15,
+            marginTop: 20,
+            padding: 16,
+            background: "#f0fdf4",
+            border: "1px solid #86efac",
+            borderRadius: 10,
+            fontWeight: 600,
+          }}
+        >
+          Your appeal is being prepared. Click the link in your email to view it.
+        </p>
+      )}
       {sessionId && (
-        <p style={{ fontSize: 13, color: "#64748b" }}>
-          Checkout session: <code>{sessionId}</code>
+        <p style={{ fontSize: 13, color: "#64748b", marginTop: 20 }}>
+          Reference: <code style={{ fontSize: 12 }}>{sessionId}</code>
         </p>
       )}
 
-      <div style={{ marginTop: 28, display: "grid", gap: 12 }}>
+      <div style={{ marginTop: 28, display: "grid", gap: 14 }}>
         <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Email (same as checkout)</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Email (for resending the link)</span>
           <input
             type="email"
             autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={resendEmail}
+            onChange={(e) => setResendEmail(e.target.value)}
             className="dap-welcome-input"
             style={{
-              padding: "10px 12px",
+              padding: "12px 14px",
               fontSize: 16,
               border: "1px solid #e2e8f0",
               borderRadius: 8,
-            }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Password (if you already set one)</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              padding: "10px 12px",
-              fontSize: 16,
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
+              maxWidth: "100%",
             }}
           />
         </label>
@@ -223,48 +222,30 @@ export function WelcomeClient({ sessionId }: { sessionId?: string }) {
               fontSize: 14,
               color: msg.kind === "err" ? "#b91c1c" : msg.kind === "ok" ? "#15803d" : "#0f172a",
             }}
+            role="status"
           >
             {msg.text}
           </p>
         )}
-        <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
-          First time: your account was created for you. Use <strong>Send password link</strong> to set a password
-          for this email, then return here to sign in.
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <button
-            type="button"
-            onClick={sendReset}
-            disabled={busy}
-            style={{
-              padding: "10px 16px",
-              fontWeight: 600,
-              background: "#0f172a",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            Send password link
-          </button>
-          <button
-            type="button"
-            onClick={signIn}
-            disabled={busy}
-            style={{
-              padding: "10px 16px",
-              fontWeight: 600,
-              background: "#22c55e",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            Sign in
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void resendAccessLink()}
+          disabled={busy}
+          style={{
+            padding: "12px 20px",
+            fontWeight: 600,
+            fontSize: 16,
+            width: "100%",
+            maxWidth: 400,
+            background: "#0f172a",
+            color: "#fff",
+            border: "none",
+            borderRadius: 8,
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          {busy ? "Sending…" : "Resend access link"}
+        </button>
       </div>
     </div>
   );

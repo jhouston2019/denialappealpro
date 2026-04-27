@@ -1,5 +1,7 @@
 import { randomBytes } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { getWelcomeRedirectUrl } from "@/lib/auth/welcome-redirect";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getAuthUserIdByEmail } from "@/lib/stripe/get-auth-user-id-by-email";
 import { normalizeSubscriptionTier } from "@/lib/billing/subscription-tier";
@@ -101,6 +103,31 @@ export async function processCheckoutSessionCompletedEvent(
       }
     } else {
       userId = createData?.user?.id ?? (await getAuthUserIdByEmail(supabase, createUserEmail));
+      if (createData?.user?.id) {
+        const { error: linkErr } = await supabase.auth.admin.generateLink({
+          type: "recovery",
+          email: createUserEmail,
+          options: { redirectTo: getWelcomeRedirectUrl() },
+        });
+        if (linkErr) {
+          console.error("[webhook] generateLink (recovery) after createUser failed:", linkErr);
+        }
+        const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (publicUrl && anon) {
+          const pub = createClient(publicUrl, anon, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+          const { error: mailErr } = await pub.auth.resetPasswordForEmail(createUserEmail, {
+            redirectTo: getWelcomeRedirectUrl(),
+          });
+          if (mailErr) {
+            console.error("[webhook] resetPasswordForEmail (send recovery email) failed:", mailErr);
+          }
+        } else {
+          console.error("[webhook] missing NEXT_PUBLIC_SUPABASE_URL/ANON — cannot email recovery link");
+        }
+      }
     }
   }
 

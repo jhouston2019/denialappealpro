@@ -1,6 +1,5 @@
 import { randomBytes } from "crypto";
 import type Stripe from "stripe";
-import { getWelcomeRedirectUrl } from "@/lib/auth/welcome-redirect";
 import { planLimitForPaidTier } from "@/lib/billing/plan-limit";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { normalizeSubscriptionTier } from "@/lib/billing/subscription-tier";
@@ -14,7 +13,7 @@ const UUID_RE =
 
 /**
  * Idempotent: checkout.session.completed → update public.users by session.metadata.user_id
- * and provision auth + magic link (no email lookup).
+ * and provision auth. Post-payment sign-in is handled on /welcome via verify-session.
  */
 export async function processCheckoutSessionCompletedEvent(
   stripeEvent: Stripe.Event,
@@ -106,16 +105,6 @@ export async function processCheckoutSessionCompletedEvent(
     if (uErr) {
       console.error("[webhook] updateUserById (confirm) failed:", uErr);
     }
-  }
-
-  const { error: linkErr } = await supabase.auth.admin.generateLink({
-    type: "magiclink",
-    email: linkEmail,
-    options: { redirectTo: getWelcomeRedirectUrl() },
-  });
-  if (linkErr) {
-    console.error("[webhook] generateLink (magiclink) failed:", linkErr);
-    return { statusCode: 500, body: { error: "Could not send access link" } };
   }
 
   const { error: peErr } = await supabase.from("processed_webhook_events").insert({

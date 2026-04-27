@@ -1,7 +1,5 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { getPublicUserById } from "@/lib/auth/user-payload";
-import { createClient } from "@/lib/supabase/server";
 import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
@@ -31,8 +29,7 @@ function resolvePriceIdFromPlan(
 }
 
 /**
- * Stripe Checkout for the logged-in user only. `metadata.user_id` = auth / public.users id.
- * No user creation, no session creation, no auth mutations.
+ * Stripe Checkout — anonymous; account is created on /success after payment.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -41,30 +38,12 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Stripe is not configured" }, 500);
     }
 
-    const supabase = await createClient();
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !authData.user) {
-      return jsonResponse({ error: "You must be signed in to check out" }, 401);
-    }
-
-    const userId = authData.user.id;
-    const row = await getPublicUserById(userId);
-    if (!row) {
-      return jsonResponse(
-        { error: "Account profile is missing. Sign out and create an account from the login page." },
-        400
-      );
-    }
-    const email = row.email.trim().toLowerCase();
-    if (!email) {
-      return jsonResponse({ error: "Account email is missing" }, 400);
-    }
-
     let body: {
       price_id?: string;
       plan?: string;
       mode?: "subscription" | "payment";
       type?: string;
+      email?: string;
     };
     try {
       body = (await request.json()) as typeof body;
@@ -72,7 +51,7 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Invalid JSON" }, 400);
     }
 
-    let priceId = (body.price_id || "").trim();
+    const bodyEmail = (body.email || "").trim().toLowerCase();
     const plan = (body.plan || "").trim();
     const mode: "subscription" | "payment" =
       body.mode === "payment" || body.type === "payment" ? "payment" : "subscription";
@@ -81,6 +60,7 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "plan is required" }, 400);
     }
 
+    let priceId = (body.price_id || "").trim();
     if (!priceId) {
       const resolved = resolvePriceIdFromPlan(plan, mode);
       if (!resolved) {
@@ -101,8 +81,13 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "NEXT_PUBLIC_SITE_URL is not set" }, 500);
     }
 
-    const successUrl = `${baseUrl.replace(/\/$/, "")}/app?session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${baseUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
+
+    const metadata: Record<string, string> = { plan };
+    if (bodyEmail) {
+      metadata.email = bodyEmail;
+    }
 
     const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
 
@@ -111,22 +96,18 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      customer_email: email,
-      metadata: {
-        user_id: userId,
-        email,
-        plan,
-      },
+      metadata,
     };
+    if (bodyEmail) {
+      sessionParams.customer_email = bodyEmail;
+    }
 
     if (mode === "subscription" && !sessionParams.subscription_data) {
-      sessionParams.subscription_data = {
-        metadata: {
-          user_id: userId,
-          email,
-          plan,
-        },
-      };
+      const subMetadata: Record<string, string> = { plan };
+      if (bodyEmail) {
+        subMetadata.email = bodyEmail;
+      }
+      sessionParams.subscription_data = { metadata: subMetadata };
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

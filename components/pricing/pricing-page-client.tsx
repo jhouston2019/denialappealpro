@@ -48,6 +48,7 @@ export default function PricingPageClient({ userEmail }: Props) {
           plan: "single",
           type: "payment" as const,
           price_id: singlePriceId,
+          email: (userEmail || "").trim(),
         }),
         credentials: "include",
       });
@@ -88,7 +89,11 @@ export default function PricingPageClient({ userEmail }: Props) {
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: tier, type: "subscription" }),
+        body: JSON.stringify({
+          plan: tier,
+          type: "subscription",
+          email: (userEmail || "").trim(),
+        }),
         credentials: "include",
       });
       const out = (await response.json()) as { session_id?: string; error?: string };

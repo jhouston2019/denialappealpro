@@ -14,6 +14,7 @@ function getRawBody(event: Parameters<Handler>[0]): string {
 /**
  * checkout.session.completed — only authority for is_paid = true.
  * Shared implementation: lib/stripe/process-checkout-session-completed.ts
+ * (Supabase user/profile steps and [webhook] console logs are emitted from that module in this function’s logs.)
  */
 const handler: Handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {

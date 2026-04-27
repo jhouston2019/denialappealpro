@@ -20,6 +20,7 @@ export async function processCheckoutSessionCompletedEvent(
     return { statusCode: 200, body: { received: true, skipped: true } };
   }
 
+  /** Service role only — `auth.admin.createUser` requires the service key, not the anon key. */
   const supabase = createServiceRoleClient();
 
   const { data: existingEv } = await supabase
@@ -60,19 +61,35 @@ export async function processCheckoutSessionCompletedEvent(
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const subId = typeof session.subscription === "string" ? session.subscription : null;
 
-  const tier = normalizeSubscriptionTier(plan);
+  const rawTierKey = `${(metadata.subscription_tier as string) || ""}`.trim().toLowerCase() || plan;
+  const subscriptionTierForDb: string | null =
+    normalizeSubscriptionTier(rawTierKey) ?? (rawTierKey ? rawTierKey : null);
+
+  const createUserEmail =
+    (typeof session.customer_email === "string" && session.customer_email.trim()
+      ? session.customer_email.trim().toLowerCase()
+      : email) || email;
 
   let userId = await getAuthUserIdByEmail(supabase, email);
 
   if (!userId) {
+    console.log("[webhook] checkout.session.completed", {
+      email: session.customer_email,
+      session_id: session.id,
+    });
     const tempPassword = randomBytes(32).toString("base64url");
-    const { data: created, error: cErr } = await supabase.auth.admin.createUser({
-      email,
+    const { data: createData, error: cErr } = await supabase.auth.admin.createUser({
+      email: createUserEmail,
       email_confirm: true,
       password: tempPassword,
       app_metadata: { source: "stripe_checkout" },
       user_metadata: { plan, price_id: (metadata.price_id as string) || null },
     });
+    if (cErr) {
+      console.error("[webhook] failed to create user:", cErr);
+    } else {
+      console.log("[webhook] user created:", createData?.user?.id);
+    }
     if (cErr) {
       const msg = (cErr.message || "").toLowerCase();
       if (msg.includes("registered") || msg.includes("exists") || cErr.status === 422) {
@@ -82,8 +99,8 @@ export async function processCheckoutSessionCompletedEvent(
         console.error("createUser failed:", cErr);
         return { statusCode: 500, body: { error: "Auth user create failed" } };
       }
-    } else if (created.user) {
-      userId = created.user.id;
+    } else {
+      userId = createData?.user?.id ?? (await getAuthUserIdByEmail(supabase, createUserEmail));
     }
   }
 
@@ -91,37 +108,24 @@ export async function processCheckoutSessionCompletedEvent(
     return { statusCode: 500, body: { error: "Could not resolve auth user" } };
   }
 
-  const { data: prof } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
-  if (prof) {
-    const { error: uErr } = await supabase
-      .from("users")
-      .update({
-        is_paid: true,
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subId,
-        subscription_tier: tier,
-        payment_verification_status: null,
-      })
-      .eq("id", userId);
-    if (uErr) {
-      console.error("Update users failed:", uErr);
-      return { statusCode: 500, body: { error: "Update users failed" } };
-    }
-  } else {
-    const { error: iErr } = await supabase.from("users").insert({
+  const { error: upErr } = await supabase.from("users").upsert(
+    {
       id: userId,
       email,
       is_paid: true,
       stripe_customer_id: customerId,
       stripe_subscription_id: subId,
-      subscription_tier: tier,
+      subscription_tier: subscriptionTierForDb,
       payment_verification_status: null,
-    });
-    if (iErr) {
-      console.error("Insert users failed:", iErr);
-      return { statusCode: 500, body: { error: "Insert users failed" } };
-    }
+    },
+    { onConflict: "id" }
+  );
+  if (upErr) {
+    console.error("[webhook] failed to create profile:", upErr);
+    console.error("Users upsert failed:", upErr);
+    return { statusCode: 500, body: { error: "Users upsert failed" } };
   }
+  console.log("[webhook] profile created for:", email);
 
   const { error: peErr } = await supabase.from("processed_webhook_events").insert({
     event_id: stripeEvent.id,

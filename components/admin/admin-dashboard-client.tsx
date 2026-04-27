@@ -109,9 +109,12 @@ const AdminDashboardClient = () => {
 
   const viewAppealDetail = async (appealId: string) => {
     try {
-      const response = await fetch(`/api/admin/appeals/${encodeURIComponent(appealId)}`, {
-        credentials: "include",
-      });
+      const response = await fetch(
+        `/api/admin/appeals?id=${encodeURIComponent(appealId)}`,
+        {
+          credentials: "include",
+        }
+      );
       if (response.ok) setSelectedAppeal((await response.json()) as AppealDetail);
     } catch {
       console.error("Failed to load appeal");

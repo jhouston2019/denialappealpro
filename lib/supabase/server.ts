@@ -1,5 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
+import type { CookieSerializeOptions } from "cookie";
 import { cookies } from "next/headers";
+
+type CookieToSet = { name: string; value: string; options: CookieSerializeOptions };
 
 /**
  * Per-request server client: reads/writes auth cookies. Use in Server Components, Route Handlers, Server Actions.
@@ -15,15 +18,13 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(
-          cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]
-        ) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
-            for (const { name, value, options } of cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
-            }
+            });
           } catch {
-            /* ignore when called from a Server Component that cannot set cookies */
+            // Called from a Server Component — middleware handles refresh
           }
         },
       },

@@ -77,7 +77,7 @@ export async function getAppealsList(request: NextRequest) {
   );
 }
 
-/** GET /api/admin/appeals/:appealId */
+/** GET /api/admin/appeals?id= (single appeal) */
 export async function getAppealDetail(request: NextRequest, appealId: string) {
   const auth = await getAdminFromRequest(request);
   if ("error" in auth) {

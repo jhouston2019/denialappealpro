@@ -187,7 +187,7 @@ const preWrap: CSSProperties = {
   wordBreak: "break-word" as const,
 };
 
-function UnlockOverlay() {
+function UnlockOverlay({ href }: { href: string }) {
   return (
     <div
       style={{
@@ -216,7 +216,7 @@ function UnlockOverlay() {
       >
         <p style={{ margin: "0 0 14px", color: NAVY, fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>Your full appeal letter is ready.</p>
         <Link
-          href="/pricing"
+          href={href}
           style={{
             display: "inline-block",
             background: GREEN,
@@ -239,9 +239,11 @@ export type PreviewLetterDisplayProps = {
   letterText: string;
   /** When true: blur after letterhead (salutation + all but first body para), lock buttons */
   locked: boolean;
+  /** CTA: signed-out → `/login?next=/pricing`; signed-in → `/pricing` (from preview flow) */
+  unlockHref?: string;
 };
 
-export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDisplayProps) {
+export function PreviewLetterDisplay({ letterText, locked, unlockHref = "/pricing" }: PreviewLetterDisplayProps) {
   const [copyBusy, setCopyBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docxBusy, setDocxBusy] = useState(false);
@@ -355,7 +357,7 @@ export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDispla
                 <div style={blurLocked}>
                   <p style={preWrap}>{salutation}</p>
                 </div>
-                {!rest && <UnlockOverlay />}
+                {!rest && <UnlockOverlay href={unlockHref} />}
               </div>
             ) : null}
 
@@ -377,7 +379,7 @@ export function PreviewLetterDisplay({ letterText, locked }: PreviewLetterDispla
                 <div style={blurLocked}>
                   <p style={preWrap}>{rest}</p>
                 </div>
-                <UnlockOverlay />
+                <UnlockOverlay href={unlockHref} />
               </div>
             ) : null}
           </>

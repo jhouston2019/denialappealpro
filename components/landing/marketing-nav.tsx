@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type CSSProperties } from "react";
-import api from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/browser";
 
 type Props = { transparent?: boolean };
@@ -79,7 +78,8 @@ export default function MarketingNav({ transparent = true }: Props) {
 
   const logout = async () => {
     try {
-      await api.post("/api/auth/logout", {});
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
       /* still navigate */
     }

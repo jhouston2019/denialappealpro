@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import api from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/browser";
+import { getNewDenialsSinceVisit } from "@/lib/auth/denials-since-visit";
 
 type AuthUser = {
   id?: string;
@@ -12,7 +13,7 @@ type AuthUser = {
 } | null;
 
 /**
- * Replaces CRA AuthContext for the appeal wizard: session via /api/auth/me (cookies).
+ * Supabase client session + public.users / appeals (RLS). No /api/auth/*.
  */
 export function useAuth() {
   const [authUser, setAuthUser] = useState<AuthUser>(null);
@@ -20,49 +21,91 @@ export function useAuth() {
   const [newDenialsBanner, setNewDenialsBanner] = useState<number | null>(null);
   const [newDenialsDollarValue, setNewDenialsDollarValue] = useState<number | null>(null);
 
-  const hydrateFromMe = useCallback((data: { user: AuthUser; new_denials_since_visit?: number; new_denials_dollar_value?: number }) => {
-    setAuthUser(data.user ?? null);
-    if (typeof data.new_denials_since_visit === "number") {
-      setNewDenialsBanner(data.new_denials_since_visit);
+  const refreshFromSession = useCallback(async (userId: string) => {
+    const supabase = createClient();
+    const { data: row, error } = await supabase
+      .from("users")
+      .select("id, email, is_paid, payment_verification_status, last_queue_visit_at")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !row) {
+      setAuthUser(null);
+      setNewDenialsBanner(null);
+      setNewDenialsDollarValue(null);
+      return;
     }
-    if (typeof data.new_denials_dollar_value === "number") {
-      setNewDenialsDollarValue(data.new_denials_dollar_value);
-    }
+    const { data: hasAppeal } = await supabase
+      .from("appeals")
+      .select("id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    const hasData = hasAppeal != null;
+    const lastV = (row as { last_queue_visit_at: string | null }).last_queue_visit_at;
+    const d = await getNewDenialsSinceVisit(supabase, userId, lastV);
+    setAuthUser({
+      id: row.id as string,
+      email: row.email as string,
+      is_paid: row.is_paid,
+      has_data: hasData,
+      payment_verification_status: (row as { payment_verification_status?: string | null })
+        .payment_verification_status,
+    });
+    setNewDenialsBanner(d.count);
+    setNewDenialsDollarValue(d.dollarValue);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void api
-      .get<{
-        user: AuthUser;
-        new_denials_since_visit?: number;
-        new_denials_dollar_value?: number;
-      }>("/api/auth/me")
-      .then(({ data }) => {
-        if (cancelled) return;
-        hydrateFromMe(data);
-      })
-      .catch(() => {
-        if (cancelled) return;
+    const supabase = createClient();
+    const run = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const u = sessionData.session?.user;
+      if (!u) {
+        if (!cancelled) {
+          setAuthUser(null);
+          setNewDenialsBanner(null);
+          setNewDenialsDollarValue(null);
+          setAuthChecked(true);
+        }
+        return;
+      }
+      await refreshFromSession(u.id);
+      if (!cancelled) setAuthChecked(true);
+    };
+    void run();
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
+      if (cancelled) return;
+      if (!session?.user) {
         setAuthUser(null);
         setNewDenialsBanner(null);
         setNewDenialsDollarValue(null);
-      })
-      .finally(() => {
-        if (!cancelled) setAuthChecked(true);
-      });
+        setAuthChecked(true);
+        return;
+      }
+      await refreshFromSession(session.user.id);
+      setAuthChecked(true);
+    });
     return () => {
       cancelled = true;
+      sub.subscription.unsubscribe();
     };
-  }, [hydrateFromMe]);
+  }, [refreshFromSession]);
 
   const markQueueViewed = useCallback(async () => {
-    try {
-      await api.post("/api/auth/queue-viewed", {});
-    } finally {
-      setNewDenialsBanner(0);
-      setNewDenialsDollarValue(0);
+    const supabase = createClient();
+    const { data: s } = await supabase.auth.getSession();
+    const u = s.session?.user;
+    if (!u) return;
+    const { error } = await supabase
+      .from("users")
+      .update({ last_queue_visit_at: new Date().toISOString() })
+      .eq("id", u.id);
+    if (error) {
+      console.error("[useAuth] markQueueViewed", error);
     }
+    setNewDenialsBanner(0);
+    setNewDenialsDollarValue(0);
   }, []);
 
   const isPaid = Boolean(authUser?.is_paid === true);

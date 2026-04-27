@@ -4,13 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Entry hub under paid shell: single purchase → /upload; subscription → /dashboard.
- * Entitlement is synced in `(app)/layout` when landing as `/app?session_id=…`.
+ * Entitlement is synced in `app/(app)/app/layout.tsx` when landing as `/app?session_id=…`.
  */
 export default async function AppEntryPage() {
   const supabase = await createClient();
   const { data: authData, error: authErr } = await supabase.auth.getUser();
   if (authErr || !authData.user) {
-    redirect("/login");
+    redirect("/login?next=" + encodeURIComponent("/app"));
   }
   const svc = createServiceRoleClient();
   const { data: row, error: rowErr } = await svc
@@ -19,7 +19,7 @@ export default async function AppEntryPage() {
     .eq("id", authData.user.id)
     .maybeSingle();
   if (rowErr || !row) {
-    redirect("/login");
+    redirect("/login?next=" + encodeURIComponent("/app"));
   }
   const isSubscription =
     row.stripe_subscription_id != null && String(row.stripe_subscription_id).length > 0;

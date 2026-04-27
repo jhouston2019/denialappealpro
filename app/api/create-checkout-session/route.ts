@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "NEXT_PUBLIC_SITE_URL is not set" }, 500);
     }
 
-    const successUrl = `${baseUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${baseUrl.replace(/\/$/, "")}/app?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
 
     const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });

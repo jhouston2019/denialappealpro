@@ -20,7 +20,7 @@ function safePathNext(raw: string | null): string | null {
   return raw;
 }
 
-export default function LoginPageClient() {
+export default function RegisterPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safePathNext(searchParams.get("next"));
@@ -35,18 +35,18 @@ export default function LoginPageClient() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
       });
       if (error) {
-        setErr(error.message || "Sign in failed");
+        setErr(error.message || "Sign up failed");
         return;
       }
       router.replace(nextPath ?? "/dashboard");
       router.refresh();
     } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : "Cannot reach the server. Check your connection and try again.");
+      setErr(e2 instanceof Error ? e2.message : "Sign up failed.");
     } finally {
       setLoading(false);
     }
@@ -55,8 +55,10 @@ export default function LoginPageClient() {
   return (
     <div style={{ padding: "16px", background: PAGE_BG_SLATE, minHeight: "calc(100vh - 60px)" }}>
       <div style={box}>
-        <h1 style={{ margin: "0 0 8px", fontSize: "20px" }}>Denial Queue</h1>
-        <p style={{ margin: "0 0 16px", fontSize: "14px", color: TEXT_MUTED_ON_SLATE }}>Sign in to continue.</p>
+        <h1 style={{ margin: "0 0 8px", fontSize: "20px" }}>Create account</h1>
+        <p style={{ margin: "0 0 16px", fontSize: "14px", color: TEXT_MUTED_ON_SLATE }}>
+          Your profile is created when you sign up (database trigger + RLS).
+        </p>
         <form onSubmit={(e) => void submit(e)}>
           <label style={{ display: "block", fontSize: "13px", fontWeight: 600 }}>Email</label>
           <input
@@ -89,13 +91,11 @@ export default function LoginPageClient() {
               marginTop: "8px",
             }}
           >
-            {loading ? "…" : "Sign in"}
+            {loading ? "…" : "Create account"}
           </button>
         </form>
         <p style={{ marginTop: "16px", fontSize: "13px" }}>
-          <Link href="/register">Create an account</Link>
-          {" · "}
-          <Link href="/pricing">Subscribe</Link>
+          <Link href="/login">Sign in</Link>
           {" · "}
           <Link href="/">Home</Link>
         </p>

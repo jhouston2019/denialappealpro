@@ -1,16 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadStripe } from "@stripe/stripe-js";
-import {
-  DAP_PREVIEW_PAYLOAD_KEY,
-  DAP_PRACTICE_PROFILE_KEY,
-  DAP_RESUME_AFTER_PAYMENT_KEY,
-  type DapPreviewAnalysisResult,
-  type DapPracticeProfileStored,
-  type DapPreviewPayloadStored,
-} from "@/lib/dap/preview-flow";
+import { DAP_PREVIEW_PAYLOAD_KEY, type DapPreviewAnalysisResult, type DapPreviewPayloadStored } from "@/lib/dap/preview-flow";
 import { useAuth } from "@/hooks/use-auth";
 import { PreviewLetterDisplay } from "@/components/preview/preview-letter-display";
 
@@ -26,9 +18,6 @@ const LOADING_LINES = [
   "Building appeal strategy...",
 ] as const;
 
-const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
-
 function confidenceColor(c: DapPreviewAnalysisResult["confidence"]): string {
   if (c === "High") return GREEN;
   if (c === "Low") return RED;
@@ -43,14 +32,13 @@ function strengthColor(s: DapPreviewAnalysisResult["appeal_strength"]): string {
 
 export function PreviewFlowClient() {
   const { isAuthenticated, isPaid } = useAuth();
+  const ctaToPricing = isAuthenticated ? "/pricing" : "/login?next=" + encodeURIComponent("/pricing");
   const [flowPayload, setFlowPayload] = useState<DapPreviewPayloadStored | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DapPreviewAnalysisResult | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [analyzeLoading, setAnalyzeLoading] = useState(true);
   const [loadingPhase, setLoadingPhase] = useState(0);
-  const [email, setEmail] = useState("");
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -118,87 +106,6 @@ export function PreviewFlowClient() {
     }, 800);
     return () => clearInterval(t);
   }, [analyzeLoading]);
-
-  const startCheckout = useCallback(
-    async (plan: "retail" | "essential" | "professional", mode: "payment" | "subscription") => {
-      if (!flowPayload || !analysis) return;
-      if (!email.trim()) {
-        window.alert("Enter your email — it must match the one you use to sign in after checkout.");
-        return;
-      }
-      if (!stripePromise) {
-        window.alert("Stripe is not configured.");
-        return;
-      }
-      setCheckoutLoading(true);
-      try {
-        let practice: DapPracticeProfileStored | undefined = flowPayload.practice_profile;
-        if (!practice) {
-          try {
-            const pr = sessionStorage.getItem(DAP_PRACTICE_PROFILE_KEY);
-            if (pr) {
-              const p = JSON.parse(pr) as Partial<DapPracticeProfileStored>;
-              const nm = String(p.provider_name || "").trim();
-              const npi = String(p.provider_npi || "").replace(/\D/g, "");
-              if (nm && npi.length === 10) {
-                practice = {
-                  provider_name: nm,
-                  provider_npi: npi,
-                  ...(p.provider_address ? { provider_address: String(p.provider_address) } : {}),
-                  ...(p.provider_phone ? { provider_phone: String(p.provider_phone) } : {}),
-                };
-              }
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-        sessionStorage.setItem(
-          DAP_RESUME_AFTER_PAYMENT_KEY,
-          JSON.stringify({
-            extracted_text: flowPayload.extracted_text,
-            claim_data: flowPayload.claim_data,
-            intake_snapshot: flowPayload.intake_snapshot,
-            preview_data: analysis,
-            mode: flowPayload.mode,
-            ...(practice ? { practice_profile: practice } : {}),
-          })
-        );
-        const body =
-          mode === "payment"
-            ? { email: email.trim().toLowerCase(), plan, mode: "payment" as const }
-            : { email: email.trim().toLowerCase(), plan, type: "subscription" as const };
-        const response = await fetch("/api/create-checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          credentials: "include",
-        });
-        const out = (await response.json()) as { session_id?: string; error?: string };
-        if (!response.ok) {
-          window.alert(out.error || "Could not start checkout.");
-          return;
-        }
-        if (!out.session_id) {
-          window.alert("No checkout session returned.");
-          return;
-        }
-        const stripe = await stripePromise;
-        if (!stripe) {
-          window.alert("Stripe failed to load.");
-          return;
-        }
-        const { error } = await stripe.redirectToCheckout({ sessionId: out.session_id });
-        if (error) window.alert(error.message);
-      } catch (e) {
-        console.error(e);
-        window.alert("Checkout error.");
-      } finally {
-        setCheckoutLoading(false);
-      }
-    },
-    [flowPayload, analysis, email]
-  );
 
   if (loadError) {
     return (
@@ -355,125 +262,40 @@ export function PreviewFlowClient() {
             <PreviewLetterDisplay
               letterText={analysis.appeal_letter ?? ""}
               locked={letterLocked}
+              unlockHref={ctaToPricing}
             />
 
             {showPaywall ? (
-            <div
-              style={{
-                background: "#0f172a",
-                borderRadius: 16,
-                padding: "28px 22px",
-                border: "1px solid #334155",
-              }}
-            >
-              <h2 style={{ color: "#f8fafc", fontSize: 24, fontWeight: 800, margin: "0 0 8px" }}>
-                Your Appeal Letter Is Ready
-              </h2>
-              <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.5, margin: "0 0 22px" }}>
-                Unlock your submission-ready appeal with full regulatory citations.
-              </p>
-
-              <label style={{ display: "block", marginBottom: 18 }}>
-                <span style={{ display: "block", color: "#e2e8f0", fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
-                  Email for checkout
-                </span>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@practice.com"
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "12px 14px",
-                    borderRadius: 10,
-                    border: "1px solid #475569",
-                    fontSize: 16,
-                    background: "#1e293b",
-                    color: "#f8fafc",
-                  }}
-                />
-              </label>
-
               <div
                 style={{
-                  display: "grid",
-                  gap: 14,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  background: "#0f172a",
+                  borderRadius: 16,
+                  padding: "28px 22px",
+                  border: "1px solid #334155",
                 }}
               >
-                <div style={{ background: "#1e293b", borderRadius: 12, padding: 18, border: "1px solid #334155" }}>
-                  <div style={{ color: "#94a3b8", fontSize: 13, fontWeight: 600 }}>Single appeal</div>
-                  <div style={{ color: "#f8fafc", fontSize: 26, fontWeight: 800, margin: "8px 0" }}>$59</div>
-                  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 14 }}>One-time</div>
-                  <button
-                    type="button"
-                    disabled={checkoutLoading}
-                    onClick={() => void startCheckout("retail", "payment")}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: "none",
-                      borderRadius: 10,
-                      background: checkoutLoading ? "#475569" : GREEN,
-                      color: "#fff",
-                      fontWeight: 800,
-                      cursor: checkoutLoading ? "wait" : "pointer",
-                      fontSize: 15,
-                    }}
-                  >
-                    Unlock My Appeal
-                  </button>
-                </div>
-                <div style={{ background: "#1e293b", borderRadius: 12, padding: 18, border: "1px solid #334155" }}>
-                  <div style={{ color: "#94a3b8", fontSize: 13, fontWeight: 600 }}>Essential</div>
-                  <div style={{ color: "#f8fafc", fontSize: 26, fontWeight: 800, margin: "8px 0" }}>$399</div>
-                  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 14 }}>/month — 10 appeals</div>
-                  <button
-                    type="button"
-                    disabled={checkoutLoading}
-                    onClick={() => void startCheckout("essential", "subscription")}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: "none",
-                      borderRadius: 10,
-                      background: checkoutLoading ? "#475569" : GREEN,
-                      color: "#fff",
-                      fontWeight: 800,
-                      cursor: checkoutLoading ? "wait" : "pointer",
-                      fontSize: 15,
-                    }}
-                  >
-                    Unlock My Appeal
-                  </button>
-                </div>
-                <div style={{ background: "#1e293b", borderRadius: 12, padding: 18, border: "1px solid #334155" }}>
-                  <div style={{ color: "#94a3b8", fontSize: 13, fontWeight: 600 }}>Professional</div>
-                  <div style={{ color: "#f8fafc", fontSize: 26, fontWeight: 800, margin: "8px 0" }}>$699</div>
-                  <div style={{ color: "#64748b", fontSize: 13, marginBottom: 14 }}>/month — 25 appeals</div>
-                  <button
-                    type="button"
-                    disabled={checkoutLoading}
-                    onClick={() => void startCheckout("professional", "subscription")}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      border: "none",
-                      borderRadius: 10,
-                      background: checkoutLoading ? "#475569" : GREEN,
-                      color: "#fff",
-                      fontWeight: 800,
-                      cursor: checkoutLoading ? "wait" : "pointer",
-                      fontSize: 15,
-                    }}
-                  >
-                    Unlock My Appeal
-                  </button>
-                </div>
+                <h2 style={{ color: "#f8fafc", fontSize: 24, fontWeight: 800, margin: "0 0 8px" }}>
+                  Your appeal letter is ready
+                </h2>
+                <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.5, margin: "0 0 20px" }}>
+                  Continue to choose a plan and unlock the full letter with regulatory citations.
+                </p>
+                <Link
+                  href={ctaToPricing}
+                  style={{
+                    display: "inline-block",
+                    background: GREEN,
+                    color: "#fff",
+                    fontWeight: 800,
+                    fontSize: 16,
+                    padding: "14px 24px",
+                    borderRadius: 10,
+                    textDecoration: "none",
+                  }}
+                >
+                  Continue to plans →
+                </Link>
               </div>
-            </div>
             ) : null}
           </>
         ) : null}

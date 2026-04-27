@@ -1,3 +1,4 @@
+import { getNewDenialsSinceVisit as getNewDenialsWithClient } from "@/lib/auth/denials-since-visit";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { User as SupaUser } from "@supabase/supabase-js";
 
@@ -48,23 +49,13 @@ export async function hasAppealDataForUser(userId: string): Promise<boolean> {
   return data != null;
 }
 
-/** Mirrors Flask _new_denials_since_visit. */
+/** Mirrors Flask _new_denials_since_visit (server / service role). */
 export async function getNewDenialsSinceVisit(
   userId: string,
   lastQueueVisitAt: string | null
 ): Promise<{ count: number; dollarValue: number }> {
   const supabase = createServiceRoleClient();
-  let q = supabase.from("appeals").select("billed_amount").eq("user_id", userId);
-  if (lastQueueVisitAt) {
-    q = q.gt("created_at", lastQueueVisitAt);
-  }
-  const { data, error } = await q;
-  if (error || !data) return { count: 0, dollarValue: 0 };
-  const count = data.length;
-  const dollarValue = Math.round(
-    data.reduce((s, r) => s + parseFloat(String((r as { billed_amount: unknown }).billed_amount || 0)), 0) * 100
-  ) / 100;
-  return { count, dollarValue };
+  return getNewDenialsWithClient(supabase, userId, lastQueueVisitAt);
 }
 
 function baseUserForLogin(row: PublicUserRow) {
@@ -81,7 +72,7 @@ function baseUserForLogin(row: PublicUserRow) {
 }
 
 /**
- * /api/auth/login and /api/auth/register — match Flask: user + new_denials_*.
+ * Server-side session payloads (legacy / optional); prefer Supabase client on the client.
  */
 export async function buildSessionPayload(
   _auth: SupaUser,
@@ -103,7 +94,7 @@ export async function buildSessionPayload(
 }
 
 /**
- * /api/auth/me — includes has_data; is_paid from public Row only.
+ * “Me”-style JSON for internal tools; is_paid from public.users only.
  */
 export async function buildMePayload(
   _auth: SupaUser,

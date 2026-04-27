@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
-import api from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/browser";
 import { TEXT_ON_SLATE, TEXT_MUTED_ON_SLATE } from "@/lib/theme/app-shell";
 
 const linkBase: CSSProperties = {
@@ -33,7 +33,8 @@ export default function PaidAppHeader() {
 
   const logout = async () => {
     try {
-      await api.post("/api/auth/logout", {});
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
       /* still navigate */
     }

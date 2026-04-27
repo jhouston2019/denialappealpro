@@ -1,6 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
+
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
+function jsonResponse(data: Record<string, string>, status: number) {
+  return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+}
 
 function resolvePriceIdFromPlan(
   plan: string,
@@ -29,88 +35,96 @@ function resolvePriceIdFromPlan(
  * Price IDs: STRIPE_PRICE_SINGLE (payment), STRIPE_PRICE_*_SUBSCRIPTION (per tier), or pass price_id.
  */
 export async function POST(request: NextRequest) {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
-    return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
-  }
-
-  let body: {
-    price_id?: string;
-    plan?: string;
-    email?: string;
-    mode?: "subscription" | "payment";
-    /** CRA compatibility */
-    type?: string;
-  };
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  let priceId = (body.price_id || "").trim();
-  const plan = (body.plan || "").trim();
-  const mode: "subscription" | "payment" =
-    body.mode === "payment" || body.type === "payment" ? "payment" : "subscription";
-
-  if (!plan) {
-    return NextResponse.json({ error: "plan is required" }, { status: 400 });
-  }
-
-  if (!priceId) {
-    const resolved = resolvePriceIdFromPlan(plan, mode);
-    if (!resolved) {
-      return NextResponse.json(
-        {
-          error:
-            "Missing or invalid price: pass price_id or set STRIPE_PRICE_SINGLE (one-time) or STRIPE_PRICE_ESSENTIAL_SUBSCRIPTION, STRIPE_PRICE_PROFESSIONAL_SUBSCRIPTION, STRIPE_PRICE_ENTERPRISE_SUBSCRIPTION (subscriptions).",
-        },
-        { status: 400 }
-      );
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      return jsonResponse({ error: "Stripe is not configured" }, 500);
     }
-    priceId = resolved;
-  }
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl?.origin || new URL(request.url).origin;
-  if (!baseUrl) {
-    return NextResponse.json({ error: "NEXT_PUBLIC_SITE_URL is not set" }, { status: 500 });
-  }
+    let body: {
+      price_id?: string;
+      plan?: string;
+      email?: string;
+      mode?: "subscription" | "payment";
+      /** CRA compatibility */
+      type?: string;
+    };
+    try {
+      body = (await request.json()) as typeof body;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
 
-  const successUrl = `${baseUrl.replace(/\/$/, "")}/welcome?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
+    let priceId = (body.price_id || "").trim();
+    const plan = (body.plan || "").trim();
+    const mode: "subscription" | "payment" =
+      body.mode === "payment" || body.type === "payment" ? "payment" : "subscription";
 
-  if (mode !== "subscription" && mode !== "payment") {
-    return NextResponse.json({ error: "mode must be subscription or payment" }, { status: 400 });
-  }
+    if (!plan) {
+      return jsonResponse({ error: "plan is required" }, 400);
+    }
 
-  const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
-  const email = (body.email || "").trim().toLowerCase();
+    if (!priceId) {
+      const resolved = resolvePriceIdFromPlan(plan, mode);
+      if (!resolved) {
+        return jsonResponse(
+          {
+            error:
+              "Missing or invalid price: pass price_id or set STRIPE_PRICE_SINGLE (one-time) or STRIPE_PRICE_ESSENTIAL_SUBSCRIPTION, STRIPE_PRICE_PROFESSIONAL_SUBSCRIPTION, STRIPE_PRICE_ENTERPRISE_SUBSCRIPTION (subscriptions).",
+          },
+          400
+        );
+      }
+      priceId = resolved;
+    }
 
-  const sessionParams: Stripe.Checkout.SessionCreateParams = {
-    mode,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    metadata: {
-      price_id: priceId,
-      plan,
-    },
-  };
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl?.origin || new URL(request.url).origin;
+    if (!baseUrl) {
+      return jsonResponse({ error: "NEXT_PUBLIC_SITE_URL is not set" }, 500);
+    }
 
-  if (email) {
-    sessionParams.customer_email = email;
-  }
+    const successUrl = `${baseUrl.replace(/\/$/, "")}/welcome?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
 
-  if (mode === "subscription" && !sessionParams.subscription_data) {
-    sessionParams.subscription_data = {
+    if (mode !== "subscription" && mode !== "payment") {
+      return jsonResponse({ error: "mode must be subscription or payment" }, 400);
+    }
+
+    const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
+    const email = (body.email || "").trim().toLowerCase();
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         price_id: priceId,
         plan,
       },
     };
-  }
 
-  const session = await stripe.checkout.sessions.create(sessionParams);
-  return NextResponse.json({ session_id: session.id });
+    if (email) {
+      sessionParams.customer_email = email;
+    }
+
+    if (mode === "subscription" && !sessionParams.subscription_data) {
+      sessionParams.subscription_data = {
+        metadata: {
+          price_id: priceId,
+          plan,
+        },
+      };
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    return jsonResponse({ session_id: session.id }, 200);
+  } catch (error) {
+    console.error("[create-checkout-session] error:", error);
+    return new Response(JSON.stringify({ error: String(error) }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
 }

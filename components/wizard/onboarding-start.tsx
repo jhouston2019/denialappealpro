@@ -325,7 +325,7 @@ export default function OnboardingStart() {
   const [ppPhone, setPpPhone] = useState('');
   const [ppErr, setPpErr] = useState('');
   const pendingPreviewPayloadRef = useRef(null);
-  /** True after /welcome sent user here to finish provider/patient/NPI (no re-upload). */
+  /** True after /success → /app sent user here to finish provider/patient/NPI (no re-upload). */
   const [resumedNeedDetails, setResumedNeedDetails] = useState(false);
   /** Step 3: show provider/patient fields — snapped only when entering Step 3, not from live intake (avoids unmount while typing). */
   const [step3ProviderFieldMount, setStep3ProviderFieldMount] = useState({

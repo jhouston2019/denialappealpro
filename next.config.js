@@ -6,7 +6,6 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      { source: "/success", destination: "/welcome", permanent: false },
       { source: "/appeal-form", destination: "/start", permanent: false },
       { source: "/upload", destination: "/start", permanent: false },
     ];

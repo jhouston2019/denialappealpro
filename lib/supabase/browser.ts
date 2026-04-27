@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-/** Browser Supabase for welcome page sign-in / sign-up only (client components). */
+/** Browser Supabase for client components that use the anon key (e.g. marketing). */
 export function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

@@ -219,7 +219,7 @@ const SITE_PAGE_GROUPS: { title: string; pages: SitePageRow[] }[] = [
       { label: "Customer login", path: "/login", description: "Supabase sign-in for customers", gate: "public" },
       {
         label: "Welcome",
-        path: "/welcome",
+        path: "/login",
         description: "Post-checkout / onboarding handoff",
         gate: "public",
       },

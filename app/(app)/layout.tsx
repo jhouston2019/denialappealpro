@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const row = await getPublicUserById(authData.user.id);
   if (!row) {
-    redirect("/welcome");
+    redirect("/login");
   }
 
   if (row.is_paid !== true) {

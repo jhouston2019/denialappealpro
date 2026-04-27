@@ -1,21 +1,16 @@
-import { randomBytes, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
 import { planLimitForCheckout } from "@/lib/billing/plan-limit";
+import { ensureStripeBootstrapAuth } from "@/lib/auth/ensure-stripe-bootstrap-auth";
+import { requireStripeBootstrapSecret } from "@/lib/auth/stripe-bootstrap-password";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { getAuthUserIdByEmail } from "@/lib/stripe/get-auth-user-id-by-email";
 import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 function jsonResponse(data: Record<string, string>, status: number) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
-}
-
-function isAuthDuplicateError(err: { message?: string; status?: number } | null): boolean {
-  if (!err) return false;
-  const m = (err.message || "").toLowerCase();
-  return m.includes("registered") || m.includes("exists") || m.includes("already") || err.status === 422;
 }
 
 function resolvePriceIdFromPlan(
@@ -39,13 +34,13 @@ function resolvePriceIdFromPlan(
 }
 
 /**
- * Stripe checkout.
- *
- * { price_id?, plan, email, mode? | type? }
- * Creates auth + public.users (pending) with a stable user_id in Stripe metadata.
+ * Stripe Checkout: `metadata.user_id` is the only post-payment identity key.
+ * Auth + public.users exist before the Stripe session; session bootstrap password is
+ * set so `/api/auth/create-session-from-stripe` can `signInWithPassword` immediately.
  */
 export async function POST(request: NextRequest) {
   try {
+    requireStripeBootstrapSecret();
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {
       return jsonResponse({ error: "Stripe is not configured" }, 500);
@@ -98,7 +93,7 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "NEXT_PUBLIC_SITE_URL is not set" }, 500);
     }
 
-    const successUrl = `${baseUrl.replace(/\/$/, "")}/welcome?session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${baseUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
 
     if (mode !== "subscription" && mode !== "payment") {
@@ -115,7 +110,7 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Server configuration error" }, 500);
     }
 
-    const { data: existingByEmail, error: exErr } = await supabase
+    const { data: rowByEmail, error: exErr } = await supabase
       .from("users")
       .select("id")
       .eq("email", email)
@@ -126,38 +121,13 @@ export async function POST(request: NextRequest) {
     }
 
     let userId: string;
-    if (existingByEmail?.id) {
-      userId = existingByEmail.id;
+    if (rowByEmail?.id) {
+      userId = await ensureStripeBootstrapAuth(supabase, rowByEmail.id, email);
     } else {
-      userId = randomUUID();
-      const tempPassword = randomBytes(32).toString("base64url");
-      const { error: cErr } = await supabase.auth.admin.createUser({
-        id: userId,
-        email,
-        email_confirm: false,
-        password: tempPassword,
-        app_metadata: { source: "stripe_checkout_pending" },
-      });
-      if (cErr) {
-        if (isAuthDuplicateError(cErr)) {
-          const alt = await getAuthUserIdByEmail(supabase, email);
-          if (!alt) {
-            console.error("[create-checkout-session] duplicate email but no user id", cErr);
-            return jsonResponse({ error: "Could not prepare checkout" }, 500);
-          }
-          userId = alt;
-        } else {
-          console.error("[create-checkout-session] createUser", cErr);
-          return jsonResponse({ error: "Could not create checkout identity" }, 500);
-        }
-      }
-
-      const { data: alreadyRow } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!alreadyRow) {
+      const proposed = randomUUID();
+      userId = await ensureStripeBootstrapAuth(supabase, proposed, email);
+      const { data: urow } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
+      if (!urow) {
         const { error: insErr } = await supabase.from("users").insert({
           id: userId,
           email,
@@ -173,7 +143,7 @@ export async function POST(request: NextRequest) {
               .eq("email", email)
               .maybeSingle();
             if (again?.id) {
-              userId = again.id;
+              userId = await ensureStripeBootstrapAuth(supabase, again.id, email);
             } else {
               console.error("[create-checkout-session] insert public.users", insErr);
               return jsonResponse({ error: "Could not prepare checkout" }, 500);

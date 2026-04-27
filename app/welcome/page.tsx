@@ -1,5 +1,5 @@
-import { WelcomeClient } from "./welcome-client";
+import { redirect } from "next/navigation";
 
 export default function WelcomePage() {
-  return <WelcomeClient />;
+  redirect("/login");
 }

@@ -7,8 +7,7 @@ const STRIPE_VERSION = "2025-02-24.acacia" as const;
 type ProcessResult = { statusCode: number; body: Record<string, unknown> };
 
 /**
- * Idempotent webhook: mirror paid state + record event. Primary entitlement + auth happen in
- * POST /api/auth/create-session-from-stripe (return URL); this must not be required for access.
+ * Idempotent webhook: mirror paid state + record event. Users are signed in only via /login.
  */
 export async function processCheckoutSessionCompletedEvent(
   stripeEvent: Stripe.Event,

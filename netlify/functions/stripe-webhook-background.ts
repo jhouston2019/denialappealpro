@@ -12,8 +12,8 @@ function getRawBody(event: Parameters<Handler>[0]): string {
 }
 
 /**
- * checkout.session.completed — idempotent DB mirror. Primary: POST /api/auth/create-session-from-stripe
- * (success URL). Shared: lib/stripe/process-checkout-session-completed.ts
+ * checkout.session.completed — idempotent DB mirror (is_paid + Stripe ids).
+ * Shared: lib/stripe/process-checkout-session-completed.ts
  */
 const handler: Handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {

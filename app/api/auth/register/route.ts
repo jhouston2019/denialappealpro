@@ -1,29 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import {
-  buildSessionPayload,
-  getPublicUserByEmail,
-  getPublicUserById,
-} from "@/lib/auth/user-payload";
-
-async function authUserExistsForEmail(
-  email: string
-): Promise<boolean> {
-  const supabase = createServiceRoleClient();
-  const e = email.trim().toLowerCase();
-  for (let page = 1; page <= 10; page++) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
-    if (data.users.some((u) => (u.email || "").toLowerCase() === e)) return true;
-    if (data.users.length < 1000) break;
-  }
-  return false;
-}
+import { buildSessionPayload, getPublicUserById } from "@/lib/auth/user-payload";
 
 /**
- * Post-payment registration only: public.users must have is_paid true for this email.
- * Same JSON shape as Flask register (201 + user + new_denials_*).
+ * Sign up from /login: Supabase Auth + public.users row (is_paid false until Stripe).
  */
 export async function POST(request: NextRequest) {
   let body: { email?: string; password?: string; referral_code?: string; ref?: string };
@@ -45,20 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   const email = emailRaw.toLowerCase();
-  const paidRow = await getPublicUserByEmail(email);
-  if (!paidRow || paidRow.is_paid !== true) {
-    return NextResponse.json(
-      { error: "Complete checkout for this plan before creating a password for this email." },
-      { status: 403 }
-    );
-  }
-
-  if (await authUserExistsForEmail(email)) {
-    return NextResponse.json(
-      { error: "An account with this email already exists" },
-      { status: 400 }
-    );
-  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
@@ -73,7 +40,7 @@ export async function POST(request: NextRequest) {
     const msg = error.message || "";
     if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("registered")) {
       return NextResponse.json(
-        { error: "An account with this email already exists" },
+        { error: "An account with this email already exists. Sign in instead." },
         { status: 400 }
       );
     }
@@ -84,33 +51,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Registration failed. Please try again." }, { status: 500 });
   }
 
-  const byId = await getPublicUserById(data.user.id);
-  const byEmail = paidRow;
-  if (byId && byId.id !== byEmail.id) {
-    await supabase.auth.signOut();
-    return NextResponse.json(
-      {
-        error:
-          "Account profile does not match checkout. Use the same email as Stripe, or contact support.",
-      },
-      { status: 409 }
-    );
+  const svc = createServiceRoleClient();
+  const { data: existingRow } = await svc.from("users").select("id").eq("id", data.user.id).maybeSingle();
+  if (!existingRow) {
+    const { error: insErr } = await svc.from("users").insert({
+      id: data.user.id,
+      email,
+      is_paid: false,
+      subscription_tier: null,
+      plan_limit: 0,
+    });
+    if (insErr) {
+      if (insErr.code === "23505") {
+        return NextResponse.json(
+          { error: "This email is already associated with an account. Sign in instead." },
+          { status: 409 }
+        );
+      }
+      console.error("[register] users insert:", insErr);
+      return NextResponse.json({ error: "Could not create account profile" }, { status: 500 });
+    }
   }
-  if (!byId && byEmail.id !== data.user.id) {
-    await supabase.auth.signOut();
-    return NextResponse.json(
-      {
-        error:
-          "Checkout profile must be linked before sign-up. Open the invite from checkout or use the same email.",
-      },
-      { status: 409 }
-    );
-  }
-
-  const row = (await getPublicUserById(data.user.id)) ?? byEmail;
 
   if (referralCode) {
-    const svc = createServiceRoleClient();
     const { data: partner } = await svc
       .from("referral_partners")
       .select("id")
@@ -121,10 +84,15 @@ export async function POST(request: NextRequest) {
       await svc
         .from("users")
         .update({ referred_by_id: partner.id as number })
-        .eq("id", row.id);
+        .eq("id", data.user.id);
     }
   }
 
-  const payload = await buildSessionPayload(data.user, row);
+  const publicRow = await getPublicUserById(data.user.id);
+  if (!publicRow) {
+    return NextResponse.json({ error: "Account profile could not be loaded" }, { status: 500 });
+  }
+
+  const payload = await buildSessionPayload(data.user, publicRow);
   return NextResponse.json(payload, { status: 201 });
 }

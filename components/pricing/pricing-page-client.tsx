@@ -19,18 +19,16 @@ const BASE_FEATURES = [
   "Appeal history dashboard",
 ];
 
-export default function PricingPageClient() {
-  const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState("");
+type Props = {
+  userEmail: string;
+};
 
-  /** Client needs NEXT_PUBLIC_*; set to the Stripe Price ID for the one-time $59 (5900¢) product. */
+export default function PricingPageClient({ userEmail }: Props) {
+  const [loading, setLoading] = useState(false);
+
   const singlePriceId = (process.env.NEXT_PUBLIC_STRIPE_PRICE_SINGLE || "").trim();
 
   const handleSinglePayment = async () => {
-    if (!email.trim()) {
-      window.alert("Please enter your email address");
-      return;
-    }
     if (!singlePriceId) {
       window.alert(
         "Single-appeal checkout is not configured. Set NEXT_PUBLIC_STRIPE_PRICE_SINGLE to your $59 (5900¢) Stripe Price ID."
@@ -47,7 +45,6 @@ export default function PricingPageClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
           plan: "single",
           type: "payment" as const,
           price_id: singlePriceId,
@@ -82,10 +79,6 @@ export default function PricingPageClient() {
   };
 
   const handleSubscribe = async (tier: "essential" | "professional" | "enterprise") => {
-    if (!email.trim()) {
-      window.alert("Please enter your email address");
-      return;
-    }
     if (!stripePromise) {
       window.alert("Stripe is not configured (set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and STRIPE_*_PRICE_ID).");
       return;
@@ -95,7 +88,7 @@ export default function PricingPageClient() {
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, plan: tier, type: "subscription" }),
+        body: JSON.stringify({ plan: tier, type: "subscription" }),
         credentials: "include",
       });
       const out = (await response.json()) as { session_id?: string; error?: string };
@@ -137,17 +130,8 @@ export default function PricingPageClient() {
 
       <div className="dap-pricing-inner">
         <div className="dap-pricing-email-card">
-          <label htmlFor="dap-pricing-email">Email for subscription checkout</label>
-          <input
-            id="dap-pricing-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@practice.com"
-            autoComplete="email"
-          />
-          <p className="dap-pricing-email-hint">
-            Required for Single appeal checkout and for Essential, Professional, and Enterprise.
+          <p className="dap-pricing-email-hint" style={{ marginTop: 0 }}>
+            Signed in as <strong>{userEmail || "—"}</strong>
           </p>
         </div>
 

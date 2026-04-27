@@ -1,15 +1,12 @@
-import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { planLimitForCheckout } from "@/lib/billing/plan-limit";
-import { ensureStripeBootstrapAuth } from "@/lib/auth/ensure-stripe-bootstrap-auth";
-import { requireStripeBootstrapSecret } from "@/lib/auth/stripe-bootstrap-password";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { getPublicUserById } from "@/lib/auth/user-payload";
+import { createClient } from "@/lib/supabase/server";
 import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
-function jsonResponse(data: Record<string, string>, status: number) {
+function jsonResponse(data: Record<string, string | number | boolean>, status: number) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
 
@@ -34,22 +31,38 @@ function resolvePriceIdFromPlan(
 }
 
 /**
- * Stripe Checkout: `metadata.user_id` is the only post-payment identity key.
- * Auth + public.users exist before the Stripe session; session bootstrap password is
- * set so `/api/auth/create-session-from-stripe` can `signInWithPassword` immediately.
+ * Stripe Checkout for the logged-in user only. `metadata.user_id` = auth / public.users id.
+ * No user creation, no session creation, no auth mutations.
  */
 export async function POST(request: NextRequest) {
   try {
-    requireStripeBootstrapSecret();
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {
       return jsonResponse({ error: "Stripe is not configured" }, 500);
     }
 
+    const supabase = await createClient();
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !authData.user) {
+      return jsonResponse({ error: "You must be signed in to check out" }, 401);
+    }
+
+    const userId = authData.user.id;
+    const row = await getPublicUserById(userId);
+    if (!row) {
+      return jsonResponse(
+        { error: "Account profile is missing. Sign out and create an account from the login page." },
+        400
+      );
+    }
+    const email = row.email.trim().toLowerCase();
+    if (!email) {
+      return jsonResponse({ error: "Account email is missing" }, 400);
+    }
+
     let body: {
       price_id?: string;
       plan?: string;
-      email?: string;
       mode?: "subscription" | "payment";
       type?: string;
     };
@@ -66,11 +79,6 @@ export async function POST(request: NextRequest) {
 
     if (!plan) {
       return jsonResponse({ error: "plan is required" }, 400);
-    }
-
-    const email = (body.email || "").trim().toLowerCase();
-    if (!email) {
-      return jsonResponse({ error: "email is required" }, 400);
     }
 
     if (!priceId) {
@@ -96,65 +104,7 @@ export async function POST(request: NextRequest) {
     const successUrl = `${baseUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
 
-    if (mode !== "subscription" && mode !== "payment") {
-      return jsonResponse({ error: "mode must be subscription or payment" }, 400);
-    }
-
     const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
-
-    let supabase: ReturnType<typeof createServiceRoleClient>;
-    try {
-      supabase = createServiceRoleClient();
-    } catch (e) {
-      console.error("[create-checkout-session] Supabase service role not configured", e);
-      return jsonResponse({ error: "Server configuration error" }, 500);
-    }
-
-    const { data: rowByEmail, error: exErr } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
-    if (exErr) {
-      console.error("[create-checkout-session] users lookup", exErr);
-      return jsonResponse({ error: "Could not prepare checkout" }, 500);
-    }
-
-    let userId: string;
-    if (rowByEmail?.id) {
-      userId = await ensureStripeBootstrapAuth(supabase, rowByEmail.id, email);
-    } else {
-      const proposed = randomUUID();
-      userId = await ensureStripeBootstrapAuth(supabase, proposed, email);
-      const { data: urow } = await supabase.from("users").select("id").eq("id", userId).maybeSingle();
-      if (!urow) {
-        const { error: insErr } = await supabase.from("users").insert({
-          id: userId,
-          email,
-          is_paid: false,
-          subscription_tier: plan,
-          plan_limit: planLimitForCheckout(plan, mode),
-        });
-        if (insErr) {
-          if (insErr.code === "23505") {
-            const { data: again } = await supabase
-              .from("users")
-              .select("id")
-              .eq("email", email)
-              .maybeSingle();
-            if (again?.id) {
-              userId = await ensureStripeBootstrapAuth(supabase, again.id, email);
-            } else {
-              console.error("[create-checkout-session] insert public.users", insErr);
-              return jsonResponse({ error: "Could not prepare checkout" }, 500);
-            }
-          } else {
-            console.error("[create-checkout-session] insert public.users", insErr);
-            return jsonResponse({ error: "Could not prepare checkout" }, 500);
-          }
-        }
-      }
-    }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode,

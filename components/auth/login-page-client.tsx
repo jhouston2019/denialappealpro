@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PAGE_BG_SLATE, TEXT_MUTED_ON_SLATE } from "@/lib/theme/app-shell";
 
 const box: React.CSSProperties = {
@@ -30,8 +30,15 @@ async function readJsonError(res: Response) {
   }
 }
 
+function safePathNext(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function LoginPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safePathNext(searchParams.get("next"));
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,7 +63,7 @@ export default function LoginPageClient() {
           return;
         }
         await res.json();
-        router.replace("/dashboard");
+        router.replace(nextPath ?? "/app");
         router.refresh();
       } else {
         const res = await fetch("/api/auth/register", {
@@ -71,7 +78,7 @@ export default function LoginPageClient() {
           return;
         }
         await res.json();
-        router.replace("/dashboard");
+        router.replace(nextPath ?? "/app");
         router.refresh();
       }
     } catch (e2) {

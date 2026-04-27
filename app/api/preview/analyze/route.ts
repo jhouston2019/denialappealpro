@@ -16,23 +16,13 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
 
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
 const WINDOW_MS = 60 * 60 * 1000;
 const MAX_PER_IP = 10;
 
 const SYSTEM =
   "You are a medical billing denial analyst. Analyze the denial and return ONLY a JSON object with these exact keys: denial_type, confidence, summary, key_issues (array of 3), appeal_strength, strategy, carc_codes (array). No other text.";
-
-function parseJsonFromContent(raw: string): Record<string, unknown> | null {
-  const trimmed = raw.trim();
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  try {
-    return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 function asNonEmptyString(v: unknown, fallback: string): string {
   if (typeof v === "string" && v.trim()) return v.trim();
@@ -69,61 +59,96 @@ function asCarcArray(v: unknown): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Model output may be raw JSON or prose with a JSON object; try direct parse, then {…} slice.
+ */
+function parseAiJsonObject(content: string): Record<string, unknown> {
+  const trimmed = content.trim();
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error("No parseable JSON object in AI output");
+    }
+    parsed = JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("AI output JSON is not an object");
+  }
+  return parsed;
+}
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const limited = checkIpHourLimit(ip, MAX_PER_IP, WINDOW_MS);
   if (!limited.ok) {
+    console.error("[preview/analyze] rate limit exceeded", { ip, retry_after_sec: limited.retryAfterSec });
     return NextResponse.json(
       { error: "Too many preview requests. Try again later.", retry_after_sec: limited.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } }
+      {
+        status: 429,
+        headers: { ...JSON_HEADERS, "Retry-After": String(limited.retryAfterSec) },
+      }
     );
   }
 
   let body: { extracted_text?: string; claim_data?: unknown; intake_snapshot?: unknown };
   try {
-    body = (await request.json()) as { extracted_text?: string; claim_data?: unknown; intake_snapshot?: unknown };
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    body = await request.json();
+  } catch (err) {
+    console.error("[preview/analyze] Invalid JSON body", err);
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers: JSON_HEADERS });
   }
 
   const extracted_text = typeof body.extracted_text === "string" ? body.extracted_text.trim() : "";
   if (!extracted_text || extracted_text.length < 10) {
-    return NextResponse.json({ error: "extracted_text is required" }, { status: 400 });
+    console.error("[preview/analyze] missing or short extracted_text", { length: extracted_text.length });
+    return NextResponse.json({ error: "extracted_text is required" }, { status: 400, headers: JSON_HEADERS });
   }
 
   const oa = getOpenAI();
   if (!oa) {
-    return NextResponse.json({ error: "Preview analysis is not configured" }, { status: 503 });
+    console.error("[preview/analyze] OpenAI not configured (missing API key or client)");
+    return NextResponse.json({ error: "Preview analysis is not configured" }, { status: 503, headers: JSON_HEADERS });
   }
 
   const userMsg = `Denial data: ${extracted_text.slice(0, 24000)}`;
 
   let profile = { provider_name: "", provider_npi: "", provider_address: "" };
   let isAnonymous = true;
-  const supa = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supa.auth.getUser();
-  if (authUser?.id) {
-    isAnonymous = false;
-    const svc = createServiceRoleClient();
-    const { data: urow, error: profErr } = await svc
-      .from("users")
-      .select("provider_name, provider_npi, provider_address")
-      .eq("id", authUser.id)
-      .maybeSingle();
-    if (!profErr && urow) {
-      const r = urow as {
-        provider_name: string | null;
-        provider_npi: string | null;
-        provider_address: string | null;
-      };
-      profile = {
-        provider_name: String(r.provider_name || "").trim(),
-        provider_npi: String(r.provider_npi || "").trim(),
-        provider_address: String(r.provider_address || "").trim(),
-      };
+  try {
+    const supa = await createClient();
+    const {
+      data: { user: authUser },
+    } = await supa.auth.getUser();
+    if (authUser?.id) {
+      isAnonymous = false;
+      const svc = createServiceRoleClient();
+      const { data: urow, error: profErr } = await svc
+        .from("users")
+        .select("provider_name, provider_npi, provider_address")
+        .eq("id", authUser.id)
+        .maybeSingle();
+      if (profErr) {
+        console.error("[preview/analyze] profile fetch warning", profErr);
+      } else if (urow) {
+        const r = urow as {
+          provider_name: string | null;
+          provider_npi: string | null;
+          provider_address: string | null;
+        };
+        profile = {
+          provider_name: String(r.provider_name || "").trim(),
+          provider_npi: String(r.provider_npi || "").trim(),
+          provider_address: String(r.provider_address || "").trim(),
+        };
+      }
     }
+  } catch (err) {
+    console.error("[preview/analyze] auth/profile section failed (continuing as anonymous if applicable)", err);
   }
 
   const claimData =
@@ -145,23 +170,36 @@ export async function POST(request: NextRequest) {
     ? generateAppealPreviewLetter(letterCtx)
     : Promise.resolve("");
 
-  const [completion, appeal_letter] = await Promise.all([
-    oa.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 500,
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: userMsg },
-      ],
-    }),
-    letterPromise,
-  ]);
+  let completion: Awaited<ReturnType<typeof oa.chat.completions.create>>;
+  let appeal_letter: string;
+  try {
+    [completion, appeal_letter] = await Promise.all([
+      oa.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 500,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: SYSTEM },
+          { role: "user", content: userMsg },
+        ],
+      }),
+      letterPromise,
+    ]);
+  } catch (err) {
+    console.error("[preview/analyze] OpenAI or letter generation failed", err);
+    return NextResponse.json(
+      { error: "Analysis request failed" },
+      { status: 502, headers: JSON_HEADERS }
+    );
+  }
 
   const content = completion.choices[0]?.message?.content?.trim() || "";
-  const parsed = parseJsonFromContent(content);
-  if (!parsed) {
-    return NextResponse.json({ error: "Could not parse analysis" }, { status: 502 });
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseAiJsonObject(content);
+  } catch (err) {
+    console.error("[preview/analyze] Failed to parse AI response", err, { contentPreview: content.slice(0, 500) });
+    return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500, headers: JSON_HEADERS });
   }
 
   const keyIssues = asStringArray(parsed.key_issues, 3, "Review issue");
@@ -170,7 +208,10 @@ export async function POST(request: NextRequest) {
   const result: DapPreviewAnalysisResult = {
     denial_type: asNonEmptyString(parsed.denial_type, "General denial"),
     confidence: normalizeConfidence(parsed.confidence),
-    summary: asNonEmptyString(parsed.summary, "We identified a payer denial to address in your appeal."),
+    summary: asNonEmptyString(
+      parsed.summary,
+      "We identified a payer denial to address in your appeal."
+    ),
     key_issues: keyIssues,
     appeal_strength: normalizeStrength(parsed.appeal_strength),
     strategy: asNonEmptyString(
@@ -179,8 +220,10 @@ export async function POST(request: NextRequest) {
     ),
     carc_codes,
     teaser: [...DAP_TEASER_LINES],
-    appeal_letter: appeal_letter || "Appeal letter could not be generated. Return to the wizard and ensure payer and denial details are filled in.",
+    appeal_letter:
+      appeal_letter ||
+      "Appeal letter could not be generated. Return to the wizard and ensure payer and denial details are filled in.",
   };
 
-  return NextResponse.json(result, { status: 200 });
+  return NextResponse.json(result, { status: 200, headers: JSON_HEADERS });
 }

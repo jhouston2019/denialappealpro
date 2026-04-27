@@ -2,27 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/admin/require-admin";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
-type Ctx = { params: Promise<{ segments?: string[] }> };
-
-/**
- * GET /api/admin/appeals — list (no extra path segments)
- * GET /api/admin/appeals/:appealId — single appeal
- *
- * Single file + optional catch-all `[[...segments]]` avoids Windows (EISDIR readlink) on
- * `app/.../appeals/[appealId]/route.ts` while preserving the same URLs and admin guard.
- */
-export async function GET(request: NextRequest, context: Ctx) {
-  const { segments } = await context.params;
-  if (segments == null || segments.length === 0) {
-    return getAppealsList(request);
-  }
-  if (segments.length > 1) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  return getAppealDetail(request, segments[0]!);
-}
-
-async function getAppealsList(request: NextRequest) {
+/** GET /api/admin/appeals — list */
+export async function getAppealsList(request: NextRequest) {
   const auth = await getAdminFromRequest(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -74,9 +55,7 @@ async function getAppealsList(request: NextRequest) {
     ai_model_used: a.ai_model_used,
     outcome_status: a.outcome_status,
     outcome_amount_recovered:
-      a.outcome_amount_recovered != null
-        ? parseFloat(String(a.outcome_amount_recovered))
-        : null,
+      a.outcome_amount_recovered != null ? parseFloat(String(a.outcome_amount_recovered)) : null,
     created_at: a.created_at,
     paid_at: a.paid_at,
   }));
@@ -98,7 +77,8 @@ async function getAppealsList(request: NextRequest) {
   );
 }
 
-async function getAppealDetail(request: NextRequest, appealId: string) {
+/** GET /api/admin/appeals/:appealId */
+export async function getAppealDetail(request: NextRequest, appealId: string) {
   const auth = await getAdminFromRequest(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });

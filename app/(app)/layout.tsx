@@ -22,7 +22,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const profile = await getPublicUserById(authData.user.id);
   if (!profile) {
-    redirect("/login?next=" + encodeURIComponent(currentPath));
+    redirect(
+      `/login?next=${encodeURIComponent(currentPath)}&reason=${encodeURIComponent("missing_profile")}`
+    );
   }
 
   return (

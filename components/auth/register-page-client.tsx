@@ -30,8 +30,7 @@ export default function RegisterPageClient() {
       router.push("/login");
       return;
     }
-    router.push("/dashboard");
-    router.refresh();
+    window.location.assign("/dashboard");
   }
 
   return (

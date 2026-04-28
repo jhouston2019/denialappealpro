@@ -24,6 +24,7 @@ export default function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safePathNext(searchParams.get("next"));
+  const bannerReason = searchParams.get("reason");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -43,8 +44,9 @@ export default function LoginPageClient() {
         setErr(error.message || "Sign in failed");
         return;
       }
-      router.replace(nextPath ?? "/dashboard");
-      router.refresh();
+      // Full navigation so middleware + Server Components see Supabase cookie session (soft nav races SSR auth).
+      const destination = nextPath ?? "/dashboard";
+      window.location.assign(destination);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Cannot reach the server. Check your connection and try again.");
     } finally {
@@ -57,6 +59,11 @@ export default function LoginPageClient() {
       <div style={box}>
         <h1 style={{ margin: "0 0 8px", fontSize: "20px" }}>Denial Queue</h1>
         <p style={{ margin: "0 0 16px", fontSize: "14px", color: TEXT_MUTED_ON_SLATE }}>Sign in to continue.</p>
+        {bannerReason === "missing_profile" && (
+          <p role="alert" style={{ margin: "0 0 12px", fontSize: "13px", color: "#9a6700" }}>
+            Your account could not load a profile in the database. Try again shortly, or contact support if this continues.
+          </p>
+        )}
         <form onSubmit={(e) => void submit(e)}>
           <label style={{ display: "block", fontSize: "13px", fontWeight: 600 }}>Email</label>
           <input

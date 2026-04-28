@@ -223,19 +223,18 @@ const SITE_PAGE_GROUPS: { title: string; pages: SitePageRow[] }[] = [
       {
         label: "Welcome",
         path: "/login",
-        description: "Post-checkout / onboarding handoff",
+        description: "Customer sign-in",
         gate: "public",
       },
     ],
   },
   {
-    title: "Customer app (paid subscription required)",
+    title: "Customer app (sign-in required)",
     pages: [
-      { label: "Dashboard", path: "/dashboard", description: "Paid app home", gate: "paid" },
+      { label: "Dashboard", path: "/dashboard", description: "App home", gate: "paid" },
       { label: "Denial queue", path: "/queue", description: "Queue list", gate: "paid" },
       { label: "New denial (start intake)", path: "/start", description: "Start new appeal flow", gate: "paid" },
       { label: "Appeal history", path: "/appeal-history", description: "Past appeals", gate: "paid" },
-      { label: "Billing", path: "/billing", description: "Subscription billing", gate: "paid" },
       { label: "Account", path: "/account", description: "Account settings", gate: "paid" },
       { label: "Profile", path: "/profile", description: "User profile", gate: "paid" },
     ],
@@ -391,12 +390,12 @@ function SitePagesTab() {
       <div style={styles.infoBox}>
         <h4 style={styles.infoTitle}>Using customer pages as admin</h4>
         <p style={styles.infoText}>
-          The paid app layout checks the customer&apos;s Supabase session and <code>is_paid</code> in the database.
+          The customer app requires a Supabase session and a matching <code>public.users</code> row.
           Keep this admin tab for operations; use a second tab with{" "}
           <a href="/login" target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>
             /login
           </a>{" "}
-          and a test or real paid account to exercise dashboards, queue, and intake flows end to end.
+          and a test account to exercise dashboards, queue, and intake flows end to end.
         </p>
       </div>
     </div>

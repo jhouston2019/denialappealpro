@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { createClient } from "@/lib/supabase/server";
 import { getInternalFlaskBaseUrl } from "@/lib/engine/forward-internal";
 
@@ -41,7 +41,7 @@ function parseBilled(raw: unknown): number {
 }
 
 export async function POST(request: NextRequest) {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
 
   const contentType = (request.headers.get("content-type") || "").toLowerCase();

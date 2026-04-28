@@ -4,10 +4,3 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-# Background-style name is reserved by Netlify; this file is named stripe-webhook-background.ts
-# and will run as a regular serverless function unless you add -background (Netlify convention).

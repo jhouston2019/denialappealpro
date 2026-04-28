@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios';
-import { loadStripe } from '@stripe/stripe-js';
 import './Pricing.css';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder');
+function nextApiOrigin() {
+  return (process.env.REACT_APP_NEXT_API_URL || '').replace(/\/$/, '');
+}
+
+async function fetchJson(path) {
+  const origin = nextApiOrigin();
+  const url = origin ? `${origin}${path}` : path;
+  const res = await fetch(url, { credentials: origin ? 'omit' : 'include' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
 /** Effective monthly when paying for 10 months (2 months free on annual). */
 function annualEffectiveMonthly(monthly) {
@@ -14,7 +22,6 @@ function annualEffectiveMonthly(monthly) {
 function Pricing() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
   const [pricingData, setPricingData] = useState(null);
   const [billingAnnual, setBillingAnnual] = useState(false);
 
@@ -24,8 +31,8 @@ function Pricing() {
 
   const fetchPricing = async () => {
     try {
-      const response = await api.get('/api/pricing/plans');
-      setPricingData(response.data);
+      const data = await fetchJson('/api/pricing/plans');
+      setPricingData(data);
     } catch (error) {
       console.error('Error fetching pricing:', error);
       setPricingData({ error: true });
@@ -49,28 +56,27 @@ function Pricing() {
   );
 
   const handleSubscribe = async (tier) => {
-    if (!email) {
-      alert('Please enter your email address');
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await api.post('/api/create-checkout-session', {
-        email,
-        plan: tier,
-        type: 'subscription',
+      const origin = nextApiOrigin();
+      const checkoutPath = '/api/create-checkout-session';
+      const url = origin ? `${origin}${checkoutPath}` : checkoutPath;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: tier, type: 'subscription' }),
+        credentials: origin ? 'omit' : 'include',
       });
-
-      const stripe = await stripePromise;
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: response.data.session_id,
-      });
-
-      if (error) {
-        console.error('Stripe error:', error);
-        alert('Payment error: ' + error.message);
+      const out = await res.json();
+      if (!res.ok) {
+        alert(out.error || 'Error creating subscription.');
+        return;
       }
+      if (!out.url) {
+        alert('No checkout URL returned.');
+        return;
+      }
+      window.location.assign(out.url);
     } catch (error) {
       console.error('Subscription error:', error);
       alert('Error creating subscription. Please try again.');
@@ -145,21 +151,6 @@ function Pricing() {
       </header>
 
       <div className="pricing-inner">
-        <div className="pricing-email-block">
-          <label htmlFor="pricing-email">Email address</label>
-          <input
-            id="pricing-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@practice.com"
-            autoComplete="email"
-          />
-          <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0.75rem 0 0', lineHeight: 1.4 }}>
-            Required for subscription checkout. Pay-as-you-go can start from the appeal form.
-          </p>
-        </div>
-
         <div className="billing-toggle-wrap">
           <div className="billing-toggle" role="group" aria-label="Billing period">
             <button

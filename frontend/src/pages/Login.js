@@ -13,6 +13,7 @@ const box = {
 };
 
 function loginErrorMessage(e2) {
+  if (e2?.message && typeof e2.message === 'string') return e2.message;
   const d = e2.response?.data;
   const status = e2.response?.status;
   if (typeof d?.error === 'string' && d.error) return d.error;
@@ -20,7 +21,7 @@ function loginErrorMessage(e2) {
   if (status === 429) return 'Too many login attempts. Wait up to an hour and try again.';
   if (status >= 500) return 'Server error. The API may be down or misconfigured.';
   if (!e2.response) {
-    return 'Cannot reach the server. Check your connection. If you are on https://denialappealpro.com, the API should be reachable; otherwise confirm REACT_APP_API_URL and that the backend allows this origin (CORS).';
+    return 'Cannot reach the server. Check your connection and Supabase configuration (REACT_APP_SUPABASE_URL / REACT_APP_SUPABASE_ANON_KEY).';
   }
   return 'Something went wrong';
 }

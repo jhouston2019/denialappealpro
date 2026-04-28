@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 
 function clip(val: unknown, maxLen: number) {
   const t = (val != null ? String(val) : "").trim();
@@ -9,7 +9,7 @@ function clip(val: unknown, maxLen: number) {
 }
 
 export async function GET() {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const svc = createServiceRoleClient();
   const { data, error } = await svc
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   let body: Record<string, unknown>;
   try {

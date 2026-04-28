@@ -238,8 +238,8 @@ function BulkQueueRows({ labels, job, jobKind }) {
 
 export default function OnboardingStart() {
   const router = useRouter();
-  const { isAuthenticated, authChecked, isPaid } = useAuth();
-  const showUnlockPricingCta = !isAuthenticated || !isPaid;
+  const { isAuthenticated, authChecked } = useAuth();
+  const showUnlockPricingCta = !isAuthenticated;
   const unlockPricingCtaBar = useMemo(
     () =>
       showUnlockPricingCta ? (
@@ -399,7 +399,7 @@ export default function OnboardingStart() {
 
   const onStep2ReviewContinue = async () => {
     setErr('');
-    const shouldBypassPreview = authChecked && isAuthenticated && isPaid === true;
+    const shouldBypassPreview = authChecked && isAuthenticated;
     if (shouldBypassPreview) {
       advanceSingle(2);
       return;

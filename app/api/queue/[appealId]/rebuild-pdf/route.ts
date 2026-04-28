@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { mapAppealToDetail } from "@/lib/queue/serialize-appeal";
 
 /**
  * Legacy endpoint: store-side PDF file path. Next.js uses on-demand PDF via /export; this bumps timestamps.
  */
 export async function POST(_request: Request, context: { params: Promise<{ appealId: string }> }) {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   const svc = createServiceRoleClient();

@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { STRIPE_VERSION } from "@/lib/stripe/process-checkout-session-completed";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+const STRIPE_API_VERSION = "2025-02-24.acacia" as const;
 
 function jsonResponse(data: Record<string, string | number | boolean>, status: number) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
@@ -29,7 +29,7 @@ function resolvePriceIdFromPlan(
 }
 
 /**
- * Stripe Checkout — anonymous; account is created on /success after payment.
+ * Stripe Checkout — returns hosted checkout URL only (no auth, no user metadata).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +43,6 @@ export async function POST(request: NextRequest) {
       plan?: string;
       mode?: "subscription" | "payment";
       type?: string;
-      email?: string;
     };
     try {
       body = (await request.json()) as typeof body;
@@ -51,7 +50,6 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "Invalid JSON" }, 400);
     }
 
-    const bodyEmail = (body.email || "").trim().toLowerCase();
     const plan = (body.plan || "").trim();
     const mode: "subscription" | "payment" =
       body.mode === "payment" || body.type === "payment" ? "payment" : "subscription";
@@ -81,37 +79,24 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ error: "NEXT_PUBLIC_SITE_URL is not set" }, 500);
     }
 
-    const successUrl = `${baseUrl.replace(/\/$/, "")}/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl.replace(/\/$/, "")}/pricing`;
+    const root = baseUrl.replace(/\/$/, "");
+    const successUrl = `${root}/pricing`;
+    const cancelUrl = `${root}/pricing`;
 
-    const metadata: Record<string, string> = { plan };
-    if (bodyEmail) {
-      metadata.email = bodyEmail;
-    }
+    const stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION });
 
-    const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
-
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    const session = await stripe.checkout.sessions.create({
       mode,
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata,
-    };
-    if (bodyEmail) {
-      sessionParams.customer_email = bodyEmail;
+    });
+
+    if (!session.url) {
+      return jsonResponse({ error: "Stripe did not return a checkout URL" }, 500);
     }
 
-    if (mode === "subscription" && !sessionParams.subscription_data) {
-      const subMetadata: Record<string, string> = { plan };
-      if (bodyEmail) {
-        subMetadata.email = bodyEmail;
-      }
-      sessionParams.subscription_data = { metadata: subMetadata };
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionParams);
-    return jsonResponse({ session_id: session.id }, 200);
+    return jsonResponse({ url: session.url }, 200);
   } catch (error) {
     console.error("[create-checkout-session] error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {

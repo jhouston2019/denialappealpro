@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../api/axios';
+import { getSupabaseBrowserClient } from '../lib/supabaseClient';
+import { getNewDenialsSinceVisit } from '../utils/denialsSinceVisit';
 import { useUser } from './UserContext';
 
 const AuthContext = createContext(null);
@@ -11,37 +12,80 @@ export function AuthProvider({ children }) {
   const [newDenialsBanner, setNewDenialsBanner] = useState(null);
   const [newDenialsDollarValue, setNewDenialsDollarValue] = useState(null);
 
-  const hydrateFromMe = useCallback((data) => {
-    setAuthUser(data.user);
-    if (typeof data.new_denials_since_visit === 'number') {
-      setNewDenialsBanner(data.new_denials_since_visit);
+  const refreshFromUserId = useCallback(async (userId) => {
+    const supabase = getSupabaseBrowserClient();
+    const { data: row, error } = await supabase
+      .from('users')
+      .select('id, email, last_queue_visit_at')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error || !row) {
+      setAuthUser(null);
+      setNewDenialsBanner(null);
+      setNewDenialsDollarValue(null);
+      return;
     }
-    if (typeof data.new_denials_dollar_value === 'number') {
-      setNewDenialsDollarValue(data.new_denials_dollar_value);
-    }
+    const { data: hasAppeal } = await supabase
+      .from('appeals')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
+    const hasData = hasAppeal != null;
+    const lastV = row.last_queue_visit_at;
+    const d = await getNewDenialsSinceVisit(supabase, userId, lastV);
+    setAuthUser({
+      id: row.id,
+      email: row.email,
+      has_data: hasData,
+    });
+    setNewDenialsBanner(d.count);
+    setNewDenialsDollarValue(d.dollarValue);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .get('/api/auth/me')
-      .then(({ data }) => {
+    let subscription;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const init = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
         if (cancelled) return;
-        hydrateFromMe(data);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setAuthUser(null);
-        setNewDenialsBanner(null);
-        setNewDenialsDollarValue(null);
-      })
-      .finally(() => {
+        if (!session?.user) {
+          setAuthUser(null);
+          setNewDenialsBanner(null);
+          setNewDenialsDollarValue(null);
+          setAuthChecked(true);
+          return;
+        }
+        await refreshFromUserId(session.user.id);
         if (!cancelled) setAuthChecked(true);
+      };
+      void init();
+      const sub = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (cancelled) return;
+        if (!session?.user) {
+          setAuthUser(null);
+          setNewDenialsBanner(null);
+          setNewDenialsDollarValue(null);
+          setAuthChecked(true);
+          return;
+        }
+        await refreshFromUserId(session.user.id);
+        setAuthChecked(true);
       });
+      subscription = sub.data.subscription;
+    } catch {
+      if (!cancelled) {
+        setAuthUser(null);
+        setAuthChecked(true);
+      }
+    }
     return () => {
       cancelled = true;
+      subscription?.unsubscribe();
     };
-  }, [hydrateFromMe]);
+  }, [refreshFromUserId]);
 
   useEffect(() => {
     if (authUser) {
@@ -51,39 +95,36 @@ export function AuthProvider({ children }) {
     }
   }, [authUser, setUser, clearUser]);
 
-  const applySession = useCallback(
-    (payload) => {
-      if (payload?.user) setAuthUser(payload.user);
-      if (typeof payload?.new_denials_since_visit === 'number') {
-        setNewDenialsBanner(payload.new_denials_since_visit);
-      }
-      if (typeof payload?.new_denials_dollar_value === 'number') {
-        setNewDenialsDollarValue(payload.new_denials_dollar_value);
-      }
-    },
-    []
-  );
-
   const login = async (email, password) => {
-    const { data } = await api.post('/api/auth/login', { email, password });
-    hydrateFromMe(data);
-    return data;
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await refreshFromUserId(session.user.id);
   };
 
   const register = async (email, password) => {
+    const supabase = getSupabaseBrowserClient();
     const referralCode = (typeof localStorage !== 'undefined' && localStorage.getItem('dap_ref')) || '';
-    const { data } = await api.post('/api/auth/register', {
-      email,
+    const { error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
       password,
-      referral_code: referralCode || undefined,
+      options: {
+        data: referralCode ? { referral_code: referralCode } : {},
+      },
     });
-    hydrateFromMe(data);
-    return data;
+    if (error) throw error;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await refreshFromUserId(session.user.id);
   };
 
   const logout = useCallback(async () => {
     try {
-      await api.post('/api/auth/logout', {});
+      const supabase = getSupabaseBrowserClient();
+      await supabase.auth.signOut();
     } catch {
       /* still clear client */
     }
@@ -100,7 +141,14 @@ export function AuthProvider({ children }) {
 
   const markQueueViewed = useCallback(async () => {
     try {
-      await api.post('/api/auth/queue-viewed', {});
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user;
+      if (!u) return;
+      await supabase
+        .from('users')
+        .update({ last_queue_visit_at: new Date().toISOString() })
+        .eq('id', u.id);
     } finally {
       setNewDenialsBanner(0);
       setNewDenialsDollarValue(0);
@@ -108,10 +156,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshMe = useCallback(async () => {
-    const { data } = await api.get('/api/auth/me');
-    hydrateFromMe(data);
-    return data;
-  }, [hydrateFromMe]);
+    const supabase = getSupabaseBrowserClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await refreshFromUserId(session.user.id);
+  }, [refreshFromUserId]);
+
+  const applySession = useCallback(
+    (payload) => {
+      if (payload?.user) setAuthUser(payload.user);
+      if (typeof payload?.new_denials_since_visit === 'number') {
+        setNewDenialsBanner(payload.new_denials_since_visit);
+      }
+      if (typeof payload?.new_denials_dollar_value === 'number') {
+        setNewDenialsDollarValue(payload.new_denials_dollar_value);
+      }
+    },
+    []
+  );
 
   const value = {
     authChecked,

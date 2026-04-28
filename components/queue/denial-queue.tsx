@@ -449,67 +449,6 @@ export default function DenialQueue({ variant = "queue" }: { variant?: "queue" |
         </div>
       )}
 
-      {metrics?.usage?.plan_usage_label && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>
-            Plan usage: {metrics.usage.plan_usage_label} appeals this period
-            {metrics.usage.soft_grace_remaining != null && (metrics.usage.plan_limit ?? 0) > 0 && (
-              <span style={{ color: "#64748b", marginLeft: 8 }}>(grace remaining: {metrics.usage.soft_grace_remaining})</span>
-            )}
-          </div>
-          <div style={{ height: 8, background: "#e5e7eb", borderRadius: 4, maxWidth: 360 }}>
-            <div
-              style={{
-                height: 8,
-                width: `${Math.min(100, metrics.usage.usage_percentage || 0)}%`,
-                background: metrics.usage.at_hard_cap ? "#dc2626" : "#0f766e",
-                borderRadius: 4,
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {metrics?.usage?.upgrade_message && (
-        <div
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            padding: 12,
-            borderRadius: 6,
-            marginBottom: 16,
-            fontSize: 14,
-          }}
-        >
-          {metrics.usage.upgrade_message}{" "}
-          <Link href="/pricing" style={{ fontWeight: 600 }}>
-            View plans
-          </Link>
-        </div>
-      )}
-
-      {metrics?.usage && !metrics.usage.subscription_tier && typeof metrics.usage.free_trial_remaining === "number" && (
-        <div
-          style={{
-            border: "1px solid #34d399",
-            background: "#ecfdf5",
-            padding: 12,
-            borderRadius: 6,
-            marginBottom: 16,
-            fontSize: 14,
-            color: "#065f46",
-          }}
-        >
-          <strong>3 free claims offer:</strong> {metrics.usage.free_trial_label || `${metrics.usage.free_trial_used}/3 used`}.
-          {metrics.usage.free_trial_remaining > 0
-            ? ` ${metrics.usage.free_trial_remaining} free generation(s) left — then choose a plan.`
-            : " Free generations used — upgrade to continue."}{" "}
-          <Link href="/pricing" style={{ fontWeight: 600, color: "#047857" }}>
-            Upgrade
-          </Link>
-        </div>
-      )}
-
       {metrics && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, marginBottom: 4 }}>

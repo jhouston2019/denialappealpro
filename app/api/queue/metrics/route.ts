@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { buildUsageStats } from "@/lib/auth/build-usage-stats";
 
 /**
@@ -8,7 +8,7 @@ import { buildUsageStats } from "@/lib/auth/build-usage-stats";
  * Retention dashboard slice is stubbed until retention tables are wired in Next.
  */
 export async function GET() {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const svc = createServiceRoleClient();
   const uid = r.userId;

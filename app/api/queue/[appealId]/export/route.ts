@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { textToPdfBytes } from "@/lib/appeal/render-letter-pdf";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ appealId: string }> }) {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   const mode = (request.nextUrl.searchParams.get("mode") || "appeal").toLowerCase();

@@ -41,8 +41,6 @@ type PostGen = {
   free_trial_remaining?: number | null;
 };
 
-type Usage = Record<string, unknown>;
-
 function getApiErrorMessage(e: unknown) {
   if (e instanceof ApiError) {
     const d = e.response.data;
@@ -64,8 +62,6 @@ export default function ClaimDetailClient() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("unpaid");
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [paywallUsage, setPaywallUsage] = useState<Usage | null>(null);
   const [postGen, setPostGen] = useState<PostGen | null>(null);
   const [trackingStatus, setTrackingStatus] = useState("pending");
   const [payerFax, setPayerFax] = useState("");
@@ -105,17 +101,7 @@ export default function ClaimDetailClient() {
         setPostGen(data.post_generation);
       }
     } catch (e) {
-      if (e instanceof ApiError && e.response.status === 402) {
-        const d = e.response.data;
-        if (d && typeof d === "object" && "usage" in d) {
-          setPaywallUsage((d as { usage: Usage }).usage);
-        } else {
-          setPaywallUsage(null);
-        }
-        setPaywallOpen(true);
-      } else {
-        setErr(getApiErrorMessage(e));
-      }
+      setErr(getApiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -229,64 +215,6 @@ export default function ClaimDetailClient() {
 
   return (
     <div style={{ padding: "16px 20px", maxWidth: 900, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-      {paywallOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.5)",
-            zIndex: 1100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 10,
-              maxWidth: 400,
-              width: "100%",
-              padding: 24,
-              boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
-            }}
-          >
-            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Limit reached</h2>
-            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#334155" }}>
-              Upgrade or add credits to continue generating appeals.{" "}
-              {paywallUsage?.subscription_tier != null && (
-                <span style={{ display: "block", marginTop: 8, fontSize: 13, color: "#64748b" }}>Check your current plan in billing.</span>
-              )}
-            </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Link
-                href="/pricing"
-                style={{
-                  display: "inline-block",
-                  padding: "10px 18px",
-                  background: "#0f766e",
-                  color: "#fff",
-                  borderRadius: 6,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  fontSize: 14,
-                }}
-              >
-                View plans
-              </Link>
-              <button
-                type="button"
-                onClick={() => setPaywallOpen(false)}
-                style={{ padding: "10px 16px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {postGen && (
         <div
           style={{

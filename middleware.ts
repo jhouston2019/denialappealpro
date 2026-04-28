@@ -3,7 +3,7 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 /**
  * Refreshes Supabase auth (required for RSC to see the session) and forwards
- * app headers for login `next` and Stripe return handling.
+ * app headers for login `next` (pathname forwarded to layouts).
  */
 export async function middleware(request: NextRequest) {
   return updateSession(request);

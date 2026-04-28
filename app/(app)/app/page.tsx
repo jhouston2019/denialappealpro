@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
+import { hasAppealDataForUser } from "@/lib/auth/user-payload";
 
 /**
- * Entry hub under paid shell: single purchase → /upload; subscription → /dashboard.
- * Entitlement is synced in `app/(app)/app/layout.tsx` when landing as `/app?session_id=…`.
+ * Hub after /app: send users to dashboard if they have appeals, else onboarding upload.
  */
 export default async function AppEntryPage() {
   const supabase = await createClient();
@@ -12,18 +12,15 @@ export default async function AppEntryPage() {
   if (authErr || !authData.user) {
     redirect("/login?next=" + encodeURIComponent("/app"));
   }
+
   const svc = createServiceRoleClient();
-  const { data: row, error: rowErr } = await svc
-    .from("users")
-    .select("stripe_subscription_id")
-    .eq("id", authData.user.id)
-    .maybeSingle();
+  const { data: row, error: rowErr } = await svc.from("users").select("id").eq("id", authData.user.id).maybeSingle();
   if (rowErr || !row) {
     redirect("/login?next=" + encodeURIComponent("/app"));
   }
-  const isSubscription =
-    row.stripe_subscription_id != null && String(row.stripe_subscription_id).length > 0;
-  if (isSubscription) {
+
+  const hasData = await hasAppealDataForUser(authData.user.id);
+  if (hasData) {
     redirect("/dashboard");
   }
   redirect("/upload");

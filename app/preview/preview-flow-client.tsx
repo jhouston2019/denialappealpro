@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DAP_PREVIEW_PAYLOAD_KEY, type DapPreviewAnalysisResult, type DapPreviewPayloadStored } from "@/lib/dap/preview-flow";
-import { useAuth } from "@/hooks/use-auth";
 import { PreviewLetterDisplay } from "@/components/preview/preview-letter-display";
 
 const PAGE_BG = "#1e293b";
@@ -31,8 +30,6 @@ function strengthColor(s: DapPreviewAnalysisResult["appeal_strength"]): string {
 }
 
 export function PreviewFlowClient() {
-  const { isAuthenticated, isPaid } = useAuth();
-  const ctaToPricing = "/pricing";
   const [flowPayload, setFlowPayload] = useState<DapPreviewPayloadStored | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DapPreviewAnalysisResult | null>(null);
@@ -137,9 +134,6 @@ export function PreviewFlowClient() {
 
   const showLoadingOverlay = analyzeLoading || !analysis;
   const loadingLabel = LOADING_LINES[loadingPhase] ?? LOADING_LINES[LOADING_LINES.length - 1];
-  const letterLocked = !isPaid || !isAuthenticated;
-  const showPaywall = letterLocked;
-
   return (
     <div
       style={{
@@ -259,44 +253,7 @@ export function PreviewFlowClient() {
               ) : null}
             </div>
 
-            <PreviewLetterDisplay
-              letterText={analysis.appeal_letter ?? ""}
-              locked={letterLocked}
-              unlockHref={ctaToPricing}
-            />
-
-            {showPaywall ? (
-              <div
-                style={{
-                  background: "#0f172a",
-                  borderRadius: 16,
-                  padding: "28px 22px",
-                  border: "1px solid #334155",
-                }}
-              >
-                <h2 style={{ color: "#f8fafc", fontSize: 24, fontWeight: 800, margin: "0 0 8px" }}>
-                  Your appeal letter is ready
-                </h2>
-                <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.5, margin: "0 0 20px" }}>
-                  Continue to choose a plan and unlock the full letter with regulatory citations.
-                </p>
-                <Link
-                  href={ctaToPricing}
-                  style={{
-                    display: "inline-block",
-                    background: GREEN,
-                    color: "#fff",
-                    fontWeight: 800,
-                    fontSize: 16,
-                    padding: "14px 24px",
-                    borderRadius: 10,
-                    textDecoration: "none",
-                  }}
-                >
-                  Continue to plans →
-                </Link>
-              </div>
-            ) : null}
+            <PreviewLetterDisplay letterText={analysis.appeal_letter ?? ""} locked={false} unlockHref="/pricing" />
           </>
         ) : null}
       </div>

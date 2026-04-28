@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
-import UpgradeModal from '../components/UpgradeModal';
 
 const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -17,8 +16,6 @@ export default function ClaimDetail() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [paywallUsage, setPaywallUsage] = useState(null);
   const [postGen, setPostGen] = useState(null);
   const [trackingStatus, setTrackingStatus] = useState('pending');
   const [payerFax, setPayerFax] = useState('');
@@ -53,12 +50,7 @@ export default function ClaimDetail() {
         setPostGen(data.post_generation);
       }
     } catch (e) {
-      if (e.response?.status === 402) {
-        setPaywallUsage(e.response.data?.usage || null);
-        setPaywallOpen(true);
-      } else {
-        setErr(e.response?.data?.error || 'Generate failed');
-      }
+      setErr(e.response?.data?.error || 'Generate failed');
     } finally {
       setBusy(false);
     }
@@ -186,13 +178,6 @@ export default function ClaimDetail() {
 
   return (
     <div style={{ padding: '16px 20px', maxWidth: '900px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
-      <UpgradeModal
-        isOpen={paywallOpen}
-        onClose={() => setPaywallOpen(false)}
-        currentTier={paywallUsage?.subscription_tier}
-        usageStats={paywallUsage}
-      />
-
       {postGen && (
         <div
           style={{

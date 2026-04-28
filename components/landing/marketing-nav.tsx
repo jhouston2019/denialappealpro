@@ -44,7 +44,6 @@ export default function MarketingNav({ transparent = true }: Props) {
       : []),
     { label: "Pricing", href: "/pricing" },
     { label: "History", href: "/appeal-history" },
-    { label: "Billing", href: "/billing" },
   ];
 
   const isActive = (href: string) => {

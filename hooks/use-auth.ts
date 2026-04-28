@@ -7,13 +7,11 @@ import { getNewDenialsSinceVisit } from "@/lib/auth/denials-since-visit";
 type AuthUser = {
   id?: string;
   email?: string;
-  is_paid?: boolean | null;
   has_data?: boolean;
-  payment_verification_status?: string | null;
 } | null;
 
 /**
- * Supabase client session + public.users / appeals (RLS). No /api/auth/*.
+ * Supabase client session + public.users / appeals (RLS).
  */
 export function useAuth() {
   const [authUser, setAuthUser] = useState<AuthUser>(null);
@@ -25,7 +23,7 @@ export function useAuth() {
     const supabase = createClient();
     const { data: row, error } = await supabase
       .from("users")
-      .select("id, email, is_paid, payment_verification_status, last_queue_visit_at")
+      .select("id, email, last_queue_visit_at")
       .eq("id", userId)
       .maybeSingle();
     if (error || !row) {
@@ -46,10 +44,7 @@ export function useAuth() {
     setAuthUser({
       id: row.id as string,
       email: row.email as string,
-      is_paid: row.is_paid,
       has_data: hasData,
-      payment_verification_status: (row as { payment_verification_status?: string | null })
-        .payment_verification_status,
     });
     setNewDenialsBanner(d.count);
     setNewDenialsDollarValue(d.dollarValue);
@@ -108,12 +103,9 @@ export function useAuth() {
     setNewDenialsDollarValue(0);
   }, []);
 
-  const isPaid = Boolean(authUser?.is_paid === true);
-
   return {
     authChecked,
     isAuthenticated: Boolean(authUser),
-    isPaid,
     user: authUser,
     newDenialsBanner,
     newDenialsDollarValue,

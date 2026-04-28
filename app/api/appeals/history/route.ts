@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 /**
  * Logged-in user's appeals for Appeal History (replaces legacy GET /api/appeals/history for current user).
  */
 export async function GET() {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const svc = createServiceRoleClient();
   const { data, error } = await svc

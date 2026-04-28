@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requirePaidCustomer } from "@/lib/api/require-paid-customer";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 
 const MAX_PDF_BATCH_FILES = 100;
 
 export async function POST(request: NextRequest) {
-  const r = await requirePaidCustomer();
+  const r = await requireAuthenticatedUser();
   if (!r.ok) return r.response;
   const ct = (request.headers.get("content-type") || "").toLowerCase();
   if (!ct.includes("multipart/form-data")) {

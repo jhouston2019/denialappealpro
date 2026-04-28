@@ -59,16 +59,6 @@ export default function AccountClient() {
     }
   };
 
-  const openPortal = async () => {
-    setErr("");
-    try {
-      const { data } = await api.post<{ url: string }>("/api/stripe/create-portal", {});
-      if (data.url) window.location.href = data.url;
-    } catch (e) {
-      setErr(errMsg(e));
-    }
-  };
-
   if (loading || !p) {
     return (
       <div style={{ padding: 24, background: PAGE_BG_SLATE, minHeight: "60vh", color: TEXT_ON_SLATE }}>
@@ -156,21 +146,6 @@ export default function AccountClient() {
           style={{ padding: "10px 18px", fontWeight: 600, cursor: saving ? "wait" : "pointer", borderRadius: 6, border: "none", background: "#0d9488", color: "#fff" }}
         >
           {saving ? "Saving…" : "Save profile"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void openPortal()}
-          style={{
-            padding: "10px 18px",
-            fontWeight: 600,
-            cursor: "pointer",
-            borderRadius: 6,
-            border: "1px solid #64748b",
-            background: "transparent",
-            color: TEXT_ON_SLATE,
-          }}
-        >
-          Manage billing
         </button>
       </div>
     </div>

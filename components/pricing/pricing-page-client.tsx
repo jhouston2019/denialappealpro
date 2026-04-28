@@ -1,10 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
-
-const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
 
 const INK = "#1e293b";
 const CHECK = "#22c55e";
@@ -35,10 +31,6 @@ export default function PricingPageClient({ userEmail }: Props) {
       );
       return;
     }
-    if (!stripePromise) {
-      window.alert("Stripe is not configured (set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and STRIPE_*_PRICE_ID).");
-      return;
-    }
     setLoading(true);
     try {
       const response = await fetch("/api/create-checkout-session", {
@@ -48,29 +40,19 @@ export default function PricingPageClient({ userEmail }: Props) {
           plan: "single",
           type: "payment" as const,
           price_id: singlePriceId,
-          email: (userEmail || "").trim(),
         }),
         credentials: "include",
       });
-      const out = (await response.json()) as { session_id?: string; error?: string };
+      const out = (await response.json()) as { url?: string; error?: string };
       if (!response.ok) {
         window.alert(out.error || "Error creating checkout session.");
         return;
       }
-      if (!out.session_id) {
-        window.alert("No session returned.");
+      if (!out.url) {
+        window.alert("No checkout URL returned.");
         return;
       }
-      const stripe = await stripePromise;
-      if (!stripe) {
-        window.alert("Stripe failed to load.");
-        return;
-      }
-      const { error } = await stripe.redirectToCheckout({ sessionId: out.session_id });
-      if (error) {
-        console.error("Stripe error:", error);
-        window.alert("Payment error: " + error.message);
-      }
+      window.location.assign(out.url);
     } catch (e) {
       console.error("Single appeal checkout error:", e);
       window.alert("Error starting checkout. Please try again.");
@@ -80,10 +62,6 @@ export default function PricingPageClient({ userEmail }: Props) {
   };
 
   const handleSubscribe = async (tier: "essential" | "professional" | "enterprise") => {
-    if (!stripePromise) {
-      window.alert("Stripe is not configured (set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and STRIPE_*_PRICE_ID).");
-      return;
-    }
     setLoading(true);
     try {
       const response = await fetch("/api/create-checkout-session", {
@@ -92,29 +70,19 @@ export default function PricingPageClient({ userEmail }: Props) {
         body: JSON.stringify({
           plan: tier,
           type: "subscription",
-          email: (userEmail || "").trim(),
         }),
         credentials: "include",
       });
-      const out = (await response.json()) as { session_id?: string; error?: string };
+      const out = (await response.json()) as { url?: string; error?: string };
       if (!response.ok) {
         window.alert(out.error || "Error creating subscription.");
         return;
       }
-      if (!out.session_id) {
-        window.alert("No session returned.");
+      if (!out.url) {
+        window.alert("No checkout URL returned.");
         return;
       }
-      const stripe = await stripePromise;
-      if (!stripe) {
-        window.alert("Stripe failed to load.");
-        return;
-      }
-      const { error } = await stripe.redirectToCheckout({ sessionId: out.session_id });
-      if (error) {
-        console.error("Stripe error:", error);
-        window.alert("Payment error: " + error.message);
-      }
+      window.location.assign(out.url);
     } catch (e) {
       console.error("Subscription error:", e);
       window.alert("Error creating subscription. Please try again.");
@@ -149,11 +117,7 @@ export default function PricingPageClient({ userEmail }: Props) {
               <span className="dap-pricing-period">(one-time)</span>
             </p>
             <ul className="dap-pricing-features" style={{ color: INK }}>
-              {[
-                "1 appeal",
-                ...BASE_FEATURES,
-                "No subscription required",
-              ].map((line) => (
+              {["1 appeal", ...BASE_FEATURES, "No subscription required"].map((line) => (
                 <li key={line}>
                   <span className="dap-pricing-check" style={{ color: CHECK }} aria-hidden>
                     ✓
@@ -180,19 +144,16 @@ export default function PricingPageClient({ userEmail }: Props) {
               <span className="dap-pricing-period">/month — 10 appeals</span>
             </p>
             <ul className="dap-pricing-features" style={{ color: INK }}>
-              {[
-                "10 appeals per month",
-                "Unused appeals roll over (up to 1 month)",
-                ...BASE_FEATURES,
-                "Priority processing",
-              ].map((line) => (
-                <li key={line}>
-                  <span className="dap-pricing-check" style={{ color: CHECK }} aria-hidden>
-                    ✓
-                  </span>
-                  {line}
-                </li>
-              ))}
+              {["10 appeals per month", "Unused appeals roll over (up to 1 month)", ...BASE_FEATURES, "Priority processing"].map(
+                (line) => (
+                  <li key={line}>
+                    <span className="dap-pricing-check" style={{ color: CHECK }} aria-hidden>
+                      ✓
+                    </span>
+                    {line}
+                  </li>
+                )
+              )}
             </ul>
             <button
               type="button"
@@ -276,9 +237,7 @@ export default function PricingPageClient({ userEmail }: Props) {
           </article>
         </div>
 
-        <p className="dap-pricing-trust">
-          No contracts. Cancel anytime. Appeals generated in under 60 seconds.
-        </p>
+        <p className="dap-pricing-trust">No contracts. Cancel anytime. Appeals generated in under 60 seconds.</p>
       </div>
     </div>
   );

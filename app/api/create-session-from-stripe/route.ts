@@ -11,103 +11,51 @@ function jsonResponse(data: Record<string, unknown>, status: number) {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
 
-async function findUserByEmail(
-  service: ReturnType<typeof createServiceRoleClient>,
-  email: string
-) {
-  const e = email.toLowerCase();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await service.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) {
-      return null;
-    }
-    const found = data.users.find((u) => (u.email || "").toLowerCase() === e);
-    if (found) {
-      return found;
-    }
-    if (data.users.length < 200) {
-      break;
-    }
-  }
-  return null;
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { session_id?: string };
-    const { session_id } = body;
-    if (!session_id) {
-      return jsonResponse({ error: "session_id required" }, 400);
-    }
+    const { session_id } = (await request.json()) as { session_id?: string };
+    if (!session_id) return jsonResponse({ error: "session_id required" }, 400);
 
     const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) {
-      return jsonResponse({ error: "Stripe not configured" }, 500);
-    }
+    if (!key) return jsonResponse({ error: "Stripe not configured" }, 500);
 
     const stripe = new Stripe(key, { apiVersion: STRIPE_VERSION });
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    const emailRaw = session.customer_details?.email || session.customer_email;
-    if (!emailRaw || String(emailRaw).trim().length === 0) {
-      return jsonResponse({ error: "No email on Stripe session" }, 400);
-    }
-    const email = String(emailRaw).trim().toLowerCase();
+    const email =
+      session.customer_details?.email?.trim().toLowerCase() ||
+      session.customer_email?.trim().toLowerCase() ||
+      (session.metadata?.email || "").trim().toLowerCase();
+
+    if (!email) return jsonResponse({ error: "No email on Stripe session" }, 400);
 
     const serviceRole = createServiceRoleClient();
 
-    let user = await findUserByEmail(serviceRole, email);
+    // User should already exist (webhook ran) — but create if not
+    const { data: listData } = await serviceRole.auth.admin.listUsers({ perPage: 1000 });
+    let user = listData?.users?.find((u) => u.email?.toLowerCase() === email);
 
     if (!user) {
-      const tempPassword = randomUUID() + "Aa!1" + randomUUID();
       const { data: created, error: createErr } = await serviceRole.auth.admin.createUser({
         email,
-        password: tempPassword,
         email_confirm: true,
+        password: randomUUID(),
       });
-      if (createErr) {
-        user = await findUserByEmail(serviceRole, email);
-        if (!user) {
-          return jsonResponse(
-            { error: createErr.message || "Failed to create user" },
-            500
-          );
-        }
-      } else if (created.user) {
-        user = created.user;
-      } else {
-        return jsonResponse({ error: "Failed to create user" }, 500);
+      if (createErr || !created.user) {
+        return jsonResponse({ error: "Failed to find or create user" }, 500);
       }
+      user = created.user;
     }
 
-    const customerId =
-      typeof session.customer === "string"
-        ? session.customer
-        : (session.customer as { id?: string } | null)?.id ?? null;
-
-    const { error: upsertErr } = await serviceRole.from("users").upsert(
-      {
-        id: user.id,
-        email: email.toLowerCase(),
-        is_paid: true,
-        plan_limit: 0,
-        ...(customerId ? { stripe_customer_id: customerId } : {}),
-      },
-      { onConflict: "id", ignoreDuplicates: false }
-    );
-
-    if (upsertErr) {
-      return jsonResponse({ error: upsertErr.message }, 500);
-    }
-
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+    // Mint session via magic link
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
     const { data: linkData, error: linkErr } = await serviceRole.auth.admin.generateLink({
       type: "magiclink",
       email,
-      options: { redirectTo: `${siteUrl.replace(/\/$/, "")}/success` },
+      options: { redirectTo: `${siteUrl}/success` },
     });
-    const hashed = linkData?.properties?.hashed_token;
-    if (linkErr || !hashed) {
+
+    if (linkErr || !linkData?.properties?.hashed_token) {
       return jsonResponse({ error: "Failed to generate magic link" }, 500);
     }
 
@@ -115,10 +63,11 @@ export async function POST(request: NextRequest) {
     const { error: otpErr } = await browserClient.auth.verifyOtp({
       type: "email",
       email,
-      token_hash: hashed,
+      token_hash: linkData.properties.hashed_token,
     });
+
     if (otpErr) {
-      return jsonResponse({ error: "Failed to establish session" }, 500);
+      return jsonResponse({ error: `verifyOtp failed: ${otpErr.message}` }, 500);
     }
 
     return jsonResponse({ ok: true, email }, 200);

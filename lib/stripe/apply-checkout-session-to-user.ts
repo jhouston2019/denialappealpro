@@ -1,12 +1,10 @@
+import { randomUUID } from "crypto";
 import type Stripe from "stripe";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 /**
- * Idempotent: Stripe Checkout completion → entitlement on `public.users` only
- * (no auth users, no sessions, no other columns).
+ * Idempotent: find or create auth user from Stripe email, upsert public.users with is_paid.
+ * Works for anonymous checkout — no metadata.user_id required.
  */
 export async function applyPaidStateFromCheckoutSession(
   session: Stripe.Checkout.Session
@@ -18,34 +16,62 @@ export async function applyPaidStateFromCheckoutSession(
     return { ok: false, error: "Payment not complete", code: "metadata" };
   }
 
-  const metadata = session.metadata || {};
-  const userId = `${metadata.user_id || ""}`.trim();
-  const metaEmail = `${metadata.email || ""}`.trim().toLowerCase();
-  if (!userId || !UUID_RE.test(userId) || !metaEmail) {
-    return { ok: false, error: "Invalid or missing user_id in session metadata", code: "metadata" };
+  const email =
+    session.customer_details?.email?.trim().toLowerCase() ||
+    session.customer_email?.trim().toLowerCase() ||
+    (session.metadata?.email || "").trim().toLowerCase();
+
+  if (!email) {
+    return { ok: false, error: "No email on Stripe session", code: "metadata" };
   }
 
   const customerId = typeof session.customer === "string" ? session.customer : null;
   const subId = typeof session.subscription === "string" ? session.subscription : null;
 
-  const supabase = createServiceRoleClient();
-  const { data: updatedRows, error: upErr } = await supabase
-    .from("users")
-    .update({
-      is_paid: true,
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subId,
-    })
-    .eq("id", userId)
-    .eq("email", metaEmail)
-    .select("id");
+  const serviceRole = createServiceRoleClient();
 
-  if (upErr) {
-    console.error("[apply-checkout] users update failed:", upErr);
-    return { ok: false, error: "User update failed", code: "db" };
+  // Find or create Supabase auth user by email
+  let userId: string;
+  const { data: listData } = await serviceRole.auth.admin.listUsers({ perPage: 1000 });
+  const existing = listData?.users?.find((u) => u.email?.toLowerCase() === email);
+
+  if (existing) {
+    userId = existing.id;
+  } else {
+    const { data: created, error: createErr } = await serviceRole.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      password: randomUUID(),
+    });
+    if (createErr || !created.user) {
+      // May have been created by a race — try lookup again
+      const { data: retry } = await serviceRole.auth.admin.listUsers({ perPage: 1000 });
+      const found = retry?.users?.find((u) => u.email?.toLowerCase() === email);
+      if (!found) {
+        return { ok: false, error: `Failed to create user: ${createErr?.message}`, code: "db" };
+      }
+      userId = found.id;
+    } else {
+      userId = created.user.id;
+    }
   }
-  if (!updatedRows?.length) {
-    return { ok: false, error: "User profile not found for this checkout", code: "db" };
+
+  // Upsert public.users — handles trigger race via onConflict
+  const { error: upsertErr } = await serviceRole.from("users").upsert(
+    {
+      id: userId,
+      email,
+      is_paid: true,
+      plan_limit: 0,
+      ...(customerId ? { stripe_customer_id: customerId } : {}),
+      ...(subId ? { stripe_subscription_id: subId } : {}),
+    },
+    { onConflict: "id", ignoreDuplicates: false }
+  );
+
+  if (upsertErr) {
+    console.error("[apply-checkout] upsert failed:", upsertErr);
+    return { ok: false, error: upsertErr.message, code: "db" };
   }
 
   return { ok: true, userId };

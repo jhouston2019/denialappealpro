@@ -31,9 +31,13 @@ export async function processCheckoutSessionCompletedEvent(
   const session = stripeEvent.data.object as Stripe.Checkout.Session;
   const applied = await applyPaidStateFromCheckoutSession(session);
   if (!applied.ok) {
+    // metadata errors (no email, not complete) are not retryable — ack to Stripe
     if (applied.code === "metadata") {
-      return { statusCode: 200, body: { received: true, ignored: applied.error } };
+      console.warn("[webhook] skipped:", applied.error);
+      return { statusCode: 200, body: { received: true, skipped: applied.error } };
     }
+    // db errors are retryable — return 500 so Stripe retries
+    console.error("[webhook] db error:", applied.error);
     return { statusCode: 500, body: { error: applied.error } };
   }
 

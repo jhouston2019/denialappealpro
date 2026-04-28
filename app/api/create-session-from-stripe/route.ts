@@ -81,37 +81,23 @@ export async function POST(request: NextRequest) {
     }
 
     const customerId =
-      typeof session.customer === "string" ? session.customer : (session.customer as { id?: string } | null)?.id ?? null;
+      typeof session.customer === "string"
+        ? session.customer
+        : (session.customer as { id?: string } | null)?.id ?? null;
 
-    const { data: existingRow, error: existErr } = await serviceRole
-      .from("users")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (existErr) {
-      return jsonResponse({ error: existErr.message }, 500);
-    }
-
-    if (!existingRow) {
-      const { error: insErr } = await serviceRole.from("users").insert({
+    const { error: upsertErr } = await serviceRole.from("users").upsert(
+      {
         id: user.id,
-        email,
+        email: email.toLowerCase(),
         is_paid: true,
         plan_limit: 0,
-        stripe_customer_id: customerId,
-      });
-      if (insErr) {
-        return jsonResponse({ error: insErr.message }, 500);
-      }
-    } else {
-      const { error: upErr } = await serviceRole
-        .from("users")
-        .update({ is_paid: true, ...(customerId ? { stripe_customer_id: customerId } : {}) })
-        .eq("id", user.id);
-      if (upErr) {
-        return jsonResponse({ error: upErr.message }, 500);
-      }
+        ...(customerId ? { stripe_customer_id: customerId } : {}),
+      },
+      { onConflict: "id", ignoreDuplicates: false }
+    );
+
+    if (upsertErr) {
+      return jsonResponse({ error: upsertErr.message }, 500);
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;

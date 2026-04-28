@@ -1,4 +1,5 @@
 import { getNewDenialsSinceVisit as getNewDenialsWithClient } from "@/lib/auth/denials-since-visit";
+import { normalizeUserEmail } from "./normalize-user-email";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -10,12 +11,7 @@ export type PublicUserRow = {
   last_active_at: string | null;
 };
 
-/** Match Stripe / webhook storage: trim + lowercase for public.users.email lookups. */
-export function normalizeUserEmail(raw: string | null | undefined): string | null {
-  if (!raw || typeof raw !== "string") return null;
-  const e = raw.trim().toLowerCase();
-  return e || null;
-}
+export { normalizeUserEmail };
 
 export async function getPublicUserByEmail(email: string): Promise<PublicUserRow | null> {
   const normalized = normalizeUserEmail(email);

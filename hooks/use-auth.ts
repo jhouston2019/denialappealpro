@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getNewDenialsSinceVisit } from "@/lib/auth/denials-since-visit";
-import { normalizeUserEmail } from "@/lib/auth/user-payload";
+import { normalizeUserEmail } from "@/lib/auth/normalize-user-email";
 import { createClient } from "@/lib/supabase/browser";
 
 type AuthUser = {

@@ -17,6 +17,9 @@ const LOADING_LINES = [
   "Building appeal strategy...",
 ] as const;
 
+/** Preview route only: UI blur + disabled exports; no billing checks. */
+const isPreview = true;
+
 function confidenceColor(c: DapPreviewAnalysisResult["confidence"]): string {
   if (c === "High") return GREEN;
   if (c === "Low") return RED;
@@ -253,7 +256,7 @@ export function PreviewFlowClient() {
               ) : null}
             </div>
 
-            <PreviewLetterDisplay letterText={analysis.appeal_letter ?? ""} locked={false} unlockHref="/pricing" />
+            <PreviewLetterDisplay letterText={analysis.appeal_letter ?? ""} isPreview={isPreview} unlockHref="/pricing" />
           </>
         ) : null}
       </div>

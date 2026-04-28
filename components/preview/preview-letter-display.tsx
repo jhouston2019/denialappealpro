@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState, useMemo, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const MUTED = "#94a3b8";
@@ -11,7 +11,7 @@ const CARD = "#ffffff";
 const BORDER = "#e2e8f0";
 const UNLOCK_TIP = "Unlock your appeal to download";
 
-const blurLocked: CSSProperties = {
+const blurPreview: CSSProperties = {
   filter: "blur(4px)",
   userSelect: "none",
   pointerEvents: "none",
@@ -23,99 +23,6 @@ function escapeHtml(s: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-/** Splits on blank lines; single block stays one paragraph. */
-export function splitAppealLetterParagraphs(text: string): string[] {
-  const t = (text || "").trim();
-  if (!t) return [];
-  const byDouble = t.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (byDouble.length > 0) return byDouble;
-  return [t];
-}
-
-const SALUTATION_RE = /^(dear|to whom it may concern|greetings|hello)\b/i;
-
-/**
- * Splits the letter for preview lock UI:
- * - letterhead: through the "Re:" line, or the first block if there is no Re: line
- * - salutation: e.g. "Dear Payer", when a following body paragraph exists
- * - firstBody: first substantive paragraph after the letterhead
- * - rest: everything after the first body paragraph
- */
-function splitPreviewLetterForLock(letterText: string): {
-  letterhead: string;
-  salutation: string;
-  firstBody: string;
-  rest: string;
-} {
-  const t = (letterText || "").replace(/\r\n/g, "\n");
-  if (!t.trim()) {
-    return { letterhead: "", salutation: "", firstBody: "", rest: "" };
-  }
-
-  const lines = t.split("\n");
-  let reIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    if (/^\s*re:\s*/i.test(line) || /^\s*re\s*[\-–—:]\s*/i.test(line.trimStart())) {
-      reIdx = i;
-      break;
-    }
-  }
-
-  let letterhead: string;
-  let afterHead: string;
-  if (reIdx >= 0) {
-    letterhead = lines.slice(0, reIdx + 1).join("\n").trimEnd();
-    afterHead = lines.slice(reIdx + 1).join("\n");
-  } else {
-    const paras = t
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-    if (paras.length >= 1) {
-      letterhead = paras[0] ?? "";
-      afterHead = paras.slice(1).join("\n\n");
-    } else {
-      letterhead = t;
-      afterHead = "";
-    }
-  }
-
-  afterHead = afterHead.replace(/^\n+/, "").trimStart();
-  if (!afterHead) {
-    return { letterhead, salutation: "", firstBody: "", rest: "" };
-  }
-
-  const bodyParts = afterHead
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (bodyParts.length === 0) {
-    return { letterhead, salutation: "", firstBody: "", rest: "" };
-  }
-
-  if (bodyParts.length === 1) {
-    return { letterhead, salutation: "", firstBody: bodyParts[0] ?? "", rest: "" };
-  }
-
-  const first = bodyParts[0] ?? "";
-  const second = bodyParts[1] ?? "";
-  const isSal = SALUTATION_RE.test(first);
-
-  if (isSal) {
-    const firstBody = second;
-    const rest = bodyParts.slice(2).join("\n\n");
-    return { letterhead, salutation: first, firstBody, rest };
-  }
-
-  return {
-    letterhead,
-    salutation: "",
-    firstBody: first,
-    rest: bodyParts.slice(1).join("\n\n"),
-  };
 }
 
 function wrapLine(line: string, maxChars: number): string[] {
@@ -214,7 +121,9 @@ function UnlockOverlay({ href }: { href: string }) {
           border: `1px solid ${BORDER}`,
         }}
       >
-        <p style={{ margin: "0 0 14px", color: NAVY, fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>Your full appeal letter is ready.</p>
+        <p style={{ margin: "0 0 14px", color: NAVY, fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
+          Your full appeal letter is ready.
+        </p>
         <Link
           href={href}
           style={{
@@ -228,7 +137,7 @@ function UnlockOverlay({ href }: { href: string }) {
             textDecoration: "none",
           }}
         >
-          Unlock My Appeal →
+          Unlock Full Letter →
         </Link>
       </div>
     </div>
@@ -237,31 +146,28 @@ function UnlockOverlay({ href }: { href: string }) {
 
 export type PreviewLetterDisplayProps = {
   letterText: string;
-  /** When true: blur after letterhead (salutation + all but first body para), lock buttons */
-  locked: boolean;
-  /** CTA: signed-out → `/login?next=/pricing`; signed-in → `/pricing` (from preview flow) */
+  /** Public preview route: full letter blurred, CTA overlay, downloads off. Product route: false. Pure UI only. */
+  isPreview: boolean;
   unlockHref?: string;
 };
 
-export function PreviewLetterDisplay({ letterText, locked, unlockHref = "/pricing" }: PreviewLetterDisplayProps) {
+export function PreviewLetterDisplay({ letterText, isPreview, unlockHref = "/pricing" }: PreviewLetterDisplayProps) {
   const [copyBusy, setCopyBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docxBusy, setDocxBusy] = useState(false);
 
-  const split = useMemo(() => splitPreviewLetterForLock(letterText), [letterText]);
-
   const doCopy = useCallback(async () => {
-    if (locked) return;
+    if (isPreview) return;
     setCopyBusy(true);
     try {
       await navigator.clipboard.writeText((letterText || "").replace(/\r\n/g, "\n").trim());
     } finally {
       setCopyBusy(false);
     }
-  }, [letterText, locked]);
+  }, [letterText, isPreview]);
 
   const doPdf = useCallback(async () => {
-    if (locked) return;
+    if (isPreview) return;
     setPdfBusy(true);
     try {
       const bytes = await buildLetterPdfBytes((letterText || "").replace(/\r\n/g, "\n"));
@@ -275,10 +181,10 @@ export function PreviewLetterDisplay({ letterText, locked, unlockHref = "/pricin
     } finally {
       setPdfBusy(false);
     }
-  }, [letterText, locked]);
+  }, [letterText, isPreview]);
 
   const doDocx = useCallback(() => {
-    if (locked) return;
+    if (isPreview) return;
     setDocxBusy(true);
     try {
       const text = (letterText || "").replace(/\r\n/g, "\n");
@@ -294,10 +200,10 @@ export function PreviewLetterDisplay({ letterText, locked, unlockHref = "/pricin
     } finally {
       setDocxBusy(false);
     }
-  }, [letterText, locked]);
+  }, [letterText, isPreview]);
 
   const hasLetter = (letterText || "").trim().length > 0;
-  const { letterhead, salutation, firstBody, rest } = split;
+  const normalized = letterText.replace(/\r\n/g, "\n");
 
   return (
     <div
@@ -336,81 +242,55 @@ export function PreviewLetterDisplay({ letterText, locked, unlockHref = "/pricin
       >
         {!hasLetter ? (
           <p style={{ margin: 0, color: MUTED }}>No letter text yet.</p>
-        ) : !locked ? (
-          <div style={preWrap}>{letterText.replace(/\r\n/g, "\n")}</div>
+        ) : isPreview ? (
+          <div style={{ position: "relative", minHeight: 160 }}>
+            <div style={blurPreview}>
+              <div style={preWrap}>{normalized}</div>
+            </div>
+            <UnlockOverlay href={unlockHref} />
+          </div>
         ) : (
-          <>
-            {letterhead ? (
-              <div style={{ marginBottom: salutation || firstBody || rest ? 20 : 0 }}>
-                <p style={preWrap}>{letterhead}</p>
-              </div>
-            ) : null}
-
-            {locked && salutation ? (
-              <div
-                style={{
-                  position: "relative",
-                  marginBottom: firstBody || rest ? 16 : 0,
-                  minHeight: rest ? undefined : 80,
-                }}
-              >
-                <div style={blurLocked}>
-                  <p style={preWrap}>{salutation}</p>
-                </div>
-                {!rest && <UnlockOverlay href={unlockHref} />}
-              </div>
-            ) : null}
-
-            {firstBody ? (
-              <div
-                style={{
-                  marginBottom: rest ? 20 : 0,
-                  position: "relative",
-                  zIndex: 1,
-                  background: "#fafafa",
-                }}
-              >
-                <p style={preWrap}>{firstBody}</p>
-              </div>
-            ) : null}
-
-            {locked && rest ? (
-              <div style={{ position: "relative", margin: 0, minHeight: 120 }}>
-                <div style={blurLocked}>
-                  <p style={preWrap}>{rest}</p>
-                </div>
-                <UnlockOverlay href={unlockHref} />
-              </div>
-            ) : null}
-          </>
+          <div style={preWrap}>{normalized}</div>
         )}
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 10, marginTop: 20, alignItems: "center" }}>
         <button
           type="button"
-          title={locked ? UNLOCK_TIP : undefined}
-          disabled={locked || copyBusy}
+          title={isPreview ? UNLOCK_TIP : undefined}
+          disabled={isPreview || copyBusy}
           onClick={() => void doCopy()}
-          style={locked || copyBusy ? { ...btnDisabled, cursor: locked ? "not-allowed" : "wait" } : { ...btnPrimary, cursor: copyBusy ? "wait" : "pointer" }}
+          style={
+            isPreview || copyBusy
+              ? { ...btnDisabled, cursor: isPreview ? "not-allowed" : "wait" }
+              : { ...btnPrimary, cursor: copyBusy ? "wait" : "pointer" }
+          }
         >
           {copyBusy ? "Copying…" : "Copy letter"}
         </button>
         <button
           type="button"
-          title={locked ? UNLOCK_TIP : undefined}
-          disabled={locked || pdfBusy}
+          title={isPreview ? UNLOCK_TIP : undefined}
+          disabled={isPreview || pdfBusy}
           onClick={() => void doPdf()}
-          style={locked || pdfBusy ? { ...btnDisabled, cursor: locked ? "not-allowed" : "wait" } : { ...btnPrimary, cursor: pdfBusy ? "wait" : "pointer" }}
+          style={
+            isPreview || pdfBusy
+              ? { ...btnDisabled, cursor: isPreview ? "not-allowed" : "wait" }
+              : { ...btnPrimary, cursor: pdfBusy ? "wait" : "pointer" }
+          }
         >
           {pdfBusy ? "Preparing…" : "Download PDF"}
         </button>
         <button
           type="button"
-          title={locked ? UNLOCK_TIP : undefined}
-          disabled={locked || docxBusy}
+          title={isPreview ? UNLOCK_TIP : undefined}
+          disabled={isPreview || docxBusy}
           onClick={doDocx}
-          style={locked || docxBusy ? { ...btnDisabled, cursor: locked ? "not-allowed" : "wait" } : { ...btnPrimary, cursor: docxBusy ? "wait" : "pointer" }}
+          style={
+            isPreview || docxBusy
+              ? { ...btnDisabled, cursor: isPreview ? "not-allowed" : "wait" }
+              : { ...btnPrimary, cursor: docxBusy ? "wait" : "pointer" }
+          }
         >
           {docxBusy ? "Preparing…" : "Download DOCX"}
         </button>

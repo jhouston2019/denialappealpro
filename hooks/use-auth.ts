@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/browser";
 import { getNewDenialsSinceVisit } from "@/lib/auth/denials-since-visit";
+import { normalizeUserEmail } from "@/lib/auth/user-payload";
+import { createClient } from "@/lib/supabase/browser";
 
 type AuthUser = {
   id?: string;
@@ -19,12 +20,19 @@ export function useAuth() {
   const [newDenialsBanner, setNewDenialsBanner] = useState<number | null>(null);
   const [newDenialsDollarValue, setNewDenialsDollarValue] = useState<number | null>(null);
 
-  const refreshFromSession = useCallback(async (userId: string) => {
+  const refreshFromSession = useCallback(async (authUserId: string, emailRaw: string | null | undefined) => {
     const supabase = createClient();
+    const email = normalizeUserEmail(emailRaw);
+    if (!email) {
+      setAuthUser(null);
+      setNewDenialsBanner(null);
+      setNewDenialsDollarValue(null);
+      return;
+    }
     const { data: row, error } = await supabase
       .from("users")
       .select("id, email, last_queue_visit_at")
-      .eq("id", userId)
+      .eq("email", email)
       .maybeSingle();
     if (error || !row) {
       setAuthUser(null);
@@ -35,12 +43,12 @@ export function useAuth() {
     const { data: hasAppeal } = await supabase
       .from("appeals")
       .select("id")
-      .eq("user_id", userId)
+      .eq("user_id", authUserId)
       .limit(1)
       .maybeSingle();
     const hasData = hasAppeal != null;
     const lastV = (row as { last_queue_visit_at: string | null }).last_queue_visit_at;
-    const d = await getNewDenialsSinceVisit(supabase, userId, lastV);
+    const d = await getNewDenialsSinceVisit(supabase, authUserId, lastV);
     setAuthUser({
       id: row.id as string,
       email: row.email as string,
@@ -65,7 +73,7 @@ export function useAuth() {
         }
         return;
       }
-      await refreshFromSession(u.id);
+      await refreshFromSession(u.id, u.email);
       if (!cancelled) setAuthChecked(true);
     };
     void run();
@@ -78,7 +86,7 @@ export function useAuth() {
         setAuthChecked(true);
         return;
       }
-      await refreshFromSession(session.user.id);
+      await refreshFromSession(session.user.id, session.user.email);
       setAuthChecked(true);
     });
     return () => {
@@ -92,10 +100,12 @@ export function useAuth() {
     const { data: s } = await supabase.auth.getSession();
     const u = s.session?.user;
     if (!u) return;
+    const email = normalizeUserEmail(u.email);
+    if (!email) return;
     const { error } = await supabase
       .from("users")
       .update({ last_queue_visit_at: new Date().toISOString() })
-      .eq("id", u.id);
+      .eq("email", email);
     if (error) {
       console.error("[useAuth] markQueueViewed", error);
     }

@@ -45,7 +45,7 @@ export async function GET() {
     .gte("last_generated_at", todayStart)
     .lt("last_generated_at", todayEnd);
 
-  const usage = await buildUsageStats(uid);
+  const usage = await buildUsageStats(r.row.email);
 
   const est = rows
     .filter(

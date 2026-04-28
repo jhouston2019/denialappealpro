@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, context: Ctx) {
   if (userId !== r.userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const stats = await buildUsageStats(userId);
+  const stats = await buildUsageStats(r.row.email);
   if (!stats) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }

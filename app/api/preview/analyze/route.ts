@@ -11,6 +11,7 @@ import {
   buildPreviewLetterContextFromPreviewPayload,
   generateAppealPreviewLetter,
 } from "@/lib/appeal/generate-preview-letter";
+import { normalizeUserEmail } from "@/lib/auth/user-payload";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -124,13 +125,14 @@ export async function POST(request: NextRequest) {
     const {
       data: { user: authUser },
     } = await supa.auth.getUser();
-    if (authUser?.id) {
+    const profileEmail = normalizeUserEmail(authUser?.email);
+    if (authUser?.id && profileEmail) {
       isAnonymous = false;
       const svc = createServiceRoleClient();
       const { data: urow, error: profErr } = await svc
         .from("users")
         .select("provider_name, provider_npi, provider_address")
-        .eq("id", authUser.id)
+        .eq("email", profileEmail)
         .maybeSingle();
       if (profErr) {
         console.error("[preview/analyze] profile fetch warning", profErr);

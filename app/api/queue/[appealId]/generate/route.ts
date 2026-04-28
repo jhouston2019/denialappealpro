@@ -78,7 +78,7 @@ export async function POST(_request: Request, context: { params: Promise<{ appea
     .order("created_at", { ascending: true });
   const events = (evs || []) as { id: number; event_type: string; message: string | null; created_at: string | null }[];
   const claim = mapAppealToDetail(fresh as Record<string, unknown>, events, false, "");
-  const usage = await buildUsageStats(r.userId);
+  const usage = await buildUsageStats(r.row.email);
   return NextResponse.json(
     {
       claim,

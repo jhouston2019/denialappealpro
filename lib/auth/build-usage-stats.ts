@@ -1,18 +1,21 @@
+import { normalizeUserEmail } from "@/lib/auth/user-payload";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 /** Minimal /api/queue/metrics `usage` object for UpgradeModal / 402 responses. */
-export async function buildUsageStats(userId: string): Promise<Record<string, unknown> | null> {
+export async function buildUsageStats(userEmail: string): Promise<Record<string, unknown> | null> {
+  const email = normalizeUserEmail(userEmail);
+  if (!email) return null;
   const svc = createServiceRoleClient();
   const { data, error } = await svc
     .from("users")
     .select(
       "id, email, subscription_tier, plan_limit, appeals_generated_monthly, appeals_generated_weekly, appeals_generated_today, overage_count, billing_status, subscription_credits, bulk_credits, free_trial_generations_used"
     )
-    .eq("id", userId)
+    .eq("email", email)
     .maybeSingle();
   if (error || !data) return null;
   const u = data as {
-    id: string;
+    id: number;
     email: string;
     subscription_tier: string | null;
     plan_limit: number;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPublicUserById, type PublicUserRow } from "@/lib/auth/user-payload";
+import { getPublicUserByEmail, normalizeUserEmail, type PublicUserRow } from "@/lib/auth/user-payload";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthenticatedUser = { userId: string; row: PublicUserRow };
@@ -13,7 +13,11 @@ export async function requireAuthenticatedUser(): Promise<
   if (error || !authData.user) {
     return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
-  const row = await getPublicUserById(authData.user.id);
+  const email = normalizeUserEmail(authData.user.email);
+  if (!email) {
+    return { ok: false, response: NextResponse.json({ error: "User email missing" }, { status: 400 }) };
+  }
+  const row = await getPublicUserByEmail(email);
   if (!row) {
     return { ok: false, response: NextResponse.json({ error: "User not found" }, { status: 404 }) };
   }

@@ -1,5 +1,5 @@
+import { getPublicUserByEmail } from "@/lib/auth/user-payload";
 import { createClient } from "@/lib/supabase/server";
-import { getPublicUserById } from "@/lib/auth/user-payload";
 import PricingPageClient from "@/components/pricing/pricing-page-client";
 
 export default async function PricingPage() {
@@ -9,10 +9,8 @@ export default async function PricingPage() {
     const supabase = await createClient();
     const { data: authData } = await supabase.auth.getUser();
     if (authData?.user) {
-      const row = await getPublicUserById(authData.user.id);
-      if (row?.email) {
-        userEmail = row.email.trim();
-      }
+      const row = await getPublicUserByEmail(authData.user.email ?? "");
+      userEmail = (row?.email || authData.user.email || "").trim();
     }
   } catch {
     // anonymous — fine

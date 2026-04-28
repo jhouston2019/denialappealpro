@@ -3,20 +3,29 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type PublicUserRow = {
-  id: string;
+  id: number;
   email: string;
   is_paid: boolean | null;
   last_queue_visit_at: string | null;
   last_active_at: string | null;
 };
 
-export async function getPublicUserById(userId: string): Promise<PublicUserRow | null> {
+/** Match Stripe / webhook storage: trim + lowercase for public.users.email lookups. */
+export function normalizeUserEmail(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const e = raw.trim().toLowerCase();
+  return e || null;
+}
+
+export async function getPublicUserByEmail(email: string): Promise<PublicUserRow | null> {
+  const normalized = normalizeUserEmail(email);
+  if (!normalized) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("users")
     .select("id, email, is_paid, last_queue_visit_at, last_active_at")
-    .eq("id", userId)
-    .single();
+    .eq("email", normalized)
+    .maybeSingle();
   if (error || !data) return null;
   return data as PublicUserRow;
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeUserEmail } from "@/lib/auth/user-payload";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -28,11 +29,19 @@ export async function GET() {
     );
   }
 
+  const email = normalizeUserEmail(user.email);
+  if (!email) {
+    return NextResponse.json(
+      { hasProviderName: false, profile: null as ProfileOut | null },
+      { status: 200 }
+    );
+  }
+
   const svc = createServiceRoleClient();
   const { data, error } = await svc
     .from("users")
     .select("provider_name, provider_npi, provider_address, provider_phone")
-    .eq("id", user.id)
+    .eq("email", email)
     .maybeSingle();
 
   if (error || !data) {

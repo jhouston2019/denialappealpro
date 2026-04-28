@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
+import { hasAppealDataForUser, normalizeUserEmail } from "@/lib/auth/user-payload";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
-import { hasAppealDataForUser } from "@/lib/auth/user-payload";
 
 /**
  * Hub after /app: send users to dashboard if they have appeals, else onboarding upload.
@@ -13,8 +13,13 @@ export default async function AppEntryPage() {
     redirect("/login?next=" + encodeURIComponent("/app"));
   }
 
+  const email = normalizeUserEmail(authData.user.email);
+  if (!email) {
+    redirect("/login?next=" + encodeURIComponent("/app"));
+  }
+
   const svc = createServiceRoleClient();
-  const { data: row, error: rowErr } = await svc.from("users").select("id").eq("id", authData.user.id).maybeSingle();
+  const { data: row, error: rowErr } = await svc.from("users").select("id").eq("email", email).maybeSingle();
   if (rowErr || !row) {
     redirect("/login?next=" + encodeURIComponent("/app"));
   }

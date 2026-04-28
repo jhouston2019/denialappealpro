@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeUserEmail } from "@/lib/auth/user-payload";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
   const authId = userData.user.id;
+  const email = normalizeUserEmail(userData.user.email);
+  if (!email) {
+    return NextResponse.json({ error: "User email missing" }, { status: 400 });
+  }
 
   let body: Body;
   try {
@@ -50,7 +55,7 @@ export async function POST(request: NextRequest) {
   const { data: row, error: selErr } = await svc
     .from("users")
     .select("appeals_generated_monthly, is_paid")
-    .eq("id", userId)
+    .eq("email", email)
     .maybeSingle();
 
   if (selErr) {
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
   const { error: upErr } = await svc
     .from("users")
     .update({ appeals_generated_monthly: current + 1 })
-    .eq("id", userId);
+    .eq("email", email);
 
   if (upErr) {
     console.error("record-usage update", upErr);

@@ -317,6 +317,7 @@ export default function OnboardingStart() {
   const [singleStep, setSingleStep] = useState(0);
   const [bulkStep, setBulkStep] = useState(0);
   const [step2PreviewBusy, setStep2PreviewBusy] = useState(false);
+  const [paywallChecking, setPaywallChecking] = useState(false);
   /** Pre-preview practice form (anonymous or no saved org name) before /preview. */
   const [showPracticeForPreview, setShowPracticeForPreview] = useState(false);
   const [ppName, setPpName] = useState('');
@@ -367,6 +368,57 @@ export default function OnboardingStart() {
   /** Latest Flask /api/extract/file|/api/extract/text payload for Step 2 debugging */
   const lastDenialParseResponseRef = useRef(null);
   const previewSubmitLockRef = useRef(false);
+
+  const checkPaidAndAdvance = async () => {
+    if (!authChecked) return;
+    if (!isAuthenticated) {
+      sessionStorage.setItem(DAP_WIZARD_RESUME_KEY, JSON.stringify({
+        intake,
+        mode,
+        singleStep: 2,
+      }));
+      sessionStorage.setItem('dap_resume_after_payment', '1');
+      router.push('/pricing');
+      return;
+    }
+    setPaywallChecking(true);
+    try {
+      const res = await fetch('/api/verify-payment', { credentials: 'include' });
+      if (!res.ok) {
+        sessionStorage.setItem(DAP_WIZARD_RESUME_KEY, JSON.stringify({
+          intake,
+          mode,
+          singleStep: 2,
+        }));
+        sessionStorage.setItem('dap_resume_after_payment', '1');
+        router.push('/pricing');
+        return;
+      }
+      const data = await res.json();
+      if (!data.is_paid) {
+        sessionStorage.setItem(DAP_WIZARD_RESUME_KEY, JSON.stringify({
+          intake,
+          mode,
+          singleStep: 2,
+        }));
+        sessionStorage.setItem('dap_resume_after_payment', '1');
+        router.push('/pricing');
+        return;
+      }
+      setStep4GenerateError('');
+      advanceSingle(3);
+    } catch {
+      sessionStorage.setItem(DAP_WIZARD_RESUME_KEY, JSON.stringify({
+        intake,
+        mode,
+        singleStep: 2,
+      }));
+      sessionStorage.setItem('dap_resume_after_payment', '1');
+      router.push('/pricing');
+    } finally {
+      setPaywallChecking(false);
+    }
+  };
 
   const advanceSingle = (next) => {
     setSingleStep(next);
@@ -1096,6 +1148,16 @@ export default function OnboardingStart() {
 
   const submit = async (e) => {
     e?.preventDefault?.();
+    if (!isAuthenticated) {
+      sessionStorage.setItem(DAP_WIZARD_RESUME_KEY, JSON.stringify({
+        intake,
+        mode,
+        singleStep: 2,
+      }));
+      sessionStorage.setItem('dap_resume_after_payment', '1');
+      router.push('/pricing');
+      return;
+    }
     if (previewSubmitLockRef.current) return;
     setErr('');
     setStep4GenerateError('');
@@ -2713,19 +2775,17 @@ export default function OnboardingStart() {
             {err && <p style={{ color: '#c2410c', fontSize: 14, fontWeight: 600, marginTop: 12 }}>{err}</p>}
             <button
               type="button"
-              onClick={() => {
-                setStep4GenerateError('');
-                advanceSingle(3);
-              }}
-              style={{ ...ctaButton(false, false, ''), marginTop: 16 }}
+              onClick={() => { void checkPaidAndAdvance(); }}
+              disabled={paywallChecking || !authChecked}
+              style={{ ...ctaButton(paywallChecking || !authChecked, false, ''), marginTop: 16 }}
               onMouseEnter={(e) => {
-                e.target.style.background = primaryCtaHover;
+                if (!paywallChecking) e.target.style.background = primaryCtaHover;
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = primaryCta;
+                if (!paywallChecking) e.target.style.background = primaryCta;
               }}
             >
-              Next — review & generate
+              {paywallChecking ? 'Checking…' : 'Next — review & generate'}
             </button>
             {unlockPricingCtaBar}
           </div>

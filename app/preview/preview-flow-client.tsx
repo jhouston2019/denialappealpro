@@ -32,7 +32,7 @@ function strengthColor(s: DapPreviewAnalysisResult["appeal_strength"]): string {
 
 export function PreviewFlowClient() {
   const { isAuthenticated, isPaid } = useAuth();
-  const ctaToPricing = isAuthenticated ? "/pricing" : "/login?next=" + encodeURIComponent("/pricing");
+  const ctaToPricing = "/pricing";
   const [flowPayload, setFlowPayload] = useState<DapPreviewPayloadStored | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DapPreviewAnalysisResult | null>(null);

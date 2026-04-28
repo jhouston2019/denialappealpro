@@ -1,4 +1,4 @@
-import { normalizeUserEmail } from "@/lib/auth/user-payload";
+import { normalizeUserEmail } from "@/lib/auth/normalize-user-email";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 /** Minimal /api/queue/metrics `usage` object for UpgradeModal / 402 responses. */
@@ -15,7 +15,7 @@ export async function buildUsageStats(userEmail: string): Promise<Record<string,
     .maybeSingle();
   if (error || !data) return null;
   const u = data as {
-    id: number;
+    id: string;
     email: string;
     subscription_tier: string | null;
     plan_limit: number;

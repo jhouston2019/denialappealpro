@@ -104,19 +104,21 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: existingRow } = await svc.from("users").select("id").eq("email", email).maybeSingle();
-  let userId: string | undefined = existingRow?.id as string | undefined;
 
-  if (!userId) {
+  let id: string;
+  if (existingRow?.id != null && existingRow.id !== "") {
+    id = String(existingRow.id);
+  } else {
     const authId = await resolveOrCreateAuthUserId(svc, email);
     if (!authId) {
       return NextResponse.json({ error: "User resolution failed" }, { status: 500 });
     }
-    userId = authId;
+    id = authId;
   }
 
   const customerId = checkoutCustomerId(session);
   const row: Record<string, unknown> = {
-    id: userId,
+    id,
     email,
     is_paid: true,
   };
@@ -124,7 +126,7 @@ export async function POST(req: NextRequest) {
     row.stripe_customer_id = customerId;
   }
 
-  const { error: upErr } = await svc.from("users").upsert(row, { onConflict: "id" });
+  const { error: upErr } = await svc.from("users").upsert(row, { onConflict: "email" });
   if (upErr) {
     console.error("[stripe webhook] upsert users", upErr);
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 });

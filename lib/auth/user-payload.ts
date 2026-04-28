@@ -1,10 +1,9 @@
 import { getNewDenialsSinceVisit as getNewDenialsWithClient } from "@/lib/auth/denials-since-visit";
 import { normalizeUserEmail } from "./normalize-user-email";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type PublicUserRow = {
-  id: number;
+  id: string;
   email: string;
   is_paid: boolean | null;
   last_queue_visit_at: string | null;
@@ -13,11 +12,15 @@ export type PublicUserRow = {
 
 export { normalizeUserEmail };
 
+/**
+ * Server-only: service role so this works even when RLS only allows `id = auth.uid()`
+ * but the profile row keying drifted (email is the billing join key).
+ */
 export async function getPublicUserByEmail(email: string): Promise<PublicUserRow | null> {
   const normalized = normalizeUserEmail(email);
   if (!normalized) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const svc = createServiceRoleClient();
+  const { data, error } = await svc
     .from("users")
     .select("id, email, is_paid, last_queue_visit_at, last_active_at")
     .eq("email", normalized)

@@ -5,8 +5,11 @@ import { cookies } from "next/headers";
 type CookieToSet = { name: string; value: string; options: CookieSerializeOptions };
 
 /**
- * Per-request server client: reads/writes auth cookies. Use in Server Components, Route Handlers, Server Actions.
- * Never use for privileged DB reads; pair with createServiceRoleClient for public.users.
+ * Per-request Supabase **server** client: wraps `createServerClient` from `@supabase/ssr`
+ * with Next.js `cookies()`. Use only in Server Components, Route Handlers, and Server Actions.
+ *
+ * This is the correct SSR session-aware client — not `lib/supabase/browser.ts`.
+ * For privileged reads/writes, also use `createServiceRoleClient` where appropriate.
  */
 export async function createClient() {
   const cookieStore = await cookies();

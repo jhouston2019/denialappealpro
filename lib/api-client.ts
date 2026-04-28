@@ -43,7 +43,8 @@ export async function apiRequest<T = unknown>(
   }
   if (Object.keys(headers).length) init.headers = headers;
 
-  const res = await fetch(buildUrl(url), init);
+  // Same-origin /api/* must send Supabase auth cookies so Route Handlers see the session.
+  const res = await fetch(buildUrl(url), { ...init, credentials: "include" });
 
   if (!res.ok) {
     const errData = await parseErrorBody(res, wantBlob);

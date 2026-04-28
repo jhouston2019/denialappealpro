@@ -28,5 +28,5 @@ export async function forwardToInternalEngine(
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  return fetch(url, { ...init, headers });
+  return fetch(url, { ...init, headers, credentials: "omit" });
 }

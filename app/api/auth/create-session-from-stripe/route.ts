@@ -112,5 +112,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create user record" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, email });
+  // Generate a one-time sign-in token for silent browser session establishment
+  let signInToken: string | null = null;
+  let signInEmail: string | null = null;
+  try {
+    const { data: linkData, error: linkErr } = await svc.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+    if (!linkErr && linkData?.properties?.hashed_token) {
+      signInToken = linkData.properties.hashed_token;
+      signInEmail = email;
+    }
+  } catch {
+    // non-fatal — browser will fall back to verify-payment poll
+  }
+
+  return NextResponse.json({
+    ok: true,
+    email,
+    sign_in_token: signInToken,
+    sign_in_email: signInEmail,
+  });
 }

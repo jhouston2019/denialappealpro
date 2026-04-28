@@ -46,16 +46,32 @@ export function SuccessClient({ sessionId }: Props) {
           body: JSON.stringify({ session_id: sessionId }),
         });
 
+        let createSessionData: {
+          error?: string;
+          sign_in_token?: string;
+          sign_in_email?: string;
+        } = {};
+        try {
+          createSessionData = await res.json();
+        } catch {
+          // ignore parse error
+        }
         if (!res.ok) {
-          const data = await res.json() as { error?: string };
-          console.error("[success] create-session-from-stripe failed", data.error);
-          // Continue anyway — webhook may still set is_paid
+          console.error("[success] create-session-from-stripe failed", createSessionData.error);
         }
 
-        // Step 2: Refresh Supabase session so subsequent authenticated calls work
+        // Step 2: Establish browser session
         setStatus("Establishing your session…");
         const supabase = createClient();
-        await supabase.auth.refreshSession();
+
+        if (createSessionData?.sign_in_token) {
+          await supabase.auth.verifyOtp({
+            token_hash: createSessionData.sign_in_token,
+            type: "magiclink",
+          });
+        } else {
+          await supabase.auth.refreshSession();
+        }
 
         // Step 3: Poll until is_paid is confirmed
         setStatus("Confirming your payment…");
@@ -72,7 +88,7 @@ export function SuccessClient({ sessionId }: Props) {
 
         // Step 5: Route
         setStatus("Redirecting…");
-        router.replace(hasResume ? "/start?resumed=1" : "/app");
+        router.replace(hasResume ? "/start?dap_need_details=1" : "/app");
       } catch (err) {
         console.error("[success] unexpected error", err);
         router.replace("/app");

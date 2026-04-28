@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     const root = baseUrl.replace(/\/$/, "");
-    const successUrl = `${root}/pricing`;
+    const successUrl = `${root}/login?paid=true`;
     const cancelUrl = `${root}/pricing`;
 
     const stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 import { generateQueueAppealLetter } from "@/lib/appeal/generate-queue-letter";
 import { mapAppealToDetail } from "@/lib/queue/serialize-appeal";
 import { appendClaimEvent } from "@/lib/queue/append-event";
@@ -9,7 +9,7 @@ import { buildUsageStats } from "@/lib/auth/build-usage-stats";
 export const runtime = "nodejs";
 
 export async function POST(_request: Request, context: { params: Promise<{ appealId: string }> }) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   const svc = createServiceRoleClient();

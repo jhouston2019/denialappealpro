@@ -5,6 +5,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 export type PublicUserRow = {
   id: string;
   email: string;
+  is_paid: boolean | null;
   last_queue_visit_at: string | null;
   last_active_at: string | null;
 };
@@ -13,7 +14,7 @@ export async function getPublicUserById(userId: string): Promise<PublicUserRow |
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, last_queue_visit_at, last_active_at")
+    .select("id, email, is_paid, last_queue_visit_at, last_active_at")
     .eq("id", userId)
     .single();
   if (error || !data) return null;

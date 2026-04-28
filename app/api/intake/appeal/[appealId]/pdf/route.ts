@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 import { createClient } from "@/lib/supabase/server";
 import { getInternalFlaskBaseUrl } from "@/lib/engine/forward-internal";
 
@@ -12,7 +12,7 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ appealId: string }> }
 ) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
 
   const { appealId } = await context.params;

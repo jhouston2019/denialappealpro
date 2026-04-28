@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 import { mapAppealToQueueRow } from "@/lib/queue/serialize-appeal";
 
 /**
  * List appeals for the queue (subset of legacy GET /api/queue).
  */
 export async function GET(request: NextRequest) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
 
   const { searchParams } = new URL(request.url);

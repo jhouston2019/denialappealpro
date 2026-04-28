@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   const svc = createServiceRoleClient();
   const { data: row, error: selErr } = await svc
     .from("users")
-    .select("appeals_generated_monthly")
+    .select("appeals_generated_monthly, is_paid")
     .eq("id", userId)
     .maybeSingle();
 
@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
   }
   if (!row) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if ((row as { is_paid?: boolean | null }).is_paid !== true) {
+    return NextResponse.json({ error: "Active purchase required" }, { status: 403 });
   }
 
   const current = parseInt(String((row as { appeals_generated_monthly: number | null }).appeals_generated_monthly ?? 0), 10) || 0;

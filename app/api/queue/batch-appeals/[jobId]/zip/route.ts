@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ jobId: string }> }
 ) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
   const { jobId } = await context.params;
   const svc = createServiceRoleClient();

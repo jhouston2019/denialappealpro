@@ -25,6 +25,7 @@ export default function LoginPageClient() {
   const nextPath = safePathNext(searchParams.get("next"));
   const bannerReason = searchParams.get("reason");
   const resetOk = searchParams.get("reset") === "ok";
+  const paidOk = searchParams.get("paid") === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -93,6 +94,11 @@ export default function LoginPageClient() {
       <div style={box}>
         <h1 style={{ margin: "0 0 8px", fontSize: "20px" }}>Denial Queue</h1>
         <p style={{ margin: "0 0 16px", fontSize: "14px", color: TEXT_MUTED_ON_SLATE }}>Sign in to continue.</p>
+        {paidOk && (
+          <p role="status" style={{ margin: "0 0 12px", fontSize: "13px", color: "#166534" }}>
+            Payment successful. Please log in.
+          </p>
+        )}
         {resetOk && (
           <p role="status" style={{ margin: "0 0 12px", fontSize: "13px", color: "#166534" }}>
             Password updated. You can sign in below.

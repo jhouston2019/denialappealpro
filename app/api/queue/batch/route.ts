@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 
 const RETAIL_PRICE = 79.0;
 
@@ -35,7 +35,7 @@ function parseDos(raw: unknown, defaults: Row): string {
 }
 
 export async function POST(request: NextRequest) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
 
   const ct = (request.headers.get("content-type") || "").toLowerCase();

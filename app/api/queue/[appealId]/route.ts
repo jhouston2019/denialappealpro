@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 import { mapAppealToDetail } from "@/lib/queue/serialize-appeal";
 import { appendClaimEvent } from "@/lib/queue/append-event";
 
@@ -21,7 +21,7 @@ async function loadAppeal(userId: string, appealId: string) {
 }
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ appealId: string }> }) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   const loaded = await loadAppeal(r.userId, appealId);
@@ -39,7 +39,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ap
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ appealId: string }> }) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   let body: Record<string, unknown>;

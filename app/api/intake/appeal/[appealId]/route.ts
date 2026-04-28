@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
+import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
 
 const PREVIEW_CHARS = 900;
 
@@ -8,7 +8,7 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ appealId: string }> }
 ) {
-  const r = await requireAuthenticatedUser();
+  const r = await requirePaidAppUser();
   if (!r.ok) return r.response;
   const { appealId } = await context.params;
   if (!appealId) {

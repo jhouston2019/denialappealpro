@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
-import { createClient } from "@/lib/supabase/server";
 import { getInternalFlaskBaseUrl } from "@/lib/engine/forward-internal";
+import { getEngineAccessToken } from "@/lib/supabase/engine-access-token";
 
 export const runtime = "nodejs";
 
@@ -20,11 +20,8 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+  const accessToken = await getEngineAccessToken();
+  if (!accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -36,7 +33,7 @@ export async function GET(
   const url = `${base}/api/generate/appeal/${encodeURIComponent(appealId)}/pdf`;
   const res = await fetch(url, {
     method: "GET",
-    headers: { Authorization: `Bearer ${session.access_token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!res.ok) {

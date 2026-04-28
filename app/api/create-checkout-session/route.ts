@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
+import { createClient } from "@/lib/supabase/server";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 const STRIPE_API_VERSION = "2025-02-24.acacia" as const;
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
     if (!key) {
       return jsonResponse({ error: "Stripe is not configured" }, 500);
     }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const customerEmail = user?.email?.toLowerCase().trim() || undefined;
 
     let body: {
       price_id?: string;
@@ -90,6 +95,7 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
+      customer_email: customerEmail,
     });
 
     if (!session.url) {

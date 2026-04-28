@@ -124,9 +124,10 @@ export async function POST(request: NextRequest) {
     const supa = await createClient();
     const {
       data: { user: authUser },
+      error: authErr,
     } = await supa.auth.getUser();
     const profileEmail = normalizeUserEmail(authUser?.email);
-    if (authUser?.id && profileEmail) {
+    if (!authErr && authUser?.id && profileEmail) {
       isAnonymous = false;
       const svc = createServiceRoleClient();
       const { data: urow, error: profErr } = await svc

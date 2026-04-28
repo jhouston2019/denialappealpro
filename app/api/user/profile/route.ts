@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePaidAppUser } from "@/lib/api/require-authenticated-user";
-import { normalizeUserEmail } from "@/lib/auth/user-payload";
+import { requireAuthenticatedUser } from "@/lib/api/require-authenticated-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 function clip(val: unknown, maxLen: number) {
@@ -9,32 +8,38 @@ function clip(val: unknown, maxLen: number) {
   return t.slice(0, maxLen);
 }
 
+function profileJsonFromRow(row: Record<string, unknown>) {
+  return {
+    provider_name: String(row.provider_name ?? "") || "",
+    provider_npi: String(row.provider_npi ?? "") || "",
+    provider_address: String(row.provider_address ?? "") || "",
+    provider_phone: String(row.provider_phone ?? "") || "",
+    provider_fax: String(row.provider_fax ?? "") || "",
+  };
+}
+
 export async function GET() {
-  const r = await requirePaidAppUser();
-  if (!r.ok) return r.response;
-  const email = normalizeUserEmail(r.row.email);
+  let user;
+  try {
+    user = await requireAuthenticatedUser();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const email = user.email?.toLowerCase().trim();
   if (!email) {
     return NextResponse.json({ error: "User email missing" }, { status: 400 });
   }
-  const svc = createServiceRoleClient();
-  const { data, error } = await svc
-    .from("users")
-    .select("provider_name, provider_npi, provider_address, provider_phone, provider_fax")
-    .eq("email", email)
-    .maybeSingle();
+
+  const db = createServiceRoleClient();
+  const { data, error } = await db.from("users").select("*").eq("email", email).maybeSingle();
   if (error) {
     return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
   }
-  return NextResponse.json(
-    {
-      provider_name: (data as { provider_name: string | null } | null)?.provider_name || "",
-      provider_npi: (data as { provider_npi: string | null } | null)?.provider_npi || "",
-      provider_address: (data as { provider_address: string | null } | null)?.provider_address || "",
-      provider_phone: (data as { provider_phone: string | null } | null)?.provider_phone || "",
-      provider_fax: (data as { provider_fax: string | null } | null)?.provider_fax || "",
-    },
-    { status: 200 }
-  );
+  if (!data) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(profileJsonFromRow(data as Record<string, unknown>), { status: 200 });
 }
 
 export async function POST(request: NextRequest) {
@@ -42,12 +47,17 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const r = await requirePaidAppUser();
-  if (!r.ok) return r.response;
-  const email = normalizeUserEmail(r.row.email);
+  let user;
+  try {
+    user = await requireAuthenticatedUser();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const email = user.email?.toLowerCase().trim();
   if (!email) {
     return NextResponse.json({ error: "User email missing" }, { status: 400 });
   }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -64,8 +74,8 @@ export async function PUT(request: NextRequest) {
   if ("provider_phone" in body) patch.provider_phone = clip(body.provider_phone, 50);
   if ("provider_fax" in body) patch.provider_fax = clip(body.provider_fax, 50);
 
-  const svc = createServiceRoleClient();
-  const { error } = await svc.from("users").update(patch).eq("email", email);
+  const db = createServiceRoleClient();
+  const { error } = await db.from("users").update(patch).eq("email", email);
   if (error) {
     return NextResponse.json({ error: "Failed to save profile" }, { status: 500 });
   }

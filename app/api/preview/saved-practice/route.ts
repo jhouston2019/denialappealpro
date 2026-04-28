@@ -21,8 +21,9 @@ export async function GET() {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
-  if (!user) {
+  if (!user || authError) {
     return NextResponse.json(
       { hasProviderName: false, profile: null as ProfileOut | null },
       { status: 200 }

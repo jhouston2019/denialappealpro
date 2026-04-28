@@ -62,7 +62,6 @@ export async function POST(request: NextRequest) {
     const browserClient = await createClient();
     const { error: otpErr } = await browserClient.auth.verifyOtp({
       type: "email",
-      email,
       token_hash: linkData.properties.hashed_token,
     });
 

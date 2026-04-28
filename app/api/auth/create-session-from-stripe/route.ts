@@ -119,9 +119,6 @@ export async function POST(req: NextRequest) {
     const { data: linkData, error: linkErr } = await svc.auth.admin.generateLink({
       type: "magiclink",
       email,
-      options: {
-        shouldCreateUser: false,
-      },
     });
     if (!linkErr && linkData?.properties?.hashed_token) {
       signInToken = linkData.properties.hashed_token;
